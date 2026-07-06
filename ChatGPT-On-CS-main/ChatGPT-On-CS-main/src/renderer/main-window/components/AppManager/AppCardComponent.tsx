@@ -15,6 +15,8 @@ import qianniuIcon from '../../../../../assets/base/platform-qianniu.png';
 import jinmaiIcon from '../../../../../assets/base/platform-jinmai.png';
 import wechatIcon from '../../../../../assets/base/platform-wechat.png';
 import wecomIcon from '../../../../../assets/base/platform-wecom.png';
+import pddIcon from '../../../../../assets/base/platform-pdd.png';
+import douyinIcon from '../../../../../assets/base/platform-douyin.png';
 import windowsIcon from '../../../../../assets/base/windows.png';
 
 const PLATFORM_ICONS: Record<string, string> = {
@@ -22,6 +24,8 @@ const PLATFORM_ICONS: Record<string, string> = {
   win_jinmai: jinmaiIcon,
   win_wechat: wechatIcon,
   win_wecom: wecomIcon,
+  win_pdd: pddIcon,
+  win_douyin: douyinIcon,
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -29,6 +33,8 @@ const PLATFORM_LABELS: Record<string, string> = {
   win_jinmai: '京麦',
   win_wechat: '微信',
   win_wecom: '企微',
+  win_pdd: '拼多多',
+  win_douyin: '抖音电商',
 };
 
 // 平台专属色映射
@@ -37,6 +43,8 @@ const PLATFORM_COLORS: Record<string, string> = {
   win_jinmai: 'jinmai',
   win_wechat: 'wechat',
   win_wecom: 'wecom',
+  win_pdd: 'red',
+  win_douyin: 'gray',
 };
 
 type AppCardComponentProps = {

@@ -37,6 +37,8 @@ import {
   CozeAI,
 } from '../../gptproxy';
 import { LoggerService } from './loggerService';
+import { VisionService } from './visionService';
+import { SentimentService } from './sentimentService';
 
 const LLM_REPLY_TIMEOUT_MS = 20000;
 const HUMAN_CUSTOMER_SERVICE_PROMPT = `你是店铺里的真人客服，请直接回复顾客当前的问题。回复必须像日常聊天，而不是客服模板或AI生成内容：
@@ -65,12 +67,20 @@ export class MessageService {
   // 记录每个 llm_name 对应的配置指纹，用于失效检测
   private llmClientConfigKey: Map<string, string>;
 
+  /** 多模态视觉服务 */
+  public readonly vision: VisionService;
+
+  /** 情绪分析服务 */
+  public readonly sentiment: SentimentService;
+
   constructor(
     private log: LoggerService,
     private autoReplyController: KeywordReplyController,
   ) {
     this.llmClientMap = new Map();
     this.llmClientConfigKey = new Map();
+    this.vision = new VisionService(log);
+    this.sentiment = new SentimentService(log);
   }
 
   /**
@@ -167,8 +177,50 @@ export class MessageService {
       if (!reply && cfg.has_use_gpt) {
         this.log.info(`开始使用 GPT 生成回复`);
 
+        // 🔍 多模态识别：检测图片消息并提取描述
+        if (lastUserMsg.content && VisionService.hasImage(lastUserMsg.content)) {
+          this.log.info('检测到图片消息，尝试多模态识别...');
+          try {
+            const visionResult = await this.vision.analyzeImage(
+              lastUserMsg.content,
+              {
+                baseUrl: cfg.base_url,
+                key: cfg.key,
+                model: cfg.model,
+              },
+              '这是一张客服对话中的图片，请描述其中与商品/订单/物流相关的内容',
+            );
+            if (visionResult.description && !visionResult.description.startsWith('[')) {
+              // 将图片描述注入到消息中
+              lastUserMsg.content = `[客户发来了一张图片，内容为：${visionResult.description}] 客户原消息：${lastUserMsg.content}`;
+              this.log.info(`图片识别结果: ${visionResult.description.slice(0, 100)}`);
+            }
+          } catch (err) {
+            this.log.warn(`多模态识别失败，将使用纯文本回复: ${String(err)}`);
+          }
+        }
+
+        // 😊 情绪分析：检测客户情绪
+        let sentimentResult = null;
+        try {
+          const sentimentMessages = messages.map((m) => ({
+            role: m.role === 'OTHER' ? 'user' : 'assistant',
+            content: m.content,
+          }));
+          sentimentResult = await this.sentiment.analyze(sentimentMessages, {
+            baseUrl: cfg.base_url,
+            key: cfg.key,
+            model: cfg.model,
+          });
+          this.log.info(
+            `情绪分析: ${sentimentResult.sentiment} (${sentimentResult.confidence})`,
+          );
+        } catch (err) {
+          this.log.warn(`情绪分析失败: ${String(err)}`);
+        }
+
         const data = await Promise.race([
-          this.getLLMResponse(cfg, ctx, messages),
+          this.getLLMResponse(cfg, ctx, messages, sentimentResult),
           new Promise<null>((resolve) => {
             setTimeout(resolve, LLM_REPLY_TIMEOUT_MS, null);
           }),
@@ -401,6 +453,7 @@ export class MessageService {
     cfg: Config,
     ctx: Context,
     messages: MessageDTO[],
+    sentimentResult?: { sentiment: string; summary: string; suggestedAction?: string } | null,
   ): Promise<ReplyDTO | null> {
     const llm_name = cfg.llm_type;
     if (!llm_name) {
@@ -457,7 +510,7 @@ export class MessageService {
           messages:
             llm_name === 'coze'
               ? this.toConversationMessages(messages)
-              : await this.toLLMMessages(ctx, messages, cfg),
+              : await this.toLLMMessages(ctx, messages, cfg, sentimentResult),
           stream: true,
           user: [
             cfg.platform_id || cfg.platform || 'platform',
@@ -588,10 +641,17 @@ export class MessageService {
     ctx: Context,
     messages: MessageDTO[],
     cfg?: Config,
+    sentimentResult?: { sentiment: string; summary: string; suggestedAction?: string } | null,
   ): Promise<Array<{ role: string; content: string }>> {
     const result: Array<{ role: string; content: string }> = [];
 
     result.push({ role: 'system', content: HUMAN_CUSTOMER_SERVICE_PROMPT });
+
+    // 😊 情绪感知：将客户情绪注入 system prompt
+    if (sentimentResult && sentimentResult.sentiment !== 'neutral') {
+      const sentimentPrompt = this.buildSentimentPrompt(sentimentResult);
+      result.push({ role: 'system', content: sentimentPrompt });
+    }
 
     // 业务侧额外提示词放在通用真人客服规则之后
     const systemPrompt = ctx.get('system_prompt');
@@ -811,5 +871,28 @@ export class MessageService {
         .map(([key, value]) => `${key}: ${value}`)
         .join('\n')}\n`,
     );
+  }
+
+  /**
+   * 根据情绪分析结果构建 System Prompt 片段
+   */
+  private buildSentimentPrompt(sentiment: {
+    sentiment: string;
+    summary: string;
+    suggestedAction?: string;
+  }): string {
+    const base = '【客户情绪感知】';
+    switch (sentiment.sentiment) {
+      case 'angry':
+        return `${base}\n客户当前情绪：愤怒 😡\n摘要：${sentiment.summary}\n应对策略：先道歉安抚，表达理解，承诺尽快解决。语气要真诚、谦逊，不要推卸责任。${sentiment.suggestedAction ? `\n建议：${sentiment.suggestedAction}` : ''}`;
+      case 'urgent':
+        return `${base}\n客户当前情绪：急切 ⏰\n摘要：${sentiment.summary}\n应对策略：快速响应，直接给出解决方案或明确时间，不要让客户觉得被忽视。${sentiment.suggestedAction ? `\n建议：${sentiment.suggestedAction}` : ''}`;
+      case 'negative':
+        return `${base}\n客户当前情绪：不满 😕\n摘要：${sentiment.summary}\n应对策略：表达同理心，主动提供补偿或解决方案，不要争辩。${sentiment.suggestedAction ? `\n建议：${sentiment.suggestedAction}` : ''}`;
+      case 'positive':
+        return `${base}\n客户当前情绪：满意 😊\n摘要：${sentiment.summary}\n应对策略：保持友好态度，可以适当引导好评或推荐其他商品。${sentiment.suggestedAction ? `\n建议：${sentiment.suggestedAction}` : ''}`;
+      default:
+        return '';
+    }
   }
 }

@@ -63,6 +63,8 @@ const platformColorMap: Record<string, string> = {
   win_wechat: 'green',
   win_wecom: 'blue',
   win_jinmai: 'red',
+  win_pdd: 'red',
+  win_douyin: 'gray',
 };
 
 const ReplyCard = React.memo(

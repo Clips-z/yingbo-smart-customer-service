@@ -40,7 +40,9 @@ export function useReplyWorkbench() {
   const isWechat = activePlatformId === 'win_wechat';
   const isWecom = activePlatformId === 'win_wecom';
   const isJinmai = activePlatformId === 'win_jinmai';
-  const supportsModes = isQianniu || isWechat || isWecom || isJinmai;
+  const isPdd = activePlatformId === 'win_pdd';
+  const isDouyin = activePlatformId === 'win_douyin';
+  const supportsModes = isQianniu || isWechat || isWecom || isJinmai || isPdd || isDouyin;
 
   const modeQuery = useQuery(
     ['reply-mode', activePlatformId],
@@ -61,6 +63,16 @@ export function useReplyWorkbench() {
     ['jinmai-collector-health'],
     getJinmaiCollectorHealth,
     { enabled: isJinmai, refetchInterval: 5000 },
+  );
+  const pddHealthQuery = useQuery(
+    ['pdd-collector-health'],
+    () => import('../../../common/services/platform/controller').then(m => m.getPddCollectorHealth?.()),
+    { enabled: isPdd, refetchInterval: 5000 },
+  );
+  const douyinHealthQuery = useQuery(
+    ['douyin-collector-health'],
+    () => import('../../../common/services/platform/controller').then(m => m.getDouyinCollectorHealth?.()),
+    { enabled: isDouyin, refetchInterval: 5000 },
   );
   const suggestionsQuery = useQuery(
     ['reply-suggestions', 'all'],
@@ -262,6 +274,10 @@ export function useReplyWorkbench() {
         message.event === 'wecom_suggestion_updated' ||
         message.event === 'jinmai_suggestion_updated' ||
         message.event === 'jinmai_suggestion_created' ||
+        message.event === 'pdd_suggestion_updated' ||
+        message.event === 'pdd_suggestion_created' ||
+        message.event === 'douyin_suggestion_updated' ||
+        message.event === 'douyin_suggestion_created' ||
         message.event === 'reply_suggestion_created' ||
         message.event === 'qianniu_suggestions_deleted' ||
         message.event === 'qianniu_suggestions_cleared'
@@ -277,11 +293,19 @@ export function useReplyWorkbench() {
       if (message.event === 'jinmai_collector_health_changed') {
         queryClient.invalidateQueries(['jinmai-collector-health']);
       }
+      if (message.event === 'pdd_collector_health_changed') {
+        queryClient.invalidateQueries(['pdd-collector-health']);
+      }
+      if (message.event === 'douyin_collector_health_changed') {
+        queryClient.invalidateQueries(['douyin-collector-health']);
+      }
       if (
         message.event === 'qianniu_reply_mode_changed' ||
         message.event === 'wechat_reply_mode_changed' ||
         message.event === 'wecom_reply_mode_changed' ||
-        message.event === 'jinmai_reply_mode_changed'
+        message.event === 'jinmai_reply_mode_changed' ||
+        message.event === 'pdd_reply_mode_changed' ||
+        message.event === 'douyin_reply_mode_changed'
       ) {
         queryClient.invalidateQueries(['reply-mode']);
       }
@@ -301,6 +325,8 @@ export function useReplyWorkbench() {
     isWechat,
     isWecom,
     isJinmai,
+    isPdd,
+    isDouyin,
     supportsModes,
     mode,
     allSuggestions,

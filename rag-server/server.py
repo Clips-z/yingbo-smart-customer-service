@@ -109,12 +109,78 @@ def read_text(file_path: Path) -> str:
     return ""
 
 
+def read_docx(file_path: Path) -> str:
+    """读取 DOCX 文件"""
+    try:
+        from docx import Document
+        doc = Document(str(file_path))
+        paragraphs = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                # 检测标题样式
+                if para.style.name.startswith('Heading'):
+                    level = para.style.name.replace('Heading ', '')
+                    paragraphs.append('#' * int(level) + ' ' + para.text.strip())
+                else:
+                    paragraphs.append(para.text.strip())
+        # 也读取表格内容
+        for table in doc.tables:
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                if cells:
+                    paragraphs.append(' | '.join(cells))
+        return '\n\n'.join(paragraphs)
+    except ImportError:
+        raise HTTPException(status_code=500, detail="缺少 python-docx 依赖，请运行: pip install python-docx")
+
+
+def read_html(file_path: Path) -> str:
+    """读取 HTML 文件，提取纯文本"""
+    try:
+        from bs4 import BeautifulSoup
+        html = file_path.read_text(encoding='utf-8')
+        soup = BeautifulSoup(html, 'html.parser')
+        # 移除 script 和 style 标签
+        for tag in soup(['script', 'style', 'nav', 'footer', 'header']):
+            tag.decompose()
+        return soup.get_text(separator='\n', strip=True)
+    except ImportError:
+        raise HTTPException(status_code=500, detail="缺少 beautifulsoup4 依赖，请运行: pip install beautifulsoup4")
+
+
+def read_excel(file_path: Path) -> str:
+    """读取 Excel 文件"""
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(str(file_path), read_only=True, data_only=True)
+        all_texts = []
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            all_texts.append(f'# 工作表: {sheet_name}')
+            rows = []
+            for row in ws.iter_rows(values_only=True):
+                cells = [str(cell) if cell is not None else '' for cell in row]
+                if any(c.strip() for c in cells):
+                    rows.append(' | '.join(cells))
+            all_texts.append('\n'.join(rows))
+        wb.close()
+        return '\n\n'.join(all_texts)
+    except ImportError:
+        raise HTTPException(status_code=500, detail="缺少 openpyxl 依赖，请运行: pip install openpyxl")
+
+
 def read_document(file_path: Path) -> str:
     suffix = file_path.suffix.lower()
     if suffix == ".pdf":
         return read_pdf(file_path)
     elif suffix in (".txt", ".md", ".markdown"):
         return read_text(file_path)
+    elif suffix == ".docx":
+        return read_docx(file_path)
+    elif suffix in (".html", ".htm"):
+        return read_html(file_path)
+    elif suffix in (".xlsx", ".xls"):
+        return read_excel(file_path)
     elif suffix in (".json", ".csv"):
         return read_text(file_path)
     else:
@@ -593,6 +659,124 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 
 # ============================================================
+# 文件监控（自动增量更新）
+# ============================================================
+_watchdog_enabled = config.get("watchdog_enabled", False)
+_watchdog_observer = None
+
+
+def start_watchdog():
+    """启动文件监控，自动检测 UPLOAD_DIR 中的文档变化"""
+    global _watchdog_observer
+    if not _watchdog_enabled:
+        return
+    try:
+        from watchdog.observers import Observer
+        from watchdog.events import FileSystemEventHandler
+
+        class KnowledgeBaseHandler(FileSystemEventHandler):
+            """知识库文件变更处理器"""
+            def on_created(self, event):
+                if not event.is_directory:
+                    _handle_file_event(event.src_path, "created")
+
+            def on_modified(self, event):
+                if not event.is_directory:
+                    _handle_file_event(event.src_path, "modified")
+
+            def on_deleted(self, event):
+                if not event.is_directory:
+                    _handle_file_event(event.src_path, "deleted")
+
+        def _handle_file_event(file_path, action):
+            path = Path(file_path)
+            suffix = path.suffix.lower()
+            supported = {".pdf", ".txt", ".md", ".markdown", ".docx", ".html", ".htm", ".xlsx", ".xls", ".csv", ".json"}
+            if suffix not in supported:
+                return
+
+            # 避免重复处理临时文件
+            if path.name.startswith("~") or path.name.startswith("."):
+                return
+
+            print(f"[Watchdog] 文件{action}: {path.name}")
+
+            if action in ("created", "modified"):
+                try:
+                    # 等待文件写入完成
+                    time.sleep(1)
+                    text = read_document(path)
+                    if text.strip():
+                        # 删除旧 chunks
+                        _remove_document_chunks(path.name)
+                        # 重新分块并入库
+                        chunks = chunk_text_recursive(text, chunk_size, chunk_overlap)
+                        _add_chunks_to_collection(chunks, path.name)
+                        print(f"[Watchdog] 已更新知识库: {path.name} ({len(chunks)} 个块)")
+                except Exception as e:
+                    print(f"[Watchdog] 处理文件失败: {path.name} - {e}")
+
+            elif action == "deleted":
+                try:
+                    _remove_document_chunks(path.name)
+                    print(f"[Watchdog] 已从知识库移除: {path.name}")
+                except Exception as e:
+                    print(f"[Watchdog] 移除文件失败: {path.name} - {e}")
+
+        def _remove_document_chunks(filename):
+            """从 ChromaDB 中移除指定文档的所有 chunks"""
+            try:
+                results = collection.get(where={"source": filename})
+                if results and results["ids"]:
+                    collection.delete(ids=results["ids"])
+            except Exception:
+                pass  # 文档可能不存在
+
+        def _add_chunks_to_collection(chunks, source_name):
+            """将 chunks 添加到 ChromaDB"""
+            if not chunks:
+                return
+            ids = [str(uuid.uuid4()) for _ in chunks]
+            metadatas = [{"source": source_name, "chunk_index": i} for i in range(len(chunks))]
+            collection.add(documents=chunks, ids=ids, metadatas=metadatas)
+
+        chunk_size = config.get("chunk_size", 500)
+        chunk_overlap = config.get("chunk_overlap", 50)
+
+        _watchdog_observer = Observer()
+        _watchdog_observer.schedule(
+            KnowledgeBaseHandler(),
+            str(UPLOAD_DIR),
+            recursive=False,
+        )
+        _watchdog_observer.start()
+        print(f"[Watchdog] 文件监控已启动，监控目录: {UPLOAD_DIR}")
+    except ImportError:
+        print("[Watchdog] 缺少 watchdog 依赖，文件监控未启用。请运行: pip install watchdog")
+    except Exception as e:
+        print(f"[Watchdog] 启动失败: {e}")
+
+
+def stop_watchdog():
+    """停止文件监控"""
+    global _watchdog_observer
+    if _watchdog_observer:
+        _watchdog_observer.stop()
+        _watchdog_observer.join()
+        _watchdog_observer = None
+
+
+@app.on_event("startup")
+async def on_startup():
+    start_watchdog()
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    stop_watchdog()
+
+
+# ============================================================
 # 文档管理 API
 # ============================================================
 @app.post("/api/upload")
@@ -855,18 +1039,33 @@ def build_rag_messages(messages: List[ChatMessage]) -> List[ChatMessage]:
     last_query = user_messages[-1].content
     context = retrieve_context(last_query, config.get("top_k", 5))
 
-    if not context:
+    # 知识图谱增强检索
+    kg_context = ""
+    if config.get("kg_enabled", False):
+        try:
+            from kg_service import KnowledgeGraph
+            kg = KnowledgeGraph(DATA_DIR)
+            kg_context = kg.to_text_context(last_query, top_k=5)
+        except Exception as e:
+            print(f"[KG] 知识图谱检索失败: {e}")
+
+    if not context and not kg_context:
         return messages
 
     # 获取原始 system prompt
     system_prompt = config.get("system_prompt", "你是一名专业的客服。")
+
+    # 组合知识库上下文
+    full_context = ""
+    if context:
+        full_context += f"\n【知识库参考信息（向量检索+Reranking）】\n{context}\n"
+    if kg_context:
+        full_context += f"\n{kg_context}\n"
+
     rag_prompt = f"""{system_prompt}
 
 以下是从知识库中检索到的相关信息，请参考这些内容回答客户的问题：
-
-【知识库参考信息】
-{context}
-
+{full_context}
 请基于以上信息回答客户问题。如果知识库信息不足以回答，请诚实告知。"""
 
     # 替换 system 消息

@@ -51,7 +51,37 @@ export const sequelize = new Sequelize({
   dialect: 'sqlite',
   dialectModule: sqlite,
   storage: DB_FILE_PATH,
-  logging: console.log,
+  logging: false, // 生产环境关闭 SQL 日志以提升性能
+  pool: {
+    max: 5,
+    min: 1,
+    acquire: 30000,
+    idle: 10000,
+  },
+  define: {
+    timestamps: false,
+  },
+  // SQLite 性能优化
+  dialectOptions: {
+    // WAL 模式：允许并发读写，显著提升并发性能
+    // 通过 PRAGMA 在连接建立后设置
+  },
+});
+
+// SQLite WAL 模式 + 性能优化 PRAGMA
+sequelize.afterConnect(async (connection: any) => {
+  if (connection && connection.run) {
+    // WAL 模式 — 允许读和写同时进行
+    connection.run('PRAGMA journal_mode=WAL;');
+    // 同步模式设为 NORMAL（WAL 模式下最安全且最快的选项）
+    connection.run('PRAGMA synchronous=NORMAL;');
+    // 缓存大小 64MB
+    connection.run('PRAGMA cache_size=-65536;');
+    // 内存映射 I/O
+    connection.run('PRAGMA mmap_size=268435456;');
+    // 临时文件存储在内存中
+    connection.run('PRAGMA temp_store=MEMORY;');
+  }
 });
 
 // 初始化模型

@@ -19,6 +19,8 @@ export const platformLabels: Record<string, string> = {
   win_wechat: '微信',
   win_jinmai: '京麦',
   win_wecom: '企微',
+  win_pdd: '拼多多',
+  win_douyin: '抖音电商',
 };
 
 export const healthLabels = {

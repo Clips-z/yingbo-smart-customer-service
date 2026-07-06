@@ -35,6 +35,20 @@ const PLATFORMS: Array<Platform & { processes: string[] }> = [
     env: 'desktop',
     processes: ['wxwork.exe', 'wecom.exe'],
   },
+  {
+    id: 'win_pdd',
+    name: '拼多多',
+    type: 'E_COMMERCE',
+    env: 'desktop',
+    processes: ['pddworkbench.exe', 'pdd_kefu.exe'],
+  },
+  {
+    id: 'win_douyin',
+    name: '抖音电商',
+    type: 'E_COMMERCE',
+    env: 'desktop',
+    processes: ['douyin_im.exe', 'douyin_kefu.exe', 'jinritemai_kefu.exe'],
+  },
 ];
 
 async function getProcessNames(): Promise<Set<string>> {

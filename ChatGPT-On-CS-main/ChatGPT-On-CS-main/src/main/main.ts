@@ -8,6 +8,16 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
+
+// ========== 启动性能优化 ==========
+// 禁用不必要的 Chromium 特性以加快启动
+app?.commandLine?.appendSwitch('disable-gpu-vsync');
+app?.commandLine?.appendSwitch('disable-background-timer-throttling');
+app?.commandLine?.appendSwitch('disable-renderer-backgrounding');
+// 减少启动时的磁盘 I/O
+app?.commandLine?.appendSwitch('disable-features', 'OutOfBlinkCors');
+// 禁用拼写检查
+app?.commandLine?.appendSwitch('disable-spell-checking');
 import 'source-map-support/register';
 import './system/logger';
 import path from 'path';

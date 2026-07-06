@@ -9,6 +9,7 @@ import { databaseReady, sequelize } from './ormconfig';
 import { ConfigController } from './controllers/configController';
 import { MessageController } from './controllers/messageController';
 import { KeywordReplyController } from './controllers/keywordReplyController';
+import { AnalyticsController } from './controllers/analyticsController';
 import { MessageService } from './services/messageService';
 import { DispatchService } from './services/dispatchService';
 import { PluginService } from './services/pluginService';
@@ -27,6 +28,8 @@ import {
   JinmaiCollectorState,
   JinmaiSidecarService,
 } from './services/jinmaiSidecarService';
+import { PddSidecarService } from './services/pddSidecarService';
+import { DouyinSidecarService } from './services/douyinSidecarService';
 import { RagService } from './services/ragService';
 import { ReplySuggestion } from './entities/replySuggestion';
 import {
@@ -51,6 +54,8 @@ class BKServer {
 
   private keywordReplyController: KeywordReplyController;
 
+  private analyticsController: AnalyticsController;
+
   private messageService: MessageService;
 
   private pluginService: PluginService;
@@ -70,6 +75,10 @@ class BKServer {
   private wecomSidecarService: WecomSidecarService;
 
   private jinmaiSidecarService: JinmaiSidecarService;
+
+  private pddSidecarService: PddSidecarService;
+
+  private douyinSidecarService: DouyinSidecarService;
 
   constructor(port: number, mainWindow: BrowserWindow) {
     this.app = express();
@@ -109,6 +118,7 @@ class BKServer {
     this.configController = new ConfigController();
     this.messageController = new MessageController();
     this.keywordReplyController = new KeywordReplyController(port);
+    this.analyticsController = new AnalyticsController();
     this.loggerService = new LoggerService(mainWindow);
 
     this.messageService = new MessageService(
@@ -161,6 +171,18 @@ class BKServer {
       this.dispatchService,
     );
 
+    this.pddSidecarService = new PddSidecarService(
+      this.port,
+      this.loggerService,
+      this.dispatchService,
+    );
+
+    this.douyinSidecarService = new DouyinSidecarService(
+      this.port,
+      this.loggerService,
+      this.dispatchService,
+    );
+
     this.configureSocketIO();
     this.setupRoutes();
     // 开启定时任务：每 5 分钟同步一次任务状态，避免频繁操作数据库
@@ -186,6 +208,20 @@ class BKServer {
   }
 
   private setupRoutes(): void {
+    // ========== 数据分析 API ==========
+    this.app.get('/api/analytics/overview', (req, res) =>
+      this.analyticsController.getOverview(req, res));
+    this.app.get('/api/analytics/daily-trend', (req, res) =>
+      this.analyticsController.getDailyTrend(req, res));
+    this.app.get('/api/analytics/platform-distribution', (req, res) =>
+      this.analyticsController.getPlatformDistribution(req, res));
+    this.app.get('/api/analytics/status-distribution', (req, res) =>
+      this.analyticsController.getStatusDistribution(req, res));
+    this.app.get('/api/analytics/top-senders', (req, res) =>
+      this.analyticsController.getTopSenders(req, res));
+    this.app.get('/api/analytics/avg-response-time', (req, res) =>
+      this.analyticsController.getAvgResponseTime(req, res));
+
     this.app.get('/', (req, res) => {
       res.type('html').send(`
         <!doctype html>
@@ -1339,6 +1375,178 @@ class BKServer {
       }),
     );
 
+    // ========== 拼多多 Sidecar API ==========
+    this.app.get('/api/v1/compat/pdd/mode', (req, res) => {
+      res.json({ success: true, data: { mode: this.pddSidecarService.getMode() } });
+    });
+    this.app.post(
+      '/api/v1/compat/pdd/mode',
+      asyncHandler(async (req, res) => {
+        const mode = String(req.body.mode || '');
+        if (!['hint', 'assist', 'unattended'].includes(mode)) {
+          res.status(400).json({ success: false, message: 'Invalid mode' });
+          return;
+        }
+        await this.pddSidecarService.setMode(mode);
+        res.json({ success: true, data: { mode } });
+      }),
+    );
+    this.app.get('/api/v1/compat/pdd/health', (req, res) => {
+      res.json({ success: true, data: this.pddSidecarService.getHealth() });
+    });
+    this.app.post('/api/v1/compat/pdd/health', (req, res) => {
+      const { state, error } = req.body || {};
+      if (state && ['stopped', 'starting', 'running', 'degraded'].includes(state)) {
+        this.pddSidecarService.reportHealth(state, error);
+      }
+      res.json({ success: true });
+    });
+    this.app.post(
+      '/api/v1/compat/pdd/suggestions/delivery',
+      asyncHandler(async (req, res) => {
+        const { sender, content, replyText, platformId, instanceId } = req.body || {};
+        try {
+          const suggestion = await ReplySuggestion.create({
+            platform_id: platformId || 'win_pdd',
+            platform_name: '拼多多',
+            sender: sender || '拼多多客户',
+            buyer_message: content,
+            reply_content: replyText,
+            status: 'pending',
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          this.dispatchService.receiveBroadcast({
+            event: 'pdd_suggestion_created',
+            data: suggestion.toJSON(),
+          });
+          res.json({ success: true, data: suggestion });
+        } catch (error) {
+          res.status(500).json({ success: false, message: String(error) });
+        }
+      }),
+    );
+    this.app.post(
+      '/api/v1/compat/pdd/suggestions/fill',
+      asyncHandler(async (req, res) => {
+        const id = Number(req.params.id || req.body.id);
+        const suggestion = await ReplySuggestion.findByPk(id);
+        if (!suggestion) {
+          res.status(404).json({ success: false, message: '待回复记录不存在' });
+          return;
+        }
+        const { content } = req.body || {};
+        if (!content) {
+          res.status(400).json({ success: false, message: '缺少回复内容' });
+          return;
+        }
+        try {
+          await this.pddSidecarService.focusAndFill(suggestion.sender, content);
+          await suggestion.update({
+            reply_content: content,
+            status: 'prepared',
+            updated_at: new Date(),
+          });
+          this.dispatchService.receiveBroadcast({
+            event: 'pdd_suggestion_updated',
+            data: suggestion.toJSON(),
+          });
+          res.json({ success: true, data: suggestion });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          this.loggerService.warn(`拼多多定位失败: ${message}`);
+          res.status(409).json({ success: false, message });
+        }
+      }),
+    );
+
+    // ========== 抖音电商 Sidecar API ==========
+    this.app.get('/api/v1/compat/douyin/mode', (req, res) => {
+      res.json({ success: true, data: { mode: this.douyinSidecarService.getMode() } });
+    });
+    this.app.post(
+      '/api/v1/compat/douyin/mode',
+      asyncHandler(async (req, res) => {
+        const mode = String(req.body.mode || '');
+        if (!['hint', 'assist', 'unattended'].includes(mode)) {
+          res.status(400).json({ success: false, message: 'Invalid mode' });
+          return;
+        }
+        await this.douyinSidecarService.setMode(mode);
+        res.json({ success: true, data: { mode } });
+      }),
+    );
+    this.app.get('/api/v1/compat/douyin/health', (req, res) => {
+      res.json({ success: true, data: this.douyinSidecarService.getHealth() });
+    });
+    this.app.post('/api/v1/compat/douyin/health', (req, res) => {
+      const { state, error } = req.body || {};
+      if (state && ['stopped', 'starting', 'running', 'degraded'].includes(state)) {
+        this.douyinSidecarService.reportHealth(state, error);
+      }
+      res.json({ success: true });
+    });
+    this.app.post(
+      '/api/v1/compat/douyin/suggestions/delivery',
+      asyncHandler(async (req, res) => {
+        const { sender, content, replyText, platformId, instanceId } = req.body || {};
+        try {
+          const suggestion = await ReplySuggestion.create({
+            platform_id: platformId || 'win_douyin',
+            platform_name: '抖音电商',
+            sender: sender || '抖音客户',
+            buyer_message: content,
+            reply_content: replyText,
+            status: 'pending',
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+          this.dispatchService.receiveBroadcast({
+            event: 'douyin_suggestion_created',
+            data: suggestion.toJSON(),
+          });
+          res.json({ success: true, data: suggestion });
+        } catch (error) {
+          res.status(500).json({ success: false, message: String(error) });
+        }
+      }),
+    );
+    this.app.post(
+      '/api/v1/compat/douyin/suggestions/fill',
+      asyncHandler(async (req, res) => {
+        const id = Number(req.params.id || req.body.id);
+        const suggestion = await ReplySuggestion.findByPk(id);
+        if (!suggestion) {
+          res.status(404).json({ success: false, message: '待回复记录不存在' });
+          return;
+        }
+        const { content } = req.body || {};
+        if (!content) {
+          res.status(400).json({ success: false, message: '缺少回复内容' });
+          return;
+        }
+        try {
+          await this.douyinSidecarService.focusAndFill(suggestion.sender, content);
+          await suggestion.update({
+            reply_content: content,
+            status: 'prepared',
+            updated_at: new Date(),
+          });
+          this.dispatchService.receiveBroadcast({
+            event: 'douyin_suggestion_updated',
+            data: suggestion.toJSON(),
+          });
+          res.json({ success: true, data: suggestion });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          this.loggerService.warn(`抖音电商定位失败: ${message}`);
+          res.status(409).json({ success: false, message });
+        }
+      }),
+    );
+
     this.app.post(
       '/api/v1/compat/qianniu/suggestions/status',
       asyncHandler(async (req, res) => {
@@ -1552,6 +1760,8 @@ class BKServer {
             this.wechatSidecarService.start();
             this.wecomSidecarService.start();
             this.jinmaiSidecarService.start();
+            this.pddSidecarService.start();
+            this.douyinSidecarService.start();
             this.ragService.start();
             resolve(true);
           } catch (error) {
@@ -1568,6 +1778,8 @@ class BKServer {
     this.wechatSidecarService.stop();
     this.wecomSidecarService.stop();
     this.jinmaiSidecarService.stop();
+    this.pddSidecarService.stop();
+    this.douyinSidecarService.stop();
     this.ragService.stop();
     return new Promise((resolve, reject) => {
       if (this.server) {

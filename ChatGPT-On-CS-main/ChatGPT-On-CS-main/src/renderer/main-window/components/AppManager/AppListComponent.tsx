@@ -4,7 +4,7 @@ import { FiRefreshCw } from 'react-icons/fi';
 import AppCardComponent from './AppCardComponent';
 import { useAppManager } from './AppManagerContext';
 
-const supportedPlatforms = ['千牛', '京麦', '微信', '企微'];
+const supportedPlatforms = ['千牛', '京麦', '微信', '企微', '拼多多', '抖音电商'];
 
 const AppListComponent = () => {
   const {

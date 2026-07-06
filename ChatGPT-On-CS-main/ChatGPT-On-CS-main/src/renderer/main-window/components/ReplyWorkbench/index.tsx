@@ -35,6 +35,8 @@ const platformEmoji: Record<string, string> = {
   win_wechat: '💬',
   win_jinmai: '📦',
   win_wecom: '🏢',
+  win_pdd: '🛒',
+  win_douyin: '🎵',
 };
 
 function renderList(
@@ -234,6 +236,7 @@ const ReplyWorkbench = () => {
                   ? platformId === 'win_wechat' ? 'green'
                   : platformId === 'win_wecom' ? 'blue'
                   : platformId === 'win_jinmai' ? 'red'
+                  : platformId === 'win_pdd' ? 'red'
                   : 'orange'
                   : 'gray'
               }
