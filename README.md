@@ -41,15 +41,15 @@
 
 ### 方式一：GitHub Releases（推荐）
 
-👉 [点击前往 Releases 页面下载](../../releases)
+👉 [直接下载 YingBo_Smart_Customer_Service_v1.4.5.zip (460MB)](https://github.com/Clips-z/yingbo-smart-customer-service/releases/download/v1.4.5/YingBo_Smart_Customer_Service_v1.4.5.zip)
 
-下载 `迎波智能客服_v1.4.5.zip`（约 1.3GB），解压后即可运行。
+或前往 [Releases 页面](https://github.com/Clips-z/yingbo-smart-customer-service/releases) 查看所有版本。
 
 ### 方式二：百度网盘
 
 👉 [点击下载（提取码：xxxx）](https://pan.baidu.com/s/你的链接)
 
-> 上传后请替换上方链接和提取码。
+> 如需通过百度网盘下载，请替换上方链接和提取码。
 
 ---
 
