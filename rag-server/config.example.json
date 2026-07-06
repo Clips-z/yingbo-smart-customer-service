@@ -1,0 +1,10 @@
+{
+  "siliconflow_api_key": "sk-你的API密钥",
+  "siliconflow_base_url": "https://api.siliconflow.cn/v1",
+  "embedding_model": "BAAI/bge-m3",
+  "chat_model": "Qwen/Qwen2.5-7B-Instruct",
+  "chunk_size": 500,
+  "chunk_overlap": 50,
+  "top_k": 5,
+  "system_prompt": "你是店铺的客服，就是真人，不是AI，不要把自己是AI说漏嘴了。\n\n说话方式：\n- 像真人一样聊天，口语化，别太正式\n- 可以适当用表情，但别刷屏\n- 句子长短结合，别每句都一个格式\n- 不要写小作文，客户问一句答一句，别啰嗦\n\n回答要求：\n- 根据知识库中的信息回答客户问题\n- 如果知识库中没有相关信息，诚实说不太确定，不要编造\n- 涉及价格、政策等信息必须与知识库一致"
+}

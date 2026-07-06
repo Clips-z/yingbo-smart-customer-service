@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RAG 知识库管理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 24px 30px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .header h1 { font-size: 24px; margin-bottom: 6px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+
+        /* Stats bar */
+        .stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            flex: 1;
+            background: white;
+            padding: 16px 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+        .stat-card .num { font-size: 28px; font-weight: 700; color: #667eea; }
+        .stat-card .label { font-size: 13px; color: #888; margin-top: 4px; }
+
+        /* Sections */
+        .section {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .section h2 {
+            font-size: 18px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section h2 .icon { font-size: 22px; }
+
+        /* Config form */
+        .form-group { margin-bottom: 16px; }
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #555;
+        }
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .form-group textarea { resize: vertical; min-height: 80px; font-family: monospace; }
+        .form-row { display: flex; gap: 12px; }
+        .form-row .form-group { flex: 1; }
+
+        /* Buttons */
+        .btn {
+            padding: 10px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-danger { background: #fee; color: #c33; }
+        .btn-danger:hover { background: #fdd; }
+        .btn-sm { padding: 6px 14px; font-size: 13px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Upload */
+        .upload-zone {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .upload-zone:hover, .upload-zone.dragover {
+            border-color: #667eea;
+            background: #f0f3ff;
+        }
+        .upload-zone .icon { font-size: 40px; margin-bottom: 8px; }
+        .upload-zone p { color: #888; font-size: 14px; }
+        .upload-zone .hint { font-size: 12px; color: #aaa; margin-top: 4px; }
+        .upload-progress {
+            display: none;
+            margin-top: 12px;
+            padding: 10px;
+            background: #f0f3ff;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+
+        /* Document list */
+        .doc-list { list-style: none; }
+        .doc-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: background 0.2s;
+        }
+        .doc-item:hover { background: #fafafa; }
+        .doc-info { flex: 1; }
+        .doc-name { font-weight: 500; font-size: 14px; }
+        .doc-meta { font-size: 12px; color: #999; }
+        .empty-state { text-align: center; padding: 30px; color: #aaa; font-size: 14px; }
+
+        /* Test query */
+        .test-result {
+            margin-top: 12px;
+            padding: 14px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 14px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .search-result {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+        }
+        .search-result .score {
+            display: inline-block;
+            background: #e8ecff;
+            color: #667eea;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+        .search-result .source { font-size: 12px; color: #999; }
+        .search-result .content { font-size: 13px; margin-top: 4px; }
+
+        /* Toast */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .toast.success { background: #52c41a; }
+        .toast.error { background: #ff4d4f; }
+        @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+        /* API info box */
+        .api-info {
+            background: #f0f3ff;
+            border: 1px solid #d6e0ff;
+            border-radius: 8px;
+            padding: 14px;
+            margin-top: 16px;
+            font-size: 13px;
+        }
+        .api-info code {
+            background: #e8ecff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "Courier New", monospace;
+        }
+        .api-info .copy-btn {
+            float: right;
+            cursor: pointer;
+            color: #667eea;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <h1>RAG 知识库服务</h1>
+        <p>本地知识库 + 硅基流动免费模型，0 成本智能客服</p>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats">
+        <div class="stat-card">
+            <div class="num" id="stat-docs">0</div>
+            <div class="label">文档数</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="stat-chunks">0</div>
+            <div class="label">知识块</div>
+        </div>
+        <div class="stat-card">
+            <div class="num" id="stat-key" style="font-size: 22px;">--</div>
+            <div class="label">API Key</div>
+        </div>
+    </div>
+
+    <!-- Config -->
+    <div class="section">
+        <h2><span class="icon">⚙️</span> 基础配置</h2>
+        <div class="form-group">
+            <label>SiliconFlow API Key</label>
+            <input type="password" id="api-key" placeholder="sk-xxxxxxxxxxxx" />
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>Chat 模型</label>
+                <input type="text" id="chat-model" value="Qwen/Qwen2.5-7B-Instruct" />
+            </div>
+            <div class="form-group">
+                <label>Embedding 模型</label>
+                <input type="text" id="embedding-model" value="BAAI/bge-m3" />
+            </div>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>分块大小（字符）</label>
+                <input type="number" id="chunk-size" value="500" />
+            </div>
+            <div class="form-group">
+                <label>检索 Top K</label>
+                <input type="number" id="top-k" value="5" />
+            </div>
+        </div>
+        <div class="form-group">
+            <label>系统提示词（客服人设）</label>
+            <textarea id="system-prompt" rows="4" placeholder="你是店铺的客服..."></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="saveConfig()">保存配置</button>
+    </div>
+
+    <!-- Upload -->
+    <div class="section">
+        <h2><span class="icon">📄</span> 上传知识库文档</h2>
+        <div class="upload-zone" id="upload-zone" onclick="document.getElementById('file-input').click()">
+            <div class="icon">📁</div>
+            <p>点击或拖拽文件到此处上传</p>
+            <div class="hint">支持 TXT、MD、PDF、JSON、CSV 格式</div>
+        </div>
+        <input type="file" id="file-input" multiple accept=".txt,.md,.markdown,.pdf,.json,.csv" style="display:none" />
+        <div class="upload-progress" id="upload-progress"></div>
+    </div>
+
+    <!-- Document list -->
+    <div class="section">
+        <h2><span class="icon">📚</span> 知识库文档列表</h2>
+        <ul class="doc-list" id="doc-list">
+            <li class="empty-state">暂无文档</li>
+        </ul>
+    </div>
+
+    <!-- Test search -->
+    <div class="section">
+        <h2><span class="icon">🔍</span> 知识库检索测试</h2>
+        <div class="form-group">
+            <label>输入测试问题</label>
+            <div style="display:flex; gap:8px;">
+                <input type="text" id="test-query" placeholder="例如：退换货政策是什么？" />
+                <button class="btn btn-primary btn-sm" onclick="testSearch()">搜索</button>
+            </div>
+        </div>
+        <div id="search-results"></div>
+    </div>
+
+    <!-- API info -->
+    <div class="section">
+        <h2><span class="icon">🔗</span> 懒人客服对接信息</h2>
+        <div class="api-info">
+            <p>在懒人客服 AI 设置中按以下信息配置：</p>
+            <p style="margin-top:8px;">大模型类型：<code>OpenAI</code></p>
+            <p>API 地址：<code>http://localhost:8000/v1</code></p>
+            <p>模型名：<code id="api-model-name">Qwen/Qwen2.5-7B-Instruct</code></p>
+            <p>API Key：<code>随意填写（服务已内置）</code></p>
+            <p style="margin-top:8px; color:#888; font-size:12px;">
+                消息流程：客户消息 → 本服务检索知识库 → 拼接上下文 → 调用硅基流动 → 返回回复
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+const API = '';
+
+// Toast
+function toast(msg, type = 'success') {
+    const t = document.createElement('div');
+    t.className = `toast ${type}`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+}
+
+// Load config and stats
+async function loadAll() {
+    try {
+        const [configResp, statsResp, docsResp] = await Promise.all([
+            fetch(API + '/api/config').then(r => r.json()),
+            fetch(API + '/api/stats').then(r => r.json()),
+            fetch(API + '/api/documents').then(r => r.json())
+        ]);
+
+        // Config
+        document.getElementById('chat-model').value = configResp.chat_model || 'Qwen/Qwen2.5-7B-Instruct';
+        document.getElementById('embedding-model').value = configResp.embedding_model || 'BAAI/bge-m3';
+        document.getElementById('chunk-size').value = configResp.chunk_size || 500;
+        document.getElementById('top-k').value = configResp.top_k || 5;
+        document.getElementById('system-prompt').value = configResp.system_prompt || '';
+        document.getElementById('api-key').placeholder = configResp.has_api_key ? '已配置（输入可修改）' : 'sk-xxxxxxxxxxxx';
+
+        // Stats
+        document.getElementById('stat-docs').textContent = statsResp.total_documents || 0;
+        document.getElementById('stat-chunks').textContent = statsResp.total_chunks || 0;
+        document.getElementById('stat-key').textContent = statsResp.has_api_key ? '✅' : '❌';
+        document.getElementById('stat-key').style.color = statsResp.has_api_key ? '#52c41a' : '#ff4d4f';
+        document.getElementById('api-model-name').textContent = statsResp.chat_model || 'Qwen/Qwen2.5-7B-Instruct';
+
+        // Documents
+        renderDocs(docsResp.documents || []);
+    } catch (e) {
+        toast('加载数据失败: ' + e.message, 'error');
+    }
+}
+
+function renderDocs(docs) {
+    const list = document.getElementById('doc-list');
+    if (!docs.length) {
+        list.innerHTML = '<li class="empty-state">暂无文档，请上传知识库文件</li>';
+        return;
+    }
+    list.innerHTML = docs.map(d => `
+        <li class="doc-item">
+            <div class="doc-info">
+                <div class="doc-name">${d.filename}</div>
+                <div class="doc-meta">${d.chunks} 个知识块</div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="deleteDoc('${d.file_id}', '${d.filename}')">删除</button>
+        </li>
+    `).join('');
+}
+
+// Save config
+async function saveConfig() {
+    const apiKey = document.getElementById('api-key').value.trim();
+    const body = {
+        chat_model: document.getElementById('chat-model').value,
+        embedding_model: document.getElementById('embedding-model').value,
+        chunk_size: parseInt(document.getElementById('chunk-size').value),
+        top_k: parseInt(document.getElementById('top-k').value),
+        system_prompt: document.getElementById('system-prompt').value,
+    };
+    if (apiKey) body.siliconflow_api_key = apiKey;
+
+    try {
+        const resp = await fetch(API + '/api/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            toast('配置已保存');
+            document.getElementById('api-key').value = '';
+            loadAll();
+        } else {
+            toast('保存失败', 'error');
+        }
+    } catch (e) {
+        toast('保存失败: ' + e.message, 'error');
+    }
+}
+
+// Upload
+const uploadZone = document.getElementById('upload-zone');
+const fileInput = document.getElementById('file-input');
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+async function handleFiles(files) {
+    if (!files.length) return;
+    const progress = document.getElementById('upload-progress');
+    progress.style.display = 'block';
+
+    for (const file of files) {
+        progress.textContent = `正在上传: ${file.name} ...`;
+        const formData = new FormData();
+        formData.append('file', file);
+        try {
+            const resp = await fetch(API + '/api/upload', { method: 'POST', body: formData });
+            const data = await resp.json();
+            if (resp.ok) {
+                toast(`${file.name} 上传成功，分为 ${data.chunks} 块`);
+            } else {
+                toast(`${file.name} 上传失败: ${data.detail || '未知错误'}`, 'error');
+            }
+        } catch (e) {
+            toast(`${file.name} 上传失败: ${e.message}`, 'error');
+        }
+    }
+    progress.style.display = 'none';
+    loadAll();
+}
+
+// Delete
+async function deleteDoc(fileId, filename) {
+    if (!confirm(`确定删除「${filename}」吗？`)) return;
+    try {
+        await fetch(API + `/api/documents/${fileId}`, { method: 'DELETE' });
+        toast('已删除');
+        loadAll();
+    } catch (e) {
+        toast('删除失败: ' + e.message, 'error');
+    }
+}
+
+// Test search
+async function testSearch() {
+    const query = document.getElementById('test-query').value.trim();
+    if (!query) return;
+    const resultsDiv = document.getElementById('search-results');
+    resultsDiv.innerHTML = '<div class="test-result">搜索中...</div>';
+    try {
+        const resp = await fetch(API + `/api/search?query=${encodeURIComponent(query)}`);
+        const data = await resp.json();
+        if (!data.results || !data.results.length) {
+            resultsDiv.innerHTML = '<div class="test-result">未找到相关内容，请上传更多文档或调整问题</div>';
+            return;
+        }
+        resultsDiv.innerHTML = data.results.map(r => `
+            <div class="search-result">
+                <span class="score">相似度: ${(r.score * 100).toFixed(1)}%</span>
+                <span class="source">来源: ${r.source}</span>
+                <div class="content">${r.content}</div>
+            </div>
+        `).join('');
+    } catch (e) {
+        resultsDiv.innerHTML = `<div class="test-result" style="color:#c33;">搜索失败: ${e.message}</div>`;
+    }
+}
+
+// Enter key for search
+document.getElementById('test-query').addEventListener('keydown', e => {
+    if (e.key === 'Enter') testSearch();
+});
+
+// Init
+loadAll();
+</script>
+</body>
+</html>

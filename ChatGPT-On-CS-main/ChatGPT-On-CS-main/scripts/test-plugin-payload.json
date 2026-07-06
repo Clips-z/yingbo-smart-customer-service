@@ -1,0 +1,12 @@
+{
+  "code": "const cc = require('config_srv');\nconst rp = require('reply_srv');\nasync function main(ctx, messages) {\n  const cfg = await cc.get(ctx);\n  return await rp.getReply(cfg, ctx, messages);\n}",
+  "messages": [
+    { "role": "OTHER", "content": "你好，请问你们家这款商品现在有货吗？什么时候能发货？" }
+  ],
+  "ctx": {
+    "CTX_APP_ID": "",
+    "CTX_INSTANCE_ID": "",
+    "CTX_APP_NAME": "测试",
+    "CTX_PLATFORM": "测试平台"
+  }
+}
