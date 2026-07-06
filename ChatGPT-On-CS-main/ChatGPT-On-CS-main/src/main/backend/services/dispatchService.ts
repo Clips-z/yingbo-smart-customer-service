@@ -11,6 +11,14 @@ import { CTX_APP_ID, CTX_INSTANCE_ID, PluginDefaultRunCode } from '../constants'
 import { LoggerService } from './loggerService';
 import { getPlatformStatuses } from './platformRuntimeService';
 
+/** NO_REPLY 常量，避免重复创建对象 */
+const NO_REPLY_RESULT: ReplyDTO = {
+  type: 'NO_REPLY',
+  content: '',
+  source: 'default',
+  safeToAutoSend: false,
+};
+
 export class DispatchService {
   // TypeScript 构造函数参数修饰符已自动完成赋值，无需手动 this.x = x
   constructor(
@@ -60,16 +68,22 @@ export class DispatchService {
       type: 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'NO_REPLY';
     }>;
   }): Promise<ReplyDTO> {
+    // 🔒 空值保护：data 可能来自不受信任的 Socket.IO 客户端
+    if (!data || !data.ctx || !data.msgs) {
+      this.log.warn('createReply 收到无效数据，返回 NO_REPLY');
+      return NO_REPLY_RESULT;
+    }
     const { ctx, msgs } = data;
-    const ctxMap = new Map<string, string>();
-    Object.keys(ctx).forEach((key) => {
-      ctxMap.set(key, ctx[key]);
-    });
-
-    let reply: ReplyDTO;
-    const cfg = await this.configController.get(ctxMap);
+    const ctxMap = new Map(Object.entries(ctx));
     const appId = ctxMap.get(CTX_APP_ID);
     const instanceId = ctxMap.get(CTX_INSTANCE_ID);
+
+    // 🔒 空值保护：cfg 可能为 null
+    const cfg = await this.configController.get(ctxMap);
+    if (!cfg) {
+      this.log.warn(`平台 ${appId || 'unknown'} 配置不存在，跳过回复生成`);
+      return NO_REPLY_RESULT;
+    }
 
     const isActive = await this.configController.checkConfigActive({
       appId,
@@ -77,32 +91,24 @@ export class DispatchService {
     });
     if (!isActive) {
       this.log.info(`平台 ${appId || 'global'} 未激活，跳过回复生成`);
-      return {
-        type: 'NO_REPLY',
-        content: '',
-        source: 'default',
-        safeToAutoSend: false,
-      };
+      return NO_REPLY_RESULT;
     }
 
     if (!cfg.has_use_gpt) {
       this.log.info(`平台 ${appId || 'global'} 未启用 GPT，跳过回复生成`);
-      return {
-        type: 'NO_REPLY',
-        content: '',
-        source: 'default',
-        safeToAutoSend: false,
-      };
+      return NO_REPLY_RESULT;
     }
 
-    await this.messageService.extractMsgInfo(cfg, ctxMap, msgs);
-    const history = await this.messageController.getConversationMessages(
-      ctxMap,
-      Math.max(cfg.context_count || 0, 0),
-    );
-    const contextualMessages = [...history, ...msgs];
-
+    // 🔒 try-catch 覆盖完整的回复生成流程
+    let reply: ReplyDTO;
     try {
+      await this.messageService.extractMsgInfo(cfg, ctxMap, msgs);
+      const history = await this.messageController.getConversationMessages(
+        ctxMap,
+        Math.max(cfg.context_count || 0, 0),
+      );
+      const contextualMessages = [...history, ...msgs];
+
       if (cfg.use_plugin && cfg.plugin_id) {
         reply = await this.pluginService.executePlugin(
           cfg.plugin_id,
@@ -121,15 +127,21 @@ export class DispatchService {
           ctxMap,
           contextualMessages,
         );
-        reply = replyData.data;
+        // 🔒 防护：replyData.data 可能不是有效的 ReplyDTO
+        reply = replyData?.data || NO_REPLY_RESULT;
       }
     } catch (error) {
-      console.error('Failed to execute plugin', error);
+      console.error('Failed to generate reply', error);
       this.log.error(
-        `回复失败: ${
+        `回复生成失败: ${
           error instanceof Error ? error.message : String(error)
         }，使用默认回复`,
       );
+      reply = await this.messageService.getDefaultReply(cfg);
+    }
+
+    // 🔒 防护：确保 reply 不为 undefined
+    if (!reply || !reply.type) {
       reply = await this.messageService.getDefaultReply(cfg);
     }
 

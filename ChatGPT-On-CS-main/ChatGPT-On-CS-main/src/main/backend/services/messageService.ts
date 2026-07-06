@@ -461,16 +461,20 @@ export class MessageService {
     }
 
     // 兜底：关键字段为空时，从全局配置继承（防止前端/控制器合并逻辑未生效导致 key 丢失）
-    if (!cfg.key || !cfg.base_url || !cfg.system_prompt) {
+    // 🔒 不修改传入的 cfg 对象，使用局部变量避免副作用
+    let resolvedKey = cfg.key;
+    let resolvedBaseUrl = cfg.base_url;
+    let resolvedSystemPrompt = cfg.system_prompt;
+    let resolvedModel = cfg.model;
+
+    if (!resolvedKey || !resolvedBaseUrl || !resolvedSystemPrompt) {
       try {
         const globalConfig = await Config.findOne({ where: { global: true } });
         if (globalConfig) {
-          if (!cfg.key && globalConfig.key) cfg.key = globalConfig.key;
-          if (!cfg.base_url && globalConfig.base_url)
-            cfg.base_url = globalConfig.base_url;
-          if (!cfg.system_prompt && globalConfig.system_prompt)
-            cfg.system_prompt = globalConfig.system_prompt;
-          if (!cfg.model && globalConfig.model) cfg.model = globalConfig.model;
+          if (!resolvedKey && globalConfig.key) resolvedKey = globalConfig.key;
+          if (!resolvedBaseUrl && globalConfig.base_url) resolvedBaseUrl = globalConfig.base_url;
+          if (!resolvedSystemPrompt && globalConfig.system_prompt) resolvedSystemPrompt = globalConfig.system_prompt;
+          if (!resolvedModel && globalConfig.model) resolvedModel = globalConfig.model;
         }
       } catch (e) {
         this.log.error(
@@ -772,7 +776,8 @@ export class MessageService {
 
       if (!query.trim()) return '';
 
-      const response = await axios.get('http://127.0.0.1:8000/api/search', {
+      const ragUrl = process.env.RAG_SERVICE_URL || 'http://127.0.0.1:8000';
+      const response = await axios.get(`${ragUrl}/api/search`, {
         params: { query, top_k: 5 },
         timeout: 10000,
       });

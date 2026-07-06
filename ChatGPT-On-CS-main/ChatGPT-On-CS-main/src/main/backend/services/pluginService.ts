@@ -189,7 +189,23 @@ export class PluginService {
       `;
 
       vm.createContext(sandbox);
-      vm.runInContext(pluginCode, sandbox);
+
+      // 🔒 插件执行超时保护（30 秒）
+      const PLUGIN_EXEC_TIMEOUT_MS = 30000;
+      const execPromise = new Promise<void>((resolve, reject) => {
+        try {
+          vm.runInContext(pluginCode, sandbox, { timeout: PLUGIN_EXEC_TIMEOUT_MS });
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      });
+
+      const timeoutPromise = new Promise<void>((_, reject) => {
+        setTimeout(() => reject(new Error('插件执行超时（30秒）')), PLUGIN_EXEC_TIMEOUT_MS);
+      });
+
+      await Promise.race([execPromise, timeoutPromise]);
 
       if (typeof sandbox.module.exports !== 'function') {
         this.log.error('插件格式错误，请检查是否导出函数');

@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>迎波智能客服 v1.5 — UI 预览</title>
+<style>
+:root {
+  --brand: #6366F1;
+  --brand-light: #818CF8;
+  --cyan: #06B6D4;
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-200: #e2e8f0;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-700: #334155;
+  --gray-800: #1e293b;
+  --green-400: #4ade80;
+  --green-500: #22c55e;
+  --green-600: #16a34a;
+  --orange-400: #fb923c;
+  --orange-500: #f97316;
+  --red-400: #f87171;
+  --red-500: #ef4444;
+  --blue-400: #60a5fa;
+  --blue-500: #3b82f6;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f1f5f9; color: #334155; line-height: 1.5;
+}
+@keyframes pulse-ring {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34,197,94,0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34,197,94,0); }
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.fade-in { animation: fadeIn 0.3s ease; }
+
+/* 导航栏 */
+.navbar {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 24px; background: rgba(255,255,255,0.92);
+  backdrop-filter: blur(16px); border-bottom: 1px solid var(--gray-100);
+  box-shadow: var(--shadow-sm);
+}
+.nav-brand { display: flex; align-items: center; gap: 12px; }
+.nav-logo {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--brand) 0%, var(--cyan) 100%);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+}
+.nav-logo span { color: white; font-weight: 900; font-size: 15px; }
+.nav-title h1 { font-size: 1.15em; font-weight: 800; background: linear-gradient(135deg, var(--brand) 0%, var(--cyan) 50%, var(--brand-light) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.nav-title p { font-size: 9px; color: var(--gray-400); letter-spacing: 0.1em; text-transform: uppercase; }
+.nav-actions { display: flex; gap: 4px; }
+.btn { padding: 6px 14px; border-radius: 24px; border: none; font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.btn-ghost { background: transparent; color: var(--gray-600); }
+.btn-ghost:hover { background: #eef2ff; color: var(--brand); }
+.btn-primary { background: var(--brand); color: white; box-shadow: 0 2px 6px rgba(99,102,241,0.25); font-weight: 600; }
+.btn-primary:hover { background: #4f46e5; transform: translateY(-1px); }
+
+/* 主容器 */
+.container { max-width: 880px; margin: 0 auto; padding: 20px; }
+
+/* 卡片 */
+.card {
+  background: white; border-radius: var(--radius-lg); padding: 20px;
+  box-shadow: var(--shadow-sm); margin-bottom: 16px;
+  border: 1px solid var(--gray-100);
+}
+.card-header { font-size: 14px; font-weight: 600; color: var(--gray-800); margin-bottom: 12px; }
+
+/* 平台卡片网格 */
+.platform-grid { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.platform-card {
+  background: white; border-radius: 12px; padding: 12px 16px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: var(--shadow-sm); border: 1px solid var(--gray-200);
+  min-width: 150px; cursor: pointer; transition: all 0.25s;
+}
+.platform-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.platform-card.offline { opacity: 0.5; }
+.platform-card.selected { box-shadow: 0 0 0 2px var(--brand-light), var(--shadow-md); }
+.platform-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; font-size: 18px;
+}
+.platform-name { font-size: 13px; font-weight: 600; color: var(--gray-800); }
+.platform-status { display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.status-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+}
+.status-dot.online { background: var(--green-400); animation: pulse-ring 2s infinite; }
+.status-dot.offline { background: #d4d4d4; }
+.status-text { font-size: 11px; }
+.status-text.online { color: var(--green-600); }
+.status-text.offline { color: var(--gray-400); }
+
+/* 状态栏 */
+.status-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  background: white; border-radius: 12px; padding: 10px 16px;
+  border: 1px solid var(--gray-100); box-shadow: var(--shadow-sm);
+}
+
+/* 标签页 */
+.tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.tab {
+  padding: 6px 16px; border-radius: 24px; border: 1px solid var(--gray-200);
+  background: white; color: var(--gray-500); font-size: 12px; font-weight: 500;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
+  transition: all 0.2s;
+}
+.tab.active { border-color: transparent; background: var(--brand); color: white; font-weight: 600; }
+.tab-badge {
+  padding: 0 6px; border-radius: 12px; font-size: 10px;
+}
+.tab.active .tab-badge { background: rgba(255,255,255,0.3); color: white; }
+.tab:not(.active) .tab-badge { background: var(--gray-100); color: var(--gray-500); }
+
+/* Segmented Control */
+.segmented { display: flex; background: var(--gray-100); border-radius: 12px; padding: 3px; gap: 2px; }
+.seg-btn {
+  padding: 6px 14px; border-radius: 10px; border: none;
+  font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s;
+  background: transparent; color: var(--gray-500);
+}
+.seg-btn.active { color: white; font-weight: 600; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+.seg-btn.active.hint { background: var(--brand); }
+.seg-btn.active.assist { background: var(--green-500); }
+.seg-btn.active.unattended { background: var(--red-500); }
+
+/* 回复卡片 */
+.reply-card {
+  background: white; border-radius: 12px; padding: 16px;
+  box-shadow: var(--shadow-sm); margin-bottom: 8px;
+  border: 1px solid var(--gray-100);
+  position: relative; overflow: hidden;
+}
+.reply-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 4px;
+}
+.reply-card.pending::before { background: var(--orange-400); }
+.reply-card.prepared::before { background: var(--blue-400); }
+.reply-card.dismissed::before { background: var(--gray-400); }
+.reply-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 12px;
+}
+.reply-sender { display: flex; align-items: center; gap: 8px; }
+.reply-sender strong { font-size: 13px; color: var(--gray-800); }
+.badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 6px;
+}
+.badge-platform { background: #ecfdf5; color: #059669; }
+.badge-platform.qianniu { background: #fff7ed; color: #c2410c; }
+.badge-platform.jinmai { background: #fef2f2; color: #dc2626; }
+.badge-status { }
+.badge-status.pending { background: #fff7ed; color: #ea580c; }
+.badge-status.prepared { background: #eff6ff; color: #2563eb; }
+.badge-status.dismissed { background: var(--gray-100); color: var(--gray-500); }
+
+.bubble {
+  background: var(--gray-50); border-radius: 10px; padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.bubble-label { font-size: 10px; color: var(--gray-400); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+.bubble-text { font-size: 13px; color: var(--gray-600); margin-top: 4px; line-height: 1.6; }
+
+.reply-section { margin-top: 0; }
+.reply-label-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.reply-label { font-size: 10px; color: var(--gray-400); font-weight: 600; }
+.reply-count { font-size: 10px; color: var(--gray-400); }
+.reply-textarea {
+  width: 100%; min-height: 60px; padding: 10px 12px;
+  border-radius: 8px; border: 1px solid var(--gray-200);
+  font-size: 13px; color: var(--gray-700); resize: vertical;
+  font-family: inherit; line-height: 1.5;
+}
+.reply-textarea:focus { outline: none; border-color: var(--brand-light); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+
+.reply-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+.icon-btn {
+  width: 28px; height: 28px; border-radius: 8px; border: none;
+  background: transparent; color: var(--gray-400); cursor: pointer;
+  font-size: 14px; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.icon-btn:hover { background: #eef2ff; color: var(--brand); }
+.fill-btn {
+  padding: 6px 16px; border-radius: 10px; border: none;
+  color: white; font-size: 12px; font-weight: 600; cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s;
+}
+.fill-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.fill-btn.wechat { background: var(--green-500); }
+.fill-btn.qianniu { background: var(--orange-500); }
+.fill-btn.jinmai { background: var(--red-500); }
+
+/* 控制面板 */
+.control-layout { display: flex; gap: 24px; align-items: flex-start; }
+.play-area {
+  display: flex; flex-direction: column; align-items: center;
+  border-radius: var(--radius-lg); padding: 16px 24px;
+  min-width: 100px;
+}
+.play-area.running { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.play-btn {
+  width: 56px; height: 56px; border-radius: 50%; border: none;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.3s; font-size: 24px;
+}
+.play-btn.running { background: var(--green-500); color: white; box-shadow: 0 0 20px rgba(34,197,94,0.4); }
+.play-btn:hover { transform: scale(1.05); }
+.play-label { margin-top: 8px; font-size: 13px; font-weight: 700; }
+.play-label.running { color: var(--green-600); }
+
+.toggle-list { flex: 1; }
+.toggle-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0;
+}
+.toggle-label { font-size: 13px; font-weight: 500; color: var(--gray-700); }
+.toggle-desc { font-size: 11px; color: var(--gray-400); }
+.toggle-switch {
+  width: 36px; height: 20px; border-radius: 10px;
+  position: relative; cursor: pointer; transition: all 0.2s;
+  border: none; flex-shrink: 0;
+}
+.toggle-switch.on { background: var(--brand); }
+.toggle-switch.off { background: #cbd5e1; }
+.toggle-switch::after {
+  content: ''; width: 16px; height: 16px; border-radius: 50%;
+  background: white; position: absolute; top: 2px; transition: all 0.2s;
+}
+.toggle-switch.on::after { left: 18px; }
+.toggle-switch.off::after { left: 2px; }
+
+/* 日志面板 */
+.log-list {
+  border: 1px solid var(--gray-100); border-radius: 8px;
+  overflow: hidden; background: var(--gray-50); max-height: 200px;
+  overflow-y: auto;
+}
+.log-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 6px 12px; border-bottom: 1px solid var(--gray-100);
+}
+.log-item:nth-child(even) { background: white; }
+.log-dot {
+  width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+  margin-top: 5px;
+}
+.log-time { font-size: 11px; color: var(--gray-400); font-family: 'SF Mono', 'Consolas', monospace; min-width: 52px; }
+.log-content { font-size: 12px; line-height: 1.5; }
+.log-content.error { color: #dc2626; }
+.log-content.warn { color: #ea580c; }
+.log-content.success { color: var(--green-600); }
+
+/* Footer */
+.footer {
+  text-align: center; padding: 16px; color: var(--gray-400);
+  font-size: 11px;
+}
+
+/* 响应式 */
+@media (max-width: 600px) {
+  .container { padding: 10px; }
+  .platform-grid { gap: 8px; }
+  .platform-card { min-width: 130px; padding: 10px 12px; }
+  .control-layout { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<!-- 导航栏 -->
+<nav class="navbar">
+  <div class="nav-brand">
+    <div class="nav-logo"><span>YB</span></div>
+    <div class="nav-title">
+      <h1>迎波智能客服</h1>
+      <p>AI Customer Service</p>
+    </div>
+  </div>
+  <div class="nav-actions">
+    <button class="btn btn-ghost">📋 记录</button>
+    <button class="btn btn-ghost">🔑 关键词</button>
+    <button class="btn btn-primary">⚙️ 设置</button>
+  </div>
+</nav>
+
+<!-- 主内容 -->
+<div class="container">
+
+  <!-- 平台管理 -->
+  <div class="card">
+    <div class="card-header">📡 平台管理</div>
+    <div class="platform-grid" id="platformGrid"></div>
+    <div class="status-bar">
+      <div style="display:flex;gap:20px">
+        <span style="font-size:12px;color:var(--gray-700)">
+          <span class="status-dot online" style="display:inline-block"></span>
+          <strong>4</strong> 个在线
+        </span>
+        <span style="font-size:12px;color:var(--gray-400)">
+          <span class="status-dot offline" style="display:inline-block"></span>
+          <strong>2</strong> 个离线
+        </span>
+      </div>
+      <span style="font-size:11px;color:var(--gray-400)">点击卡片选择平台 · 仅在线可操作</span>
+    </div>
+  </div>
+
+  <!-- 回复工作台 -->
+  <div class="card">
+    <div class="card-header">💼 回复工作台</div>
+
+    <!-- 平台标签 -->
+    <div class="tabs" id="platformTabs"></div>
+
+    <!-- 模式 + 标题 -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h4 style="font-size:13px;font-weight:600;color:var(--gray-800);margin:0">微信 · 回复工作台</h4>
+        <p style="font-size:11px;color:var(--gray-400);margin:2px 0 0">仅生成建议，不操作客服客户端</p>
+      </div>
+      <div class="segmented">
+        <button class="seg-btn active hint">💡 仅提示</button>
+        <button class="seg-btn assist">🤝 辅助回复</button>
+        <button class="seg-btn unattended">🤖 无人值守</button>
+      </div>
+    </div>
+
+    <!-- 回复卡片列表 -->
+    <div id="replyCards"></div>
+  </div>
+
+  <!-- 控制面板 -->
+  <div class="card">
+    <div class="card-header">🎛️ 控制面板</div>
+    <div class="control-layout">
+      <div class="play-area running">
+        <button class="play-btn running">▶</button>
+        <span class="play-label running">运行中</span>
+      </div>
+      <div class="toggle-list" id="toggleList"></div>
+    </div>
+  </div>
+
+  <!-- 运行日志 -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="card-header" style="margin-bottom:0">📜 运行日志 <span style="font-size:11px;color:var(--gray-400);font-weight:400">6 条记录</span></div>
+      <div style="display:flex;gap:4px">
+        <button class="icon-btn">🗑️</button>
+        <button class="icon-btn">📂</button>
+      </div>
+    </div>
+    <div class="log-list" id="logList"></div>
+  </div>
+
+  <div class="footer">📘 使用手册 · © 2026 YinBo. All rights reserved. · UI 预览版 v1.5</div>
+</div>
+
+<script>
+// ========== 模拟数据 ==========
+const platforms = [
+  { id: 'win_qianniu', name: '千牛', emoji: '🐂', iconBg: '#fff7ed', running: true },
+  { id: 'win_wechat', name: '微信', emoji: '💬', iconBg: '#ecfdf5', running: true },
+  { id: 'win_wecom', name: '企微', emoji: '🏢', iconBg: '#eff6ff', running: false },
+  { id: 'win_jinmai', name: '京麦', emoji: '📦', iconBg: '#fef2f2', running: true },
+  { id: 'win_pdd', name: '拼多多', emoji: '🛒', iconBg: '#fef2f2', running: false },
+  { id: 'win_douyin', name: '抖音电商', emoji: '🎵', iconBg: '#f8fafc', running: true },
+];
+
+const tabs = [
+  { id: 'all', label: '🌐 全部', count: 12, active: true },
+  { id: 'win_wechat', label: '💬 微信', count: 5, active: false },
+  { id: 'win_qianniu', label: '🐂 千牛', count: 4, active: false },
+  { id: 'win_jinmai', label: '📦 京麦', count: 3, active: false },
+];
+
+const replyCards = [
+  { sender: '张三', platform: '微信', platformClass: '', status: 'pending', statusLabel: '待回复', statusClass: 'pending', msg: '你好，这个衣服有没有XXL码的？我身高185穿L会不会小？', reply: '亲，有的哦～XXL码库存充足。185的话建议选XXL，L码可能会偏小呢。现在下单今天就能发货～', time: '2分钟前', fillBtn: 'wechat', fillLabel: '✏️ 填入微信' },
+  { sender: '李四', platform: '千牛', platformClass: 'qianniu', status: 'prepared', statusLabel: '已填入', statusClass: 'prepared', msg: '我买的鞋怎么还没发货？已经3天了，别人的都到了', reply: '非常抱歉让您久等了！我马上帮您查一下物流情况。最近仓库爆单，部分订单会延迟1-2天，我帮您优先处理～', time: '5分钟前', fillBtn: 'qianniu', fillLabel: '✏️ 填入千牛' },
+  { sender: '王五', platform: '京麦', platformClass: 'jinmai', status: 'dismissed', statusLabel: '已处理', statusClass: 'dismissed', msg: '能便宜点吗？我看别家才卖99，你们卖129太贵了', reply: '亲，我们家品质有保障哦～用的是进口面料，做工也更精细。129已经是618活动价了，还送运费险呢', time: '15分钟前', fillBtn: 'jinmai', fillLabel: '✏️ 填入京麦' },
+];
+
+const toggles = [
+  { label: '关键词匹配', desc: '优先匹配关键词，未匹配则调用 AI', on: true },
+  { label: 'GPT 回复', desc: '关闭后仅使用关键词回复', on: true },
+  { label: '关键词转人工', desc: '匹配关键词自动暂停并提醒', on: true },
+  { label: '关键词替换', desc: '自动替换回复中的敏感词', on: false },
+  { label: 'ESC 自动暂停', desc: '按 ESC 键时自动暂停回复', on: true },
+];
+
+const logs = [
+  { time: '14:32:01', text: '检测到微信，微信自动回复采集已启动', cls: '' },
+  { time: '14:32:02', text: '检测到千牛，千牛自动回复采集已启动', cls: '' },
+  { time: '14:32:05', text: '匹配关键词: 亲，有的哦～XXL码库存充足', cls: 'success' },
+  { time: '14:33:10', text: '未匹配到关键词，开始使用 GPT 生成回复', cls: 'warn' },
+  { time: '14:33:12', text: 'GPT 生成回复: 非常抱歉让您久等了...', cls: 'success' },
+  { time: '14:35:00', text: '千牛采集异常退出（代码 1），4 秒后重试', cls: 'error' },
+];
+
+// ========== 渲染 ==========
+// 平台卡片
+const grid = document.getElementById('platformGrid');
+platforms.forEach(p => {
+  grid.innerHTML += `
+    <div class="platform-card ${p.running ? '' : 'offline'} fade-in" onclick="this.classList.toggle('selected')">
+      <div class="platform-icon" style="background:${p.iconBg}">${p.emoji}</div>
+      <div>
+        <div class="platform-name">${p.name}</div>
+        <div class="platform-status">
+          <span class="status-dot ${p.running ? 'online' : 'offline'}"></span>
+          <span class="status-text ${p.running ? 'online' : 'offline'}">${p.running ? '在线' : '离线'}</span>
+        </div>
+      </div>
+    </div>`;
+});
+
+// 平台标签
+const tabContainer = document.getElementById('platformTabs');
+tabs.forEach(t => {
+  tabContainer.innerHTML += `
+    <button class="tab ${t.active ? 'active' : ''}">
+      ${t.label} <span class="tab-badge">${t.count}</span>
+    </button>`;
+});
+
+// 回复卡片
+const replyContainer = document.getElementById('replyCards');
+replyCards.forEach(c => {
+  replyContainer.innerHTML += `
+    <div class="reply-card ${c.status} fade-in">
+      <div class="reply-card-header">
+        <div class="reply-sender">
+          <span style="color:var(--brand)">👤</span>
+          <strong>${c.sender}</strong>
+          <span class="badge badge-platform ${c.platformClass}">${c.platform}</span>
+          <span class="badge badge-status ${c.statusClass}">${c.statusLabel}</span>
+        </div>
+        <span style="font-size:11px;color:var(--gray-400)">${c.time}</span>
+      </div>
+      <div class="bubble">
+        <span class="bubble-label">买家原话</span>
+        <p class="bubble-text">${c.msg}</p>
+      </div>
+      <div class="reply-section">
+        <div class="reply-label-row">
+          <span class="reply-label">建议回复</span>
+          <span class="reply-count">可编辑 · ${c.reply.length}/300</span>
+        </div>
+        <textarea class="reply-textarea">${c.reply}</textarea>
+      </div>
+      <div class="reply-actions">
+        <div style="display:flex;gap:4px">
+          <button class="icon-btn">📋</button>
+          <button class="icon-btn">✅</button>
+        </div>
+        <button class="fill-btn ${c.fillBtn}">${c.fillLabel}</button>
+      </div>
+    </div>`;
+});
+
+// 控制面板开关
+const toggleContainer = document.getElementById('toggleList');
+toggles.forEach(t => {
+  toggleContainer.innerHTML += `
+    <div class="toggle-row">
+      <div>
+        <div class="toggle-label">${t.label}</div>
+        <div class="toggle-desc">${t.desc}</div>
+      </div>
+      <button class="toggle-switch ${t.on ? 'on' : 'off'}" onclick="this.classList.toggle('on');this.classList.toggle('off')"></button>
+    </div>`;
+});
+
+// 日志列表
+const logContainer = document.getElementById('logList');
+logs.forEach((l, i) => {
+  const dotColor = l.cls === 'error' ? 'var(--red-400)' : l.cls === 'warn' ? 'var(--orange-400)' : l.cls === 'success' ? 'var(--green-400)' : 'var(--blue-400)';
+  logContainer.innerHTML += `
+    <div class="log-item fade-in">
+      <span class="log-dot" style="background:${dotColor}"></span>
+      <span class="log-time">${l.time}</span>
+      <span class="log-content ${l.cls}">${l.text}</span>
+    </div>`;
+});
+
+// 模式切换
+document.querySelectorAll('.seg-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+</script>
+
+</body>
+</html>
