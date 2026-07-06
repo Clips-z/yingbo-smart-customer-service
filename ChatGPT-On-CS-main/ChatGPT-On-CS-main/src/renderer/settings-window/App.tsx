@@ -17,7 +17,15 @@ import {
   Checkbox,
   Text,
   Button,
+  Box,
+  VStack,
 } from '@chakra-ui/react';
+import {
+  FiSettings,
+  FiCpu,
+  FiBox,
+  FiInfo,
+} from 'react-icons/fi';
 import { loader } from '@monaco-editor/react';
 import { HashRouter as Router, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -51,6 +59,14 @@ const queryClient = new QueryClient({
   },
 });
 
+// 侧边栏导航配置
+const NAV_ITEMS = [
+  { key: 'general', icon: FiSettings, label: '通用设置' },
+  { key: 'ai', icon: FiCpu, label: 'AI 配置' },
+  { key: 'plugin', icon: FiBox, label: '插件设置' },
+  { key: 'about', icon: FiInfo, label: '关于' },
+];
+
 const App = () => {
   const [settings, setSettings] = useState<{
     appId?: string;
@@ -59,13 +75,11 @@ const App = () => {
   const toast = useToast();
   const [isActive, setIsActive] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(true);
+  const [tabIndex, setTabIndex] = useState(0);
 
   useEffect(() => {
     trackPageView('Settings');
   }, []);
-
-  // 打印当前的 url
-  // console.log('current url:', window.location.href);
 
   const fetchConfigActive = useCallback(
     async (appId: string, instanceId?: string) => {
@@ -97,8 +111,6 @@ const App = () => {
       try {
         const { appId, instanceId } = settings;
 
-        console.log('activeConfig', event.target.checked);
-
         setIsActive(event.target.checked);
         await activeConfig({
           active: event.target.checked,
@@ -113,7 +125,7 @@ const App = () => {
           isClosable: true,
         });
 
-        setIsModalOpen(!event.target.checked); // Close modal after activation
+        setIsModalOpen(!event.target.checked);
       } catch (error) {
         const errormsg =
           error instanceof Error ? error.message : JSON.stringify(error);
@@ -147,7 +159,6 @@ const App = () => {
 
       setSettings(settingsArgs);
 
-      // If both appId and instanceId are present, fetch config active state
       if (settingsArgs.appId) {
         fetchConfigActive(settingsArgs.appId, settingsArgs.instanceId);
       }
@@ -160,7 +171,6 @@ const App = () => {
       electron.ipcRenderer.on(
         'update-settings-params',
         // @ts-ignore
-        // eslint-disable-next-line @typescript-eslint/no-shadow
         (receivedArgs: string[]) => {
           console.log('update-settings-params', receivedArgs);
           handleParams(receivedArgs);
@@ -174,141 +184,194 @@ const App = () => {
   }, [fetchConfigActive]);
 
   const renderSettingsTabs = () => (
-    <Tabs variant="enclosed" orientation="vertical" flex="1">
-      <TabList
-        p={4}
-        width="200px"
-        bg="gray.100"
+    <Flex direction="row" height="100vh" bg="gray.50">
+      {/* 侧边导航栏 — 图标风格 */}
+      <Flex
+        direction="column"
+        w="180px"
+        bg="white"
         borderRight="1px solid"
-        borderColor="gray.200"
+        borderColor="gray.100"
+        py={4}
+        px={2}
       >
-        <Tab
-          _selected={{ bg: 'gray.200' }}
-          _hover={{ bg: 'gray.300' }}
-          textAlign="left"
-        >
-          通用设置
-        </Tab>
-        <Tab
-          _selected={{ bg: 'gray.200' }}
-          _hover={{ bg: 'gray.300' }}
-          textAlign="left"
-        >
-          AI 配置
-        </Tab>
-        <Tab
-          _selected={{ bg: 'gray.200' }}
-          _hover={{ bg: 'gray.300' }}
-          textAlign="left"
-        >
-          {settings.appId || settings.instanceId ? '' : '全局'}插件设置
-        </Tab>
-
-        {!settings.appId && (
-          <Tab
-            _selected={{ bg: 'gray.200' }}
-            _hover={{ bg: 'gray.300' }}
-            textAlign="left"
+        {/* Logo */}
+        <Box px={3} mb={6}>
+          <Heading
+            size="sm"
+            fontWeight="800"
+            letterSpacing="-0.02em"
+            className="font-zh"
+            background="linear-gradient(135deg, #6366F1 0%, #06B6D4 100%)"
+            backgroundClip="text"
+            style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
           >
-            关于
-          </Tab>
-        )}
-      </TabList>
-
-      <TabPanels flex="1" overflowY="auto" p={4}>
-        <TabPanel>
-          <Heading as="h3" size="md" mb={4}>
-            通用设置
+            迎波智能客服
           </Heading>
-          <GeneralSettings
-            style={{ width: '60vw' }}
-            appId={settings.appId}
-            instanceId={settings.instanceId}
-          />
-        </TabPanel>
-        <TabPanel>
-          <Heading as="h3" size="md" mb={4}>
-            AI 配置
-          </Heading>
-          <LLMSettings
-            appId={settings.appId}
-            instanceId={settings.instanceId}
-          />
-        </TabPanel>
-        <TabPanel>
-          <Router>
-            <Routes>
-              <Route
-                path="/"
-                element={
-                  <PluginPage
-                    appId={settings.appId}
-                    instanceId={settings.instanceId}
-                  />
-                }
-              />
-              <Route path="/editor" element={<PluginEditPage />} />
-            </Routes>
-          </Router>
-        </TabPanel>
+          <Text fontSize="10px" color="gray.400" mt={0.5} fontWeight={500}>
+            设置中心
+          </Text>
+        </Box>
 
-        {!settings.appId && (
-          <>
-            <TabPanel>
-              <AboutPage />
+        {/* 导航项 */}
+        <Tabs
+          orientation="vertical"
+          index={tabIndex}
+          onChange={setTabIndex}
+          flex="1"
+          variant="unstyled"
+        >
+          <TabList>
+            {NAV_ITEMS.map((item, i) => {
+              // 平台设置时隐藏关于页
+              if (item.key === 'about' && (settings.appId || settings.instanceId)) {
+                return null;
+              }
+              // 平台设置时调整插件标签
+              const label =
+                item.key === 'plugin' && (settings.appId || settings.instanceId)
+                  ? '插件设置'
+                  : item.key === 'plugin'
+                  ? '全局插件'
+                  : item.label;
+
+              const isSelected = tabIndex === i;
+              const Icon = item.icon;
+
+              return (
+                <Tab
+                  key={item.key}
+                  borderRadius="lg"
+                  mb={1}
+                  px={3}
+                  py={2.5}
+                  justifyContent="flex-start"
+                  fontSize="13px"
+                  fontWeight={isSelected ? 600 : 500}
+                  color={isSelected ? 'brand.600' : 'gray.600'}
+                  bg={isSelected ? 'brand.50' : 'transparent'}
+                  _hover={isSelected ? {} : { bg: 'gray.100', color: 'gray.700' }}
+                  transition="all 0.2s"
+                >
+                  <Icon size={16} style={{ marginRight: 10 }} />
+                  {label}
+                </Tab>
+              );
+            })}
+          </TabList>
+        </Tabs>
+      </Flex>
+
+      {/* 内容区域 */}
+      <Box flex="1" overflowY="auto" p={6} bg="gray.50">
+        <Tabs
+          orientation="vertical"
+          index={tabIndex}
+          onChange={setTabIndex}
+          variant="unstyled"
+          flex="1"
+        >
+          <TabPanels>
+            <TabPanel p={0}>
+              <Box bg="white" borderRadius="xl" p={6} boxShadow="sm" border="1px solid" borderColor="gray.100">
+                <Heading as="h3" size="md" mb={5} color="gray.800" display="flex" alignItems="center" gap={2}>
+                  <FiSettings size={20} /> 通用设置
+                </Heading>
+                <GeneralSettings
+                  style={{ width: '100%' }}
+                  appId={settings.appId}
+                  instanceId={settings.instanceId}
+                />
+              </Box>
             </TabPanel>
-          </>
-        )}
-      </TabPanels>
-    </Tabs>
+            <TabPanel p={0}>
+              <Box bg="white" borderRadius="xl" p={6} boxShadow="sm" border="1px solid" borderColor="gray.100">
+                <Heading as="h3" size="md" mb={5} color="gray.800" display="flex" alignItems="center" gap={2}>
+                  <FiCpu size={20} /> AI 配置
+                </Heading>
+                <LLMSettings
+                  appId={settings.appId}
+                  instanceId={settings.instanceId}
+                />
+              </Box>
+            </TabPanel>
+            <TabPanel p={0}>
+              <Router>
+                <Routes>
+                  <Route
+                    path="/"
+                    element={
+                      <PluginPage
+                        appId={settings.appId}
+                        instanceId={settings.instanceId}
+                      />
+                    }
+                  />
+                  <Route path="/editor" element={<PluginEditPage />} />
+                </Routes>
+              </Router>
+            </TabPanel>
+            <TabPanel p={0}>
+              <Box bg="white" borderRadius="xl" p={6} boxShadow="sm" border="1px solid" borderColor="gray.100">
+                <AboutPage />
+              </Box>
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
+      </Box>
+
+      {/* 激活弹窗 */}
+      {settings.appId && (
+        <Modal isOpen={isModalOpen} onClose={() => {}}>
+          <ModalOverlay />
+          <ModalContent borderRadius="xl">
+            <ModalHeader>
+              激活配置
+              <Checkbox
+                ml={4}
+                isChecked={isActive}
+                onChange={handleCheckboxChange}
+                colorScheme="brand"
+              >
+                激活{' '}
+                {settings.instanceId
+                  ? `客服 ${settings.instanceId} 设置`
+                  : `应用 ${settings.appId} 设置`}
+              </Checkbox>
+              <Text color="gray.500" fontSize="sm" mt={1}>
+                请注意：激活设置后，设置才会生效
+              </Text>
+            </ModalHeader>
+            <ModalBody />
+          </ModalContent>
+        </Modal>
+      )}
+
+      {/* 取消激活按钮 */}
+      {settings.appId && isActive && (
+        <Button
+          position="fixed"
+          top="16px"
+          right="16px"
+          colorScheme="red"
+          variant="outline"
+          borderRadius="full"
+          size="sm"
+          onClick={() => {
+            // @ts-ignore
+            handleCheckboxChange({ target: { checked: false } });
+          }}
+        >
+          取消激活
+        </Button>
+      )}
+    </Flex>
   );
 
   return (
     <QueryClientProvider client={queryClient}>
       <ChakraProvider theme={theme}>
-        <Flex direction="row" height="99vh">
-          {renderSettingsTabs()}
-        </Flex>
-
-        {settings.appId && (
-          <Modal isOpen={isModalOpen} onClose={() => {}}>
-            <ModalOverlay />
-            <ModalContent>
-              <ModalHeader>
-                设置
-                <Checkbox
-                  ml={4}
-                  isChecked={isActive}
-                  onChange={handleCheckboxChange}
-                >
-                  激活{' '}
-                  {settings.instanceId
-                    ? `客服 ${settings.instanceId} 设置`
-                    : `应用 ${settings.appId} 设置`}
-                </Checkbox>
-                <Text color="gray.500" fontSize="sm">
-                  请注意：激活设置后，设置才会生效
-                </Text>
-              </ModalHeader>
-              <ModalBody>{/* 具体内容可在这里添加 */}</ModalBody>
-            </ModalContent>
-          </Modal>
-        )}
-
-        {settings.appId && isActive && (
-          <Button
-            position="fixed"
-            top="16px"
-            right="16px"
-            colorScheme="red"
-            onClick={() => {
-              // @ts-ignore
-              handleCheckboxChange({ target: { checked: false } });
-            }}
-          >
-            取消激活
-          </Button>
-        )}
+        {renderSettingsTabs()}
       </ChakraProvider>
     </QueryClientProvider>
   );

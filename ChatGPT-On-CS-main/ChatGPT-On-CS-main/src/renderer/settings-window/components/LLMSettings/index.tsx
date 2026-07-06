@@ -7,7 +7,13 @@ import {
   useToast,
   Stack,
   Skeleton,
+  Box,
+  Text,
+  Badge,
+  Flex,
+  Divider,
 } from '@chakra-ui/react';
+import { FiZap, FiKey, FiCheckCircle } from 'react-icons/fi';
 import { useQuery } from '@tanstack/react-query';
 import {
   getConfig,
@@ -115,8 +121,6 @@ const LLMSettings: React.FC<LLMSettingsProps> = ({ appId, instanceId }) => {
         cozeUserId: config.cozeUserId || 'lazy-customer-service',
       });
     } else {
-      // 切换模型类型时，填充该模型类型的默认 base URL 和推荐模型
-      // 如果当前已有配置且切换的是相同类型，则保留用户已修改的值
       const preset = LLMDefaultConfig[value];
       const defaultModel = preset?.models?.[0] || '';
       const isSameType = config.llmType === value;
@@ -171,61 +175,153 @@ const LLMSettings: React.FC<LLMSettingsProps> = ({ appId, instanceId }) => {
 
   if (isLoading) {
     return (
-      <Stack>
-        <Skeleton height="20px" />
-        <Skeleton height="20px" />
-        <Skeleton height="20px" />
+      <Stack spacing={4}>
+        <Skeleton height="40px" borderRadius="md" />
+        <Skeleton height="40px" borderRadius="md" />
+        <Skeleton height="40px" borderRadius="md" />
       </Stack>
     );
   }
 
   return (
-    <VStack spacing="4" align="start">
-      <FormControl>
-        <FormLabel htmlFor="llmType">选择大模型类型</FormLabel>
-        <Select
-          id="llmType"
-          placeholder="选择大模型类型"
-          value={config.llmType}
-          onChange={(e) => handleProviderChange(e.target.value)}
+    <VStack spacing={6} align="stretch">
+      {/* 步骤 1: 选择大模型供应商 */}
+      <Box
+        bg="gray.50"
+        borderRadius="lg"
+        p={4}
+        border="1px solid"
+        borderColor="gray.100"
+      >
+        <Flex align="center" gap={2} mb={3}>
+          <Flex
+            w="24px"
+            h="24px"
+            borderRadius="full"
+            bg="brand.500"
+            color="white"
+            align="center"
+            justify="center"
+            fontSize="12px"
+            fontWeight="700"
+          >
+            1
+          </Flex>
+          <Text fontWeight="600" fontSize="14px" color="gray.800">
+            选择大模型供应商
+          </Text>
+        </Flex>
+        <FormControl>
+          <Select
+            id="llmType"
+            placeholder="请选择大模型类型"
+            value={config.llmType}
+            onChange={(e) => handleProviderChange(e.target.value)}
+            bg="white"
+            borderRadius="lg"
+            size="md"
+            focusBorderColor="brand.400"
+          >
+            {LLMTypeList.map((type) => (
+              <option key={type.key} value={type.key}>
+                {type.name}
+              </option>
+            ))}
+          </Select>
+        </FormControl>
+      </Box>
+
+      {/* 步骤 2: 配置连接信息 */}
+      {config.llmType && (
+        <Box
+          bg="gray.50"
+          borderRadius="lg"
+          p={4}
+          border="1px solid"
+          borderColor="gray.100"
         >
-          {LLMTypeList.map((type) => (
-            <option key={type.key} value={type.key}>
-              {type.name}
-            </option>
-          ))}
-        </Select>
-      </FormControl>
+          <Flex align="center" gap={2} mb={3}>
+            <Flex
+              w="24px"
+              h="24px"
+              borderRadius="full"
+              bg={config.llmType ? 'brand.500' : 'gray.300'}
+              color="white"
+              align="center"
+              justify="center"
+              fontSize="12px"
+              fontWeight="700"
+            >
+              2
+            </Flex>
+            <Text fontWeight="600" fontSize="14px" color="gray.800">
+              配置连接信息
+            </Text>
+            {config.llmType && (
+              <Badge colorScheme="brand" variant="subtle" fontSize="10px" borderRadius="full">
+                {LLMTypeList.find((t) => t.key === config.llmType)?.name || config.llmType}
+              </Badge>
+            )}
+          </Flex>
 
-      {config.llmType !== 'coze' && (
-        <ThirdPartyInterface
-          config={config}
-          handleUpdateConfig={handleUpdateConfig}
-          handleBaseURLChange={handleBaseURLChange}
-          handleCheckHealth={handleCheckHealth}
-          reply={reply}
-          show={show}
-          setShow={setShow}
-        />
+          {config.llmType !== 'coze' && (
+            <ThirdPartyInterface
+              config={config}
+              handleUpdateConfig={handleUpdateConfig}
+              handleBaseURLChange={handleBaseURLChange}
+              handleCheckHealth={handleCheckHealth}
+              reply={reply}
+              show={show}
+              setShow={setShow}
+            />
+          )}
+
+          {config.llmType === 'coze' && (
+            <CozeSettings
+              config={config}
+              handleUpdateConfig={handleUpdateConfig}
+              handleCheckHealth={handleCheckHealth}
+              reply={reply}
+              show={show}
+              setShow={setShow}
+            />
+          )}
+        </Box>
       )}
 
-      {config.llmType === 'coze' && (
-        <CozeSettings
-          config={config}
-          handleUpdateConfig={handleUpdateConfig}
-          handleCheckHealth={handleCheckHealth}
-          reply={reply}
-          show={show}
-          setShow={setShow}
-        />
-      )}
-
-      {config.llmType !== 'coze' && (
-        <PromptKnowledge
-          config={config}
-          setLocalConfig={handleLocalConfig}
-          saveConfig={handleUpdateConfig}
-        />
+      {/* 步骤 3: 提示词与知识库 */}
+      {config.llmType && config.llmType !== 'coze' && (
+        <Box
+          bg="gray.50"
+          borderRadius="lg"
+          p={4}
+          border="1px solid"
+          borderColor="gray.100"
+        >
+          <Flex align="center" gap={2} mb={3}>
+            <Flex
+              w="24px"
+              h="24px"
+              borderRadius="full"
+              bg="brand.500"
+              color="white"
+              align="center"
+              justify="center"
+              fontSize="12px"
+              fontWeight="700"
+            >
+              3
+            </Flex>
+            <Text fontWeight="600" fontSize="14px" color="gray.800">
+              提示词与知识库
+            </Text>
+          </Flex>
+          <PromptKnowledge
+            config={config}
+            setLocalConfig={handleLocalConfig}
+            saveConfig={handleUpdateConfig}
+          />
+        </Box>
       )}
     </VStack>
   );

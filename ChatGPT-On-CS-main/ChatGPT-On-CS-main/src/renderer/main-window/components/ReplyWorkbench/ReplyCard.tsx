@@ -19,6 +19,8 @@ import {
   FiCornerUpLeft,
   FiEdit3,
   FiMessageSquare,
+  FiUser,
+  FiSend,
 } from 'react-icons/fi';
 import {
   fillQianniuSuggestion,
@@ -32,7 +34,6 @@ import {
 } from '../../../common/services/platform/platform';
 import { useToast } from '../../hooks/useToast';
 import {
-  borderColorMap,
   formatTime,
   platformLabels,
   statusColorMap,
@@ -55,6 +56,14 @@ function extractErrorMessage(error: unknown): string {
   }
   return String(error);
 }
+
+// 平台色映射
+const platformColorMap: Record<string, string> = {
+  win_qianniu: 'orange',
+  win_wechat: 'green',
+  win_wecom: 'blue',
+  win_jinmai: 'red',
+};
 
 const ReplyCard = React.memo(
   ({
@@ -145,7 +154,7 @@ const ReplyCard = React.memo(
     > = {
       win_qianniu: {
         label: '填入千牛',
-        colorScheme: 'teal',
+        colorScheme: 'orange',
         onClick: fillReply,
         tooltip:
           mode === 'assist'
@@ -153,7 +162,7 @@ const ReplyCard = React.memo(
             : '切换到辅助回复模式后可用',
       },
       win_wechat: {
-        label: '定位并填入微信',
+        label: '填入微信',
         colorScheme: 'green',
         onClick: fillWechatReply,
         tooltip:
@@ -162,8 +171,8 @@ const ReplyCard = React.memo(
             : '切换到微信辅助回复模式后可用',
       },
       win_wecom: {
-        label: '定位并填入企微',
-        colorScheme: 'purple',
+        label: '填入企微',
+        colorScheme: 'blue',
         onClick: fillWecomReply,
         tooltip:
           mode === 'assist'
@@ -173,111 +182,188 @@ const ReplyCard = React.memo(
     };
 
     const fillConfig = fillButtonConfig[platformId];
+    const pColor = platformColorMap[platformId] || 'gray';
+    const leftBorderColor = (() => {
+      switch (item.status) {
+        case 'pending': return 'orange.400';
+        case 'prepared': return 'blue.400';
+        case 'sent': return 'green.400';
+        case 'failed': return 'red.400';
+        default: return 'gray.200';
+      }
+    })();
 
     return (
       <Box
-        borderWidth="1px"
-        borderColor={borderColorMap[item.status]}
-        borderRadius="6px"
         bg="white"
-        p={3}
-        width="full"
-        opacity={isSelected ? 1 : undefined}
+        borderRadius="lg"
+        boxShadow={isSelected ? 'md' : 'sm'}
+        border="1px solid"
+        borderColor={isSelected ? 'brand.200' : 'gray.100'}
+        transition="all 0.2s ease"
+        _hover={{ boxShadow: 'md' }}
+        position="relative"
+        overflow="hidden"
       >
-        <Flex justify="space-between" align="center" gap={2} mb={2}>
-          <HStack minW={0} spacing={2}>
-            {onToggleSelect && (
-              <Checkbox
-                isChecked={isSelected || false}
-                onChange={() => onToggleSelect(item.id)}
-                size="sm"
-                flexShrink={0}
-              />
-            )}
-            <Box color="orange.500" flexShrink={0}>
-              <FiMessageSquare />
-            </Box>
-            <Text fontWeight="700" fontSize="sm" noOfLines={1}>
-              {item.sender}
-            </Text>
-            <Badge colorScheme="purple" flexShrink={0}>
-              {platformLabels[item.platform_id] || item.platform_id}
-            </Badge>
-            <Badge colorScheme={statusColorMap[item.status]} flexShrink={0}>
-              {statusLabels[item.status]}
-            </Badge>
-          </HStack>
-          <Text color="gray.500" fontSize="xs" whiteSpace="nowrap">
-            {formatTime(item.created_at)}
-          </Text>
-        </Flex>
-
-        <Box borderLeft="3px solid" borderColor="gray.300" pl={2} mb={3}>
-          <Text color="gray.500" fontSize="xs" mb={1}>
-            买家原话
-          </Text>
-          <Text fontSize="sm">{item.incoming_content}</Text>
-        </Box>
-
-        <Text color="gray.500" fontSize="xs" mb={1}>
-          建议回复
-        </Text>
-        <Textarea
-          value={content}
-          onChange={(event) => setContent(event.target.value)}
-          size="sm"
-          minH="76px"
-          maxLength={300}
-          resize="vertical"
-          bg="gray.50"
-          isDisabled={item.status === 'sent'}
+        {/* 左侧状态色条 */}
+        <Box
+          position="absolute"
+          left={0}
+          top={0}
+          bottom={0}
+          w="4px"
+          bg={leftBorderColor}
         />
 
-        <Flex justify="space-between" align="center" mt={2} gap={2} wrap="wrap">
-          <ButtonGroup size="sm" variant="ghost" spacing={1}>
-            <Tooltip label={hasCopied ? '已复制' : '复制回复'}>
-              <IconButton
-                aria-label="复制回复"
-                icon={<FiClipboard />}
-                onClick={onCopy}
-              />
-            </Tooltip>
-            {item.status === 'pending' ? (
-              <Tooltip label="移到已处理">
+        <Box pl={5} pr={4} pt={3} pb={3}>
+          {/* 头部：发送者信息 */}
+          <Flex justify="space-between" align="flex-start" gap={2} mb={3}>
+            <HStack minW={0} spacing={2}>
+              {onToggleSelect && (
+                <Checkbox
+                  isChecked={isSelected || false}
+                  onChange={() => onToggleSelect(item.id)}
+                  size="sm"
+                  colorScheme="brand"
+                  flexShrink={0}
+                />
+              )}
+              <Box color={`${pColor}.500`} flexShrink={0}>
+                <FiUser />
+              </Box>
+              <Text fontWeight="700" fontSize="13px" noOfLines={1} color="gray.800">
+                {item.sender}
+              </Text>
+              <Badge
+                colorScheme={platformColorMap[item.platform_id] || 'gray'}
+                variant="subtle"
+                fontSize="10px"
+                borderRadius="sm"
+              >
+                {platformLabels[item.platform_id] || item.platform_id}
+              </Badge>
+              <Badge
+                colorScheme={statusColorMap[item.status]}
+                variant="subtle"
+                fontSize="10px"
+                borderRadius="sm"
+              >
+                {statusLabels[item.status]}
+              </Badge>
+            </HStack>
+            <Text color="gray.400" fontSize="11px" whiteSpace="nowrap" flexShrink={0}>
+              {formatTime(item.created_at)}
+            </Text>
+          </Flex>
+
+          {/* 买家原话 — 气泡样式 */}
+          <Box
+            bg="gray.50"
+            borderRadius="lg"
+            p={2.5}
+            mb={3}
+            position="relative"
+          >
+            <Text color="gray.400" fontSize="10px" fontWeight={600} mb={1} textTransform="uppercase" letterSpacing="0.05em">
+              买家原话
+            </Text>
+            <Text fontSize="13px" color="gray.700" lineHeight="1.6">
+              {item.incoming_content}
+            </Text>
+          </Box>
+
+          {/* 建议回复 */}
+          <Box>
+            <Flex align="center" mb={1.5} justify="space-between">
+              <Text color="gray.400" fontSize="10px" fontWeight={600} textTransform="uppercase" letterSpacing="0.05em">
+                建议回复
+              </Text>
+              <Text color="gray.400" fontSize="10px">
+                可编辑 · {content.length}/300
+              </Text>
+            </Flex>
+            <Textarea
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              size="sm"
+              minH="68px"
+              maxLength={300}
+              resize="vertical"
+              bg="white"
+              border="1px solid"
+              borderColor="gray.200"
+              borderRadius="md"
+              fontSize="13px"
+              _focus={{ borderColor: 'brand.400', boxShadow: '0 0 0 1px var(--chakra-colors-brand-200)' }}
+              isDisabled={item.status === 'sent'}
+            />
+          </Box>
+
+          {/* 底部操作栏 */}
+          <Flex justify="space-between" align="center" mt={3} gap={2} wrap="wrap">
+            <ButtonGroup size="xs" variant="ghost" spacing={0}>
+              <Tooltip label={hasCopied ? '已复制' : '复制回复'}>
                 <IconButton
-                  aria-label="标记已处理"
-                  icon={<FiCheck />}
-                  isDisabled={isWorking}
-                  onClick={() => updateStatus('dismissed')}
+                  aria-label="复制回复"
+                  icon={<FiClipboard />}
+                  onClick={onCopy}
+                  color={hasCopied ? 'green.500' : 'gray.400'}
+                  _hover={{ color: 'brand.500', bg: 'brand.50' }}
+                  borderRadius="md"
+                  size="sm"
                 />
               </Tooltip>
-            ) : (
-              <Tooltip label="重新放回待回复">
-                <IconButton
-                  aria-label="重新待回复"
-                  icon={<FiCornerUpLeft />}
-                  isDisabled={isWorking}
-                  onClick={() => updateStatus('pending')}
-                />
+              {item.status === 'pending' ? (
+                <Tooltip label="标记为已处理">
+                  <IconButton
+                    aria-label="标记已处理"
+                    icon={<FiCheck />}
+                    isDisabled={isWorking}
+                    onClick={() => updateStatus('dismissed')}
+                    color="gray.400"
+                    _hover={{ color: 'green.500', bg: 'green.50' }}
+                    borderRadius="md"
+                    size="sm"
+                  />
+                </Tooltip>
+              ) : (
+                <Tooltip label="重新放回待回复">
+                  <IconButton
+                    aria-label="重新待回复"
+                    icon={<FiCornerUpLeft />}
+                    isDisabled={isWorking}
+                    onClick={() => updateStatus('pending')}
+                    color="gray.400"
+                    _hover={{ color: 'orange.500', bg: 'orange.50' }}
+                    borderRadius="md"
+                    size="sm"
+                  />
+                </Tooltip>
+              )}
+            </ButtonGroup>
+
+            {fillConfig && item.status !== 'sent' && (
+              <Tooltip label={fillConfig.tooltip}>
+                <Button
+                  size="sm"
+                  leftIcon={<FiSend />}
+                  colorScheme={fillConfig.colorScheme}
+                  isLoading={isWorking}
+                  isDisabled={mode !== 'assist' || !content.trim()}
+                  onClick={fillConfig.onClick}
+                  borderRadius="lg"
+                  fontWeight={600}
+                  fontSize="12px"
+                  boxShadow="sm"
+                  _hover={{ transform: 'translateY(-1px)', boxShadow: 'md' }}
+                  transition="all 0.2s"
+                >
+                  {fillConfig.label}
+                </Button>
               </Tooltip>
             )}
-          </ButtonGroup>
-
-          {fillConfig && item.status !== 'sent' && (
-            <Tooltip label={fillConfig.tooltip}>
-              <Button
-                size="sm"
-                leftIcon={<FiEdit3 />}
-                colorScheme={fillConfig.colorScheme}
-                isLoading={isWorking}
-                isDisabled={mode !== 'assist' || !content.trim()}
-                onClick={fillConfig.onClick}
-              >
-                {fillConfig.label}
-              </Button>
-            </Tooltip>
-          )}
-        </Flex>
+          </Flex>
+        </Box>
       </Box>
     );
   },

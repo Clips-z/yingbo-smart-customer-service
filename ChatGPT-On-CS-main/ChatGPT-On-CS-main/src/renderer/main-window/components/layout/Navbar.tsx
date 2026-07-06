@@ -21,34 +21,33 @@ const Navbar = () => {
       align="center"
       justify="space-between"
       wrap="wrap"
-      padding={{ base: '0.75rem 1rem', md: '1rem 1.5rem' }}
+      padding={{ base: '0.6rem 1rem', md: '0.75rem 1.5rem' }}
       position="fixed"
       width="100%"
       top="0"
-      bg={'white'}
+      bg="rgba(255, 255, 255, 0.92)"
+      backdropFilter="blur(16px)"
       borderBottom="1px solid"
       borderColor="gray.100"
       zIndex="1000"
-      height={{ base: '56px', md: '60px' }}
-      boxShadow="sm"
+      height={{ base: '52px', md: '56px' }}
     >
-      {/* 品牌名称 — 渐变设计 */}
+      {/* 品牌名称 */}
       <HStack spacing={3}>
-        {/* Logo 图标区域 */}
         <Box
-          w="32px"
-          h="32px"
-          borderRadius="8px"
-          bgGradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+          w="34px"
+          h="34px"
+          borderRadius="10px"
+          bgGradient="linear-gradient(135deg, #6366F1 0%, #06B6D4 100%)"
           display="flex"
           alignItems="center"
           justifyContent="center"
-          boxShadow="md"
+          boxShadow="0 2px 8px rgba(99, 102, 241, 0.3)"
         >
           <Text
             color="white"
             fontWeight="900"
-            fontSize="16px"
+            fontSize="15px"
             fontFamily="'Segoe UI', system-ui, sans-serif"
             lineHeight={1}
           >
@@ -59,11 +58,11 @@ const Navbar = () => {
         <Box>
           <Text
             as="h1"
-            fontSize={{ base: '1.15em', md: '1.4em' }}
+            fontSize={{ base: '1.05em', md: '1.25em' }}
             fontWeight="800"
             letterSpacing="-0.02em"
             className="font-zh"
-            background="linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%)"
+            background="linear-gradient(135deg, #6366F1 0%, #06B6D4 50%, #818CF8 100%)"
             backgroundClip="text"
             style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
             lineHeight="1.2"
@@ -71,47 +70,64 @@ const Navbar = () => {
             迎波智能客服
           </Text>
           <Text
-            fontSize="10px"
+            fontSize="9px"
             color="gray.400"
             fontWeight="500"
-            letterSpacing="0.08em"
+            letterSpacing="0.1em"
             textTransform="uppercase"
             lineHeight={1}
-            mt="-2px"
+            mt="-1px"
           >
-            AI Customer Service Assistant
+            AI Customer Service
           </Text>
         </Box>
       </HStack>
 
-      <HStack gap="6px" display={{ md: 'flex' }} spacing={1}>
+      {/* 导航按钮组 — 胶囊风格 */}
+      <HStack spacing={1}>
         <Button
           size="xs"
           variant="ghost"
-          leftIcon={<CalendarIcon />}
+          leftIcon={<CalendarIcon boxSize="12px" />}
           onClick={handleOpenDataview}
-          colorScheme="teal"
-          borderRadius="lg"
+          color="gray.600"
+          borderRadius="full"
+          px={3}
+          fontSize="12px"
+          fontWeight={500}
+          _hover={{ bg: 'brand.50', color: 'brand.600' }}
         >
           记录
         </Button>
         <Button
           size="xs"
           variant="ghost"
-          leftIcon={<ChatIcon />}
+          leftIcon={<ChatIcon boxSize="12px" />}
           onClick={handleOpenDataview}
-          colorScheme="teal"
-          borderRadius="lg"
+          color="gray.600"
+          borderRadius="full"
+          px={3}
+          fontSize="12px"
+          fontWeight={500}
+          _hover={{ bg: 'brand.50', color: 'brand.600' }}
         >
           关键词
         </Button>
         <Button
           size="xs"
-          variant="ghost"
-          leftIcon={<SettingsIcon />}
+          variant="solid"
+          leftIcon={<SettingsIcon boxSize="12px" />}
           onClick={handleOpenSettings}
-          colorScheme="teal"
-          borderRadius="lg"
+          bg="brand.500"
+          color="white"
+          borderRadius="full"
+          px={4}
+          fontSize="12px"
+          fontWeight={600}
+          _hover={{ bg: 'brand.600', transform: 'translateY(-1px)' }}
+          _active={{ bg: 'brand.700' }}
+          boxShadow="0 2px 6px rgba(99, 102, 241, 0.25)"
+          transition="all 0.2s"
         >
           设置
         </Button>

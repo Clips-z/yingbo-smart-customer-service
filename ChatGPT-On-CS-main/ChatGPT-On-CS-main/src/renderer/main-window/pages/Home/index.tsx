@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Box, Stack, Divider } from '@chakra-ui/react';
+import { Box, VStack } from '@chakra-ui/react';
 import PageContainer from '../../../common/components/PageContainer';
 import { trackPageView } from '../../../common/services/analytics';
 import AppManager from '../../components/AppManager/index';
@@ -16,23 +16,27 @@ const HomePage = () => {
 
   return (
     <PageContainer>
-      <Stack spacing={2}>
-        <Box>
+      <VStack spacing={3} pb={4}>
+        {/* 平台管理 */}
+        <Box w="full">
           <AppManager />
         </Box>
-        <Divider my="4" />
-        <Box>
+
+        {/* 回复工作台 */}
+        <Box w="full">
           <ReplyWorkbench />
         </Box>
-        <Divider my="4" />
-        <Box>
+
+        {/* 控制面板 */}
+        <Box w="full">
           <Panels />
         </Box>
-        <Divider my="4" />
-        <Box>
+
+        {/* 运行日志 */}
+        <Box w="full">
           <LogBox />
         </Box>
-      </Stack>
+      </VStack>
     </PageContainer>
   );
 };

@@ -3,42 +3,45 @@ import {
   Box,
   Text,
   Stack,
-  useColorModeValue,
   Tooltip,
   Button,
+  HStack,
 } from '@chakra-ui/react';
+import { FiBookOpen } from 'react-icons/fi';
 
 const Footer = () => {
-  const bg = useColorModeValue('gray.100', 'gray.900');
-
   return (
     <Box
       as="footer"
       role="contentinfo"
       maxW="7xl"
-      py="3"
+      py={3}
       px={{ base: '4', md: '8' }}
-      bg={bg}
+      bg="white"
+      borderTop="1px solid"
+      borderColor="gray.100"
     >
-      <Stack>
-        <Box position={'absolute'}>
-          <Tooltip label="查看文档获取帮助">
-            <Button
-              variant="link"
-              size="sm"
-              onClick={() =>
-                window.electron.ipcRenderer.sendMessage('open-user-manual')
-              }
-            >
-              📘 使用手册
-            </Button>
-          </Tooltip>
-        </Box>
-
-        <Text fontSize="sm" alignSelf={{ base: 'center' }}>
+      <HStack justify="center" spacing={6}>
+        <Tooltip label="查看文档获取帮助">
+          <Button
+            variant="ghost"
+            size="xs"
+            leftIcon={<FiBookOpen size={14} />}
+            onClick={() =>
+              window.electron.ipcRenderer.sendMessage('open-user-manual')
+            }
+            color="gray.500"
+            fontSize="12px"
+            _hover={{ color: 'brand.500', bg: 'brand.50' }}
+            borderRadius="full"
+          >
+            使用手册
+          </Button>
+        </Tooltip>
+        <Text fontSize="11px" color="gray.400">
           &copy; {new Date().getFullYear()} YinBo. All rights reserved.
         </Text>
-      </Stack>
+      </HStack>
     </Box>
   );
 };

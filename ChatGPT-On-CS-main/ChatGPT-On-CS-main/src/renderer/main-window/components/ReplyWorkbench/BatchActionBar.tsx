@@ -7,8 +7,9 @@ import {
   HStack,
   Spacer,
   Tooltip,
+  IconButton,
 } from '@chakra-ui/react';
-import { FiCheckSquare, FiTrash, FiTrash2 } from 'react-icons/fi';
+import { FiCheckSquare, FiTrash, FiTrash2, FiCheck } from 'react-icons/fi';
 import { ReplySuggestion } from '../../../common/services/platform/platform';
 
 interface BatchActionBarProps {
@@ -47,20 +48,24 @@ const BatchActionBar = React.memo(
     return (
       <Flex
         bg="gray.50"
-        borderRadius="6px"
+        borderRadius="lg"
         p={2}
         mb={3}
         align="center"
         gap={2}
         wrap="wrap"
         border="1px solid"
-        borderColor="gray.200"
+        borderColor="gray.100"
       >
-        <HStack spacing={2} flexShrink={0}>
+        <HStack spacing={1} flexShrink={0}>
           <Button
             size="xs"
             variant="ghost"
             onClick={allSelected ? onClearSelection : onSelectAll}
+            color="gray.500"
+            fontSize="11px"
+            borderRadius="md"
+            _hover={{ bg: 'gray.200' }}
           >
             {allSelected ? '取消全选' : '全选'}
           </Button>
@@ -71,14 +76,16 @@ const BatchActionBar = React.memo(
                 variant="outline"
                 colorScheme="orange"
                 onClick={onSelectPendingOnly}
+                borderRadius="md"
+                fontSize="11px"
               >
-                选待回复({pending.length})
+                选待回复 ({pending.length})
               </Button>
             </Tooltip>
           )}
         </HStack>
         {hasSelection && (
-          <Badge colorScheme="teal" fontSize="xs" flexShrink={0}>
+          <Badge colorScheme="brand" fontSize="10px" borderRadius="full" px={2}>
             已选 {selectedIds.size}
           </Badge>
         )}
@@ -92,7 +99,7 @@ const BatchActionBar = React.memo(
             }
           >
             <Button
-              leftIcon={<FiCheckSquare />}
+              leftIcon={<FiCheck />}
               colorScheme="green"
               variant="outline"
               isLoading={batchWorking}
@@ -102,8 +109,10 @@ const BatchActionBar = React.memo(
               }
               onClick={onBatchDismissed}
               size="xs"
+              borderRadius="md"
+              fontSize="11px"
             >
-              一键已处理({batchCount})
+              一键已处理 ({batchCount})
             </Button>
           </Tooltip>
           {hasSelection && (
@@ -115,6 +124,8 @@ const BatchActionBar = React.memo(
                 isLoading={batchWorking}
                 onClick={onBatchDelete}
                 size="xs"
+                borderRadius="md"
+                fontSize="11px"
               >
                 删除选中
               </Button>
@@ -124,11 +135,13 @@ const BatchActionBar = React.memo(
             <Button
               leftIcon={<FiTrash2 />}
               colorScheme="red"
-              variant="outline"
+              variant="ghost"
               isLoading={batchWorking}
               isDisabled={handled.length === 0}
               onClick={onClearHandled}
               size="xs"
+              borderRadius="md"
+              fontSize="11px"
             >
               清空已处理
             </Button>
