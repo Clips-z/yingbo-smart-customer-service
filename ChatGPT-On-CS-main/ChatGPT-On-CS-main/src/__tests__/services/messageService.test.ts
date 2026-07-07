@@ -8,6 +8,8 @@ jest.mock('../../main/backend/controllers/keywordReplyController');
 jest.mock('../../main/backend/services/loggerService');
 jest.mock('../../main/backend/services/visionService');
 jest.mock('../../main/backend/services/sentimentService');
+jest.mock('../../main/gptproxy', () => ({}));
+jest.mock('openai', () => ({}), { virtual: true });
 jest.mock('fs/promises');
 jest.mock('axios');
 

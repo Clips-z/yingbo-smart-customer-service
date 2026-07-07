@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { Box, Flex, Tooltip, Icon, Text } from '@chakra-ui/react';
 import {
   FiGrid,
@@ -78,6 +78,37 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
     return () => clearInterval(timer);
   }, []);
 
+  // 底部按钮点击处理 — 提取为 useCallback 避免每次渲染创建新函数
+  const handleBottomNavClick = useCallback(
+    (key: string) => {
+      if (key === 'notifications') {
+        togglePanel();
+      } else if (key === 'docs') {
+        window.electron.ipcRenderer.sendMessage('open-user-manual');
+      } else if (key === 'help') {
+        window.electron.ipcRenderer.sendMessage(
+          'open-url',
+          'https://github.com/Clips-z/yingbo-smart-customer-service',
+        );
+      } else if (key === 'favorites') {
+        onNavigate('service' as any);
+      }
+    },
+    [togglePanel, onNavigate],
+  );
+
+  // 主导航点击处理
+  const handleMainNavClick = useCallback(
+    (key: string) => {
+      if (key === 'dataview') {
+        window.electron.ipcRenderer.sendMessage('open-dataview-window', {});
+      } else {
+        onNavigate(key as NavSection);
+      }
+    },
+    [onNavigate],
+  );
+
   return (
     <Flex
       direction="column"
@@ -130,11 +161,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             >
               <Box
                 as="button"
-                onClick={() =>
-                  item.key === 'dataview'
-                    ? window.electron.ipcRenderer.sendMessage('open-dataview-window', {})
-                    : onNavigate(item.key)
-                }
+                onClick={() => handleMainNavClick(item.key)}
                 display="flex"
                 flexDirection="column"
                 alignItems="center"
@@ -214,20 +241,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               _focusVisible={{
                 boxShadow: '0 0 0 2px rgba(66, 99, 235, 0.4)',
               }}
-              onClick={() => {
-                if (item.key === 'notifications') {
-                  togglePanel();
-                } else if (item.key === 'docs') {
-                  // 打开用户使用手册（通过 IPC 调用主进程 shell.openPath）
-                  window.electron.ipcRenderer.sendMessage('open-user-manual');
-                } else if (item.key === 'help') {
-                  // 打开帮助：导航到知识管理 → 显示使用指南
-                  window.electron.ipcRenderer.sendMessage('open-url', 'https://github.com/Clips-z/yingbo-smart-customer-service');
-                } else if (item.key === 'favorites') {
-                  // 收藏功能：导航到客服中心（快捷入口，后续可扩展独立收藏面板）
-                  onNavigate('service' as any);
-                }
-              }}
+              onClick={() => handleBottomNavClick(item.key)}
             >
               <Icon position="relative">
                 {item.icon}

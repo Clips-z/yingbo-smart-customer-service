@@ -73,7 +73,7 @@ export class KeywordReplyController {
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(path);
-    const worksheet = workbook.worksheets[0];
+    const worksheet = workbook.worksheets[0]!;
 
     if (worksheet.rowCount === 0) {
       throw new Error('文件内容为空');
@@ -383,7 +383,7 @@ export class KeywordReplyController {
 
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(path);
-    const worksheet = workbook.worksheets[0];
+    const worksheet = workbook.worksheets[0]!;
 
     if (worksheet.rowCount === 0) {
       throw new Error('文件内容为空');
@@ -593,7 +593,7 @@ export class KeywordReplyController {
 
     await workbook.xlsx.readFile(path);
 
-    const worksheet = workbook.worksheets[0];
+    const worksheet = workbook.worksheets[0]!;
 
     if (worksheet.rowCount === 0) {
       throw new Error('文件内容为空');
