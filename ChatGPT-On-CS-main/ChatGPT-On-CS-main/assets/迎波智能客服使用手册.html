@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>迎波智能客服使用手册</title>
+  <style>
+    :root { color-scheme: light; --navy:#0c2746; --teal:#18bcb2; --ink:#182433; --muted:#607086; --line:#dce6ef; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:#f3f7fa; color:var(--ink); font:16px/1.75 "Microsoft YaHei",sans-serif; }
+    header { padding:42px 24px; color:white; background:linear-gradient(135deg,var(--navy),#16496b); }
+    header div, main { max-width:920px; margin:auto; }
+    h1 { margin:0 0 8px; font-size:34px; }
+    h2 { margin-top:34px; color:var(--navy); border-bottom:1px solid var(--line); padding-bottom:8px; }
+    h3 { color:#146d70; }
+    main { padding:28px 34px 50px; background:white; box-shadow:0 12px 40px rgba(12,39,70,.08); }
+    code { background:#edf3f7; padding:2px 7px; border-radius:5px; }
+    .modes { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:14px; }
+    .card { border:1px solid var(--line); border-top:4px solid var(--teal); border-radius:10px; padding:16px; }
+    .tip { padding:14px 18px; border-left:4px solid var(--teal); background:#eaf9f8; }
+    footer { text-align:center; padding:24px; color:var(--muted); }
+  </style>
+</head>
+<body>
+  <header><div><h1>迎波智能客服</h1><p>离线使用手册 · 微信 / 千牛 / 京麦 / 企业微信</p></div></header>
+  <main>
+    <h2>快速开始</h2>
+    <ol><li>启动软件并允许本机网络访问。</li><li>打开需要接待的平台客户端并登录。</li><li>确认左侧平台状态为“在线”。</li><li>进入“设置 → AI 配置”，填写模型信息并检查连接。</li><li>选择回复模式后启动工作。</li></ol>
+    <h2>三种回复模式</h2>
+    <div class="modes"><div class="card"><b>仅提示</b><p>只生成建议，不操作聊天窗口。</p></div><div class="card"><b>辅助回复</b><p>点击填入后定位联系人并写入输入框，由人工发送。</p></div><div class="card"><b>无人值守</b><p>自动定位并发送，启用前请先完成测试。</p></div></div>
+    <h2>配置普通大模型</h2>
+    <p>在“大模型类型”选择 OpenAI 或相应服务商，填写模型名、以 <code>/v1</code> 结尾的 API 地址与 API Key。客服人设和本地知识库会应用于普通模型。</p>
+    <h2>配置 Coze</h2>
+    <ol><li>先在 Coze 将智能体发布到 API 渠道。</li><li>大模型类型选择“Coze 智能体”。</li><li>填写地区、Personal Access Token 和 Bot ID。</li><li>点击“检查 Coze 连接”。</li></ol>
+    <p class="tip">Coze 模式使用智能体自身的人设、知识库、插件和工作流，不叠加本地提示词。</p>
+    <h2>多平台运行</h2>
+    <p>微信和千牛可以同时开启。软件按平台分别显示任务，只识别已启动且在线的平台；未启动的平台不会采集消息。</p>
+    <h2>关键词与转人工</h2>
+    <ul><li>关键词匹配：优先返回固定话术。</li><li>关键词转人工：命中后暂停自动处理。</li><li>关键词替换：发送前替换指定表达。</li></ul>
+    <h2>常见问题</h2>
+    <ul><li><b>模型失败：</b>检查地址、模型名、Key、余额与网络。</li><li><b>Coze 拒绝访问：</b>重新创建 Token，并确认已发布到 API。</li><li><b>平台离线：</b>确认客户端已启动登录且版本受支持。</li><li><b>微信定位失败：</b>确认联系人可搜索、微信未锁定。</li></ul>
+    <h2>安全建议</h2>
+    <p>不要公开 API Key 或 Token。退款、价格承诺和售后争议建议设置转人工规则。首次使用无人值守前，请先用“仅提示”和“辅助回复”验证。</p>
+  </main>
+  <footer>Copyright © 2026 YinBo · 迎波智能客服</footer>
+</body>
+</html>

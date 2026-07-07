@@ -1,0 +1,35 @@
+appId: com.yinbo.smartcustomer
+productName: 迎波智能客服
+copyright: Copyright © 2026 YinBo
+asar: true
+asarUnpack: "**\\*.{node,dll}"
+compression: maximum
+files:
+  - dist
+  - node_modules
+  - package.json
+afterSign: ".erb/scripts/notarize.js"
+win:
+  executableName: 迎波智能客服
+  icon: assets/icon.ico
+  requestedExecutionLevel: requireAdministrator
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  perMachine: true
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 迎波智能客服
+  uninstallDisplayName: 迎波智能客服
+  deleteAppDataOnUninstall: true
+  artifactName: "${productName} ${version}.${ext}"
+directories:
+  app: release/app
+  buildResources: assets
+  output: release/build
+extraResources:
+  - "./assets/**"
+afterPack: "./removeLocales.js"

@@ -1,0 +1,72 @@
+# ===========================================
+# 迎波智能客服项目 - GitHub .gitignore
+# ===========================================
+
+# === 构建产物 / 安装包 ===
+_installer-stage/
+release/
+*.exe
+*.asar
+*.asar.bak.*
+
+# === npm 依赖（任何层级）===
+node_modules/
+
+# === Python 虚拟环境 ===
+.venv/
+.venv-wechat/
+venv/
+env/
+
+# === Python 编译缓存 ===
+__pycache__/
+*.pyc
+*.pyo
+
+# === PyInstaller 打包后端 ===
+assets/backend/
+
+# === 运行时依赖（微信客户端、Python运行时、OCR模型）===
+runtime/
+tools/
+
+# === 运行时缓存 / 临时文件 ===
+.tmp-userdata/
+temp-data/
+*.log
+
+# === 敏感配置（含API Key，切勿上传！）===
+.env
+open_ai.http
+config.local.json
+rag-server/config.json
+
+# === IDE / 编辑器 ===
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# === TypeScript 生成文件 ===
+*.css.d.ts
+*.sass.d.ts
+*.scss.d.ts
+
+# === 依赖锁文件（可选保留，这里保留 package-lock.json）===
+# package-lock.json
+# pnpm-lock.yaml
+
+# === 测试覆盖率 ===
+coverage/
+.eslintcache
+
+# === 打包备份 ===
+*.tar.gz
+*.tar
+*.zip
+
+# === WorkBuddy / Agents 工作目录 ===
+.workbuddy/
+.agents/
