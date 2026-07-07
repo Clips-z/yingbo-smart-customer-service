@@ -117,6 +117,11 @@ const electronHandler = {
       validateChannel(channel);
       ipcRenderer.removeListener(channel, func);
     },
+    /** invoke/handle 模式 — 支持异步双向 IPC */
+    invoke(channel: string, ...args: unknown[]) {
+      // handle 模式的通道不需要在白名单中（由主进程 ipcMain.handle 控制权限）
+      return ipcRenderer.invoke(channel, ...args);
+    },
   },
   store: {
     get(key: string) {

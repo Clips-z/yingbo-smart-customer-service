@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Box, Flex, Tooltip, Icon, Text } from '@chakra-ui/react';
 import {
   FiGrid,
@@ -11,6 +11,7 @@ import {
   FiBell,
   FiHelpCircle,
 } from 'react-icons/fi';
+import useNotificationStore from '../../stores/useNotificationStore';
 
 /* ── 导航项定义 ── */
 export type NavSection = 'dashboard' | 'service' | 'knowledge' | 'security' | 'dataview';
@@ -66,6 +67,17 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   onNavigate,
   showKnowledgeSub,
 }) => {
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const togglePanel = useNotificationStore((s) => s.togglePanel);
+
+  // 定期轮询未读计数
+  useEffect(() => {
+    const store = useNotificationStore.getState();
+    store.loadUnreadCount();
+    const timer = setInterval(() => store.loadUnreadCount(), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <Flex
       direction="column"
@@ -204,18 +216,13 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               }}
               onClick={() => {
                 if (item.key === 'notifications') {
-                  // 通知面板功能规划中，当前暂用 toast 提示
-                  import('../Panels').then(({ openNotificationPanel }) => {
-                    openNotificationPanel?.();
-                  }).catch(() => {
-                    // 通知面板模块未就绪，静默忽略
-                  });
+                  togglePanel();
                 }
               }}
             >
               <Icon position="relative">
                 {item.icon}
-                {item.key === 'notifications' && (
+                {item.key === 'notifications' && unreadCount > 0 && (
                   <Box
                     position="absolute"
                     top="-4px"
@@ -234,7 +241,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                     lineHeight={1}
                     boxShadow="0 1px 3px rgba(220, 38, 38, 0.4)"
                   >
-                    99
+                    {unreadCount > 99 ? '99+' : unreadCount}
                   </Box>
                 )}
               </Icon>

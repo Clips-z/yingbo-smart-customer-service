@@ -48,13 +48,14 @@ loader.config({
 });
 
 // Create a client
+// 注意：keepPreviousData 是 useQuery 级别的选项，不应放在 defaultOptions 中
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      keepPreviousData: true,
       refetchOnWindowFocus: false,
-      retry: false,
-      cacheTime: 10,
+      retry: 1,
+      gcTime: 5 * 60 * 1000, // 5分钟，避免缓存频繁失效
+      staleTime: 30 * 1000,
     },
   },
 });
