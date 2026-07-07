@@ -32,12 +32,10 @@ contextBridge.exposeInMainWorld('electron', {
       try { ipcRenderer.once(channel, (event, ...args) => func(...args)); } catch (e) {}
     },
 
-    // remove(channel) — 只移除该 channel 所有监听器（BroadcastProvider 用法）
     remove: (channel, func) => {
       if (func) {
         try { ipcRenderer.removeListener(channel, func); } catch (e) {}
       } else {
-        // 只传 channel 时移除全部
         if (listeners[channel]) {
           for (const fn of listeners[channel]) {
             try { ipcRenderer.removeListener(channel, fn); } catch (e) {}
@@ -47,9 +45,8 @@ contextBridge.exposeInMainWorld('electron', {
       }
     },
 
-    // removeListener(channel, func) — 移除指定监听器（App.tsx cleanup 用法）
     removeListener: (channel, func) => {
-      if (!func) return; // 防止传 undefined 时报错
+      if (!func) return;
       try { ipcRenderer.removeListener(channel, func); } catch (e) {}
     },
   },

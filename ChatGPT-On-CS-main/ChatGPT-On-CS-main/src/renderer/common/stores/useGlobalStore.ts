@@ -20,7 +20,7 @@ interface GlobalStore {
   setCurrentPlugin: (plugin: Plugin | null) => void;
 }
 
-const useGlobalStore = create<GlobalStore>((set) => ({
+const useGlobalStore = create<GlobalStore>((set, get) => ({
   logs: [],
   activePlatformId: null,
   activePlatformIds: [],
@@ -40,5 +40,13 @@ const useGlobalStore = create<GlobalStore>((set) => ({
       currentPlugin: plugin,
     })),
 }));
+
+// 暴露到 window 用于 mock/调试（仅在 mock-preload 环境下生效）
+if (typeof window !== 'undefined') {
+  (window as any).__globalStore = {
+    getState: () => useGlobalStore.getState(),
+    setState: (partial: Partial<GlobalStore>) => useGlobalStore.setState(partial),
+  };
+}
 
 export default useGlobalStore;
