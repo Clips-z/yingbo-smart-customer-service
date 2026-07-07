@@ -45,8 +45,7 @@ const PluginEditor = ({
 
   const handleEditorWillMount = (monaco: Monaco) => {
     monaco.languages.registerCompletionItemProvider('javascript', {
-      // @ts-ignore
-      provideCompletionItems: () => {
+      provideCompletionItems: (): any => {
         const suggestions = [
           {
             label: 'require',

@@ -172,4 +172,4 @@ const KNOWLEDGE_SUB_LABELS: Record<KnowledgeSubKey, string> = {
   'corpus-test': '问答语料测试',
 };
 
-export default MainLayout;
+export default React.memo(MainLayout);

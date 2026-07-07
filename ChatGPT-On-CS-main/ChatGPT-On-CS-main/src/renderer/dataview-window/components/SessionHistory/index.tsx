@@ -146,8 +146,7 @@ const SessionHistory = () => {
   );
 
   const tableInstance = useTable(
-    // @ts-ignore
-    { columns, data: currentPageData },
+    { columns, data: currentPageData } as any,
     useGlobalFilter,
     useFilters,
   );

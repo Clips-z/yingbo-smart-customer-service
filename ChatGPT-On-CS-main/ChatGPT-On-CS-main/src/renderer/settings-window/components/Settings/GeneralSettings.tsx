@@ -371,4 +371,4 @@ const GeneralSettings = ({
   );
 };
 
-export default GeneralSettings;
+export default React.memo(GeneralSettings);
