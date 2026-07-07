@@ -228,6 +228,9 @@ const configuration: webpack.Configuration = {
     historyApiFallback: {
       verbose: true,
     },
+    client: {
+      overlay: false, // 关闭编译警告/错误浮层，避免遮住 UI 预览
+    },
     setupMiddlewares(middlewares) {
       console.log('Starting preload.js builder...');
       const preloadProcess = spawn('npm', ['run', 'start:preload'], {
