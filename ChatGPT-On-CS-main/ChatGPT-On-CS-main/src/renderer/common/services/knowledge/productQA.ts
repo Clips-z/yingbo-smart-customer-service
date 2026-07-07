@@ -142,6 +142,49 @@ export async function toggleProductOnSale(
   return { id, onSale };
 }
 
+/** 新增商品 */
+export async function addProductQA(input: {
+  name: string;
+  platformProductId: string;
+  barcode?: string;
+  shopId: string;
+  onSale: boolean;
+}): Promise<ProductQA> {
+  await delay(200);
+  const shop = SHOPS.find((s) => s.id === input.shopId) ?? SHOPS[0];
+  const created: ProductQA = {
+    id: `prod_${Date.now()}`,
+    name: input.name,
+    platformProductId: input.platformProductId,
+    barcode: input.barcode,
+    shopName: shop.name,
+    shopId: shop.id,
+    onSale: input.onSale,
+    qaCount: 0,
+    hue: Math.floor(Math.random() * 360),
+  };
+  ALL_PRODUCTS.unshift(created);
+  return created;
+}
+
+/** 批量上下架 */
+export async function batchSetOnSale(ids: string[], onSale: boolean): Promise<void> {
+  await delay(200);
+  ids.forEach((id) => {
+    const t = ALL_PRODUCTS.find((p) => p.id === id);
+    if (t) t.onSale = onSale;
+  });
+}
+
+/** 批量删除 */
+export async function batchDeleteProducts(ids: string[]): Promise<void> {
+  await delay(200);
+  const set = new Set(ids);
+  for (let i = ALL_PRODUCTS.length - 1; i >= 0; i--) {
+    if (set.has(ALL_PRODUCTS[i].id)) ALL_PRODUCTS.splice(i, 1);
+  }
+}
+
 /** 店铺列表（用于筛选下拉） */
 export const SHOP_OPTIONS = SHOPS;
 

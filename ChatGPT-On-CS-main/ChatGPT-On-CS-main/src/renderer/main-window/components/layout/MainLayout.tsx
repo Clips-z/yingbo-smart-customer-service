@@ -8,6 +8,10 @@ import Panels from '../Panels';
 import LogBox from '../LogBox';
 import ProductQALibrary from '../ProductQALibrary';
 import StoreKnowledgeBase from '../StoreKnowledgeBase';
+import IndustryConfig from '../IndustryConfig';
+import ValidityManagement from '../ValidityManagement';
+import CorpusTest from '../CorpusTest';
+import ContentSecurity from '../ContentSecurity';
 
 /* ── 工作台内容（保持不变）── */
 const DashboardContent = () => (
@@ -130,6 +134,12 @@ const MainLayout = () => {
                     return <ProductQALibrary />;
                   case 'store-kb':
                     return <StoreKnowledgeBase />;
+                  case 'industry-config':
+                    return <IndustryConfig />;
+                  case 'validity':
+                    return <ValidityManagement />;
+                  case 'corpus-test':
+                    return <CorpusTest />;
                   default:
                     return (
                       <PlaceholderView
@@ -141,13 +151,7 @@ const MainLayout = () => {
                 }
 
               case 'security':
-                return (
-                  <PlaceholderView
-                    title="内容安全"
-                    description="敏感词过滤、内容审核与安全策略管理"
-                    icon="🛡️"
-                  />
-                );
+                return <ContentSecurity />;
 
               default:
                 return <DashboardContent />;

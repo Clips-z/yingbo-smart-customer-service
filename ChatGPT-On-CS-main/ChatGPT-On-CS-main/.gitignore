@@ -35,3 +35,8 @@ open_ai.http
 .tmp-userdata/llm.local.json
 
 tests/*
+
+# Debug scripts & screenshots
+diagnose*.js
+ui-*.png
+*.js.map

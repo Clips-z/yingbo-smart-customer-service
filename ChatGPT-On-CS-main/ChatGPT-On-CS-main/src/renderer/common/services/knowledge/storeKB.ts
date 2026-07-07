@@ -169,6 +169,33 @@ export async function fetchStoreQAList(
 
 export const SHOP_OPTIONS = SHOPS;
 
+/** 新增 QA */
+export async function addQA(input: Omit<QAItem, 'id' | 'triggerCount' | 'updatedAt'>): Promise<QAItem> {
+  await delay(200);
+  const created: QAItem = {
+    ...input,
+    id: `qa_${Date.now()}`,
+    triggerCount: 0,
+    updatedAt: new Date().toISOString(),
+  };
+  ALL_QA.unshift(created);
+  return created;
+}
+
+/** 更新 QA */
+export async function updateQA(id: string, patch: Partial<Omit<QAItem, 'id'>>): Promise<void> {
+  await delay(150);
+  const t = ALL_QA.find((q) => q.id === id);
+  if (t) Object.assign(t, patch, { updatedAt: new Date().toISOString() });
+}
+
+/** 删除 QA */
+export async function deleteQA(id: string): Promise<void> {
+  await delay(120);
+  const idx = ALL_QA.findIndex((q) => q.id === id);
+  if (idx >= 0) ALL_QA.splice(idx, 1);
+}
+
 export const STAGE_LABELS: Record<QAStage, string> = {
   presale: '售前',
   mid: '售中',
