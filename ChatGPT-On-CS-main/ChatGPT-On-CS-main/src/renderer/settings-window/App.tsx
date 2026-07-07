@@ -42,7 +42,7 @@ import {
 import theme from '../common/styles/theme';
 import '../common/App.css';
 
-// TODO: 后续考虑将 monaco-editor 的路径改为本地路径
+// Monaco Editor CDN 路径 — 生产环境建议改为本地路径以避免外网依赖
 loader.config({
   paths: { vs: 'https://jsd.onmicrosoft.cn/npm/monaco-editor@0.43.0/min/vs' },
 });

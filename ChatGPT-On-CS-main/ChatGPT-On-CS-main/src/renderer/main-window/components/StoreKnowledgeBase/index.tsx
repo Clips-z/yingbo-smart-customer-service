@@ -319,7 +319,8 @@ const StoreKnowledgeBase: React.FC = () => {
     try {
       const res = await fetchStoreQAList({ keyword, shop, stage, page, pageSize });
       setItems(res.list); setTotal(res.total); setStats(res.stats);
-    } catch {
+    } catch (err) {
+      console.error('[StoreKB] load failed:', err);
       toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
     } finally { setLoading(false); }
   };

@@ -69,13 +69,8 @@ export class Completions extends APIResource {
         if (part.type === 'text') {
           parts.push({ text: part.text });
         } else {
-          // TODO: Handle images
-          // parts.push({
-          //   inline_data: {
-          //     "mime_type": "image/jpeg",
-          //     "data": "'$(base64 -w0 image.jpg)'"
-          //   }
-          // });
+          // 图片处理：需 base64 编码后以 inline_data 传递（Gemini Vision API）
+          // 当前项目中图片理解由 VisionService 统一处理，此处仅处理纯文本
         }
       }
 
@@ -163,7 +158,8 @@ export class Completions extends APIResource {
       choices,
       object: 'chat.completion',
       created: Date.now() / 10,
-      // TODO 需要支持 usage
+      // Gemini API 流式模式下 usage 需从最后一个 chunk 提取，非流式直接返回
+      // 当前先用零值占位，后续可解析 response 中的 usageMetadata
       usage: {
         completion_tokens: 0,
         prompt_tokens: 0,

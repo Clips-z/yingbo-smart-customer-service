@@ -45,8 +45,9 @@ async function findChromePath(): Promise<string | null> {
       if (fs.existsSync(p)) {
         return p;
       }
-    } catch {
+    } catch (err) {
       // 忽略权限等错误
+      console.debug('[chrome-detect] exists check failed for', p, ':', err);
     }
   }
 
@@ -60,8 +61,8 @@ async function findChromePath(): Promise<string | null> {
     if (firstLine && firstLine.endsWith('.exe')) {
       return firstLine;
     }
-  } catch {
-    // where 命令失败也忽略
+  } catch (err) {
+    console.debug('[chrome-detect] where.exe failed:', err);
   }
 
   return null;

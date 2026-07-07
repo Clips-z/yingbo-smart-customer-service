@@ -748,7 +748,7 @@ export class KeywordReplyController {
 
   /**
    * 获取所有平台信息
-   * FIXME: 为了避免依赖注入，这里直接通过网络请求获取所有平台，后续优化
+   * 注：通过 HTTP 调用内部 API 获取平台列表（简化依赖注入，后续可改为直接调用 dispatchService）
    * @returns 所有平台
    */
   async getApps(): Promise<{ data: { id: string; name: string }[] } | null> {

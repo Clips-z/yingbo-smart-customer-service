@@ -303,8 +303,8 @@ export class RagService {
                 this.lastError = 'RAG 服务返回异常状态';
                 this.broadcastHealth();
               }
-            } catch {
-              // 忽略 JSON 解析错误
+            } catch (parseErr) {
+              console.error('[ragService] health response parse error:', parseErr);
             }
             resolve();
           });
@@ -346,7 +346,8 @@ export class RagService {
               const health = JSON.parse(data);
               this.totalChunks = health.chunks || 0;
               resolve(health.status === 'ok');
-            } catch {
+            } catch (parseErr) {
+              console.error('[ragService] health parse error:', parseErr);
               resolve(false);
             }
           });

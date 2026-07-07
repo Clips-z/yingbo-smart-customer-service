@@ -95,9 +95,8 @@ export class Config extends Model {
 }
 
 export async function checkAndAddFields(sequelize: Sequelize) {
-  const tableDescription = await Config.describe();
+  const tableDescription = (await Config.describe()) as Record<string, unknown>;
 
-  // @ts-ignore
   if (!tableDescription.qianniu_reply_mode) {
     await sequelize
       .getQueryInterface()
@@ -108,7 +107,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
       });
   }
 
-  // @ts-ignore
   if (!tableDescription.wechat_reply_mode) {
     await sequelize
       .getQueryInterface()
@@ -119,7 +117,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
       });
   }
 
-  // @ts-ignore
   if (!tableDescription.wecom_reply_mode) {
     await sequelize
       .getQueryInterface()
@@ -139,7 +136,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     ['coze_api_base', DataTypes.STRING(255)],
   ] as const;
   for (const [field, type] of llmTextFields) {
-    // @ts-ignore
     if (!tableDescription[field]) {
       // eslint-disable-next-line no-await-in-loop
       await sequelize.getQueryInterface().addColumn('n_config', field, {
@@ -150,7 +146,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     }
   }
 
-  // @ts-ignore
   if (!tableDescription.has_esc_close) {
     await sequelize.getQueryInterface().addColumn('n_config', 'has_esc_close', {
       type: DataTypes.BOOLEAN,
@@ -159,7 +154,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.truncate_word_count) {
     await sequelize
       .getQueryInterface()
@@ -170,7 +164,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
       });
   }
 
-  // @ts-ignore
   if (!tableDescription.truncate_word_key) {
     await sequelize
       .getQueryInterface()
@@ -181,7 +174,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
       });
   }
 
-  // @ts-ignore
   if (!tableDescription.has_transfer) {
     await sequelize.getQueryInterface().addColumn('n_config', 'has_transfer', {
       type: DataTypes.BOOLEAN,
@@ -190,7 +182,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.has_replace) {
     await sequelize.getQueryInterface().addColumn('n_config', 'has_replace', {
       type: DataTypes.BOOLEAN,
@@ -199,7 +190,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.jinritemai_default_reply_match) {
     await sequelize
       .getQueryInterface()
@@ -210,7 +200,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
       });
   }
 
-  // @ts-ignore
   if (!tableDescription.rag_enabled) {
     await sequelize.getQueryInterface().addColumn('n_config', 'rag_enabled', {
       type: DataTypes.BOOLEAN,

@@ -138,8 +138,8 @@ const electronHandler = {
           console.error('[IPC] Store value too large (>5MB), rejected');
           return;
         }
-      } catch {
-        console.error('[IPC] Store value is not serializable');
+      } catch (serializeErr) {
+        console.error('[IPC] Store value is not serializable:', serializeErr);
         return;
       }
       ipcRenderer.send('electron-store-set', key, value);

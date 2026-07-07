@@ -105,7 +105,8 @@ export class QianniuOcrWorker {
         id?: string;
         type?: string;
       };
-    } catch {
+    } catch (parseErr) {
+      // 非 JSON 行（如 stderr 日志），正常跳过
       return;
     }
     if (!response.id) return;

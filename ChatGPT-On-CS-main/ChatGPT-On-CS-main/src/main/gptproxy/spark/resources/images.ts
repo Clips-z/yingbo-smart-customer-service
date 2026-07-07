@@ -3,7 +3,7 @@ import { type RequestOptions } from 'openai/core';
 
 import { APIResource } from '../resource';
 
-// TODO: 没有权限，暂未测试
+// 讯飞星火图片生成 API — 需开通权限后测试，接口文档见下方链接
 export class Images extends APIResource {
   /**
    * See https://www.xfyun.cn/doc/spark/ImageGeneration.html

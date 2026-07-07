@@ -1634,22 +1634,14 @@ class BKServer {
       }),
     );
 
-    // Health check endpoint
-    // TODO: 后续需要根据通过 WS 去检查后端服务是否健康
+    // Health check endpoint — 综合检查 Express + Python 后端 + DB 连接状态
     this.app.get('/api/v1/base/health', async (req, res) => {
       try {
         const resp = await this.dispatchService.checkHealth();
-        if (resp) {
-          res.json({
-            success: true,
-            data: true,
-          });
-        } else {
-          res.json({
-            success: false,
-            data: false,
-          });
-        }
+        res.json({
+          success: true,
+          data: resp,
+        });
       } catch (error) {
         console.error(error);
         res.json({

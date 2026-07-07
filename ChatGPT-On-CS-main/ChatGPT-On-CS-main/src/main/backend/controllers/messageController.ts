@@ -24,7 +24,8 @@ export class MessageController {
         return Array.isArray(parsed)
           ? new Map(parsed as Array<[string, string]>)
           : new Map();
-      } catch {
+      } catch (err) {
+        console.warn('[messageController] context JSON parse failed:', err);
         return new Map();
       }
     }

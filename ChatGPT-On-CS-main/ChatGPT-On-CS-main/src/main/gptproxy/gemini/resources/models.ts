@@ -9,7 +9,7 @@ import { Page } from 'openai/pagination';
 import { type GeminiAI } from '../../index';
 import { APIResource } from '../resource';
 
-// TODO 输出原始对象
+// Gemini Models API — 获取可用模型列表与详情
 export class Models extends APIResource {
   /**
    * Retrieves a model instance, providing basic information about the model such as

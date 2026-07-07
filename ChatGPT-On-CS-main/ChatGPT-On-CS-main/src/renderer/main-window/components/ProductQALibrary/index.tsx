@@ -281,7 +281,8 @@ const ProductQALibrary: React.FC = () => {
       const res = await fetchProductQAList({ keyword, shop, status, page, pageSize });
       setProducts(res.list);
       setTotal(res.total);
-    } catch {
+    } catch (err) {
+      console.error('[ProductQA] load failed:', err);
       toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
     } finally {
       setLoading(false);
@@ -295,7 +296,8 @@ const ProductQALibrary: React.FC = () => {
     try {
       await toggleProductOnSale(id, onSale);
       setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, onSale } : p)));
-    } catch {
+    } catch (err) {
+      console.error('[ProductQA] toggle failed:', err);
       toast({ title: '操作失败', status: 'error', duration: 1500, isClosest: true });
     } finally {
       setTogglingIds((prev) => { const n = new Set(prev); n.delete(id); return n; });

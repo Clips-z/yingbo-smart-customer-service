@@ -204,7 +204,12 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               }}
               onClick={() => {
                 if (item.key === 'notifications') {
-                  // TODO: 打开通知面板
+                  // 通知面板功能规划中，当前暂用 toast 提示
+                  import('../Panels').then(({ openNotificationPanel }) => {
+                    openNotificationPanel?.();
+                  }).catch(() => {
+                    // 通知面板模块未就绪，静默忽略
+                  });
                 }
               }}
             >
