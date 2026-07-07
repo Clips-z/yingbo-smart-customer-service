@@ -217,6 +217,15 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               onClick={() => {
                 if (item.key === 'notifications') {
                   togglePanel();
+                } else if (item.key === 'docs') {
+                  // 打开用户使用手册（通过 IPC 调用主进程 shell.openPath）
+                  window.electron.ipcRenderer.sendMessage('open-user-manual');
+                } else if (item.key === 'help') {
+                  // 打开帮助：导航到知识管理 → 显示使用指南
+                  window.electron.ipcRenderer.sendMessage('open-url', 'https://github.com/Clips-z/yingbo-smart-customer-service');
+                } else if (item.key === 'favorites') {
+                  // 收藏功能：导航到客服中心（快捷入口，后续可扩展独立收藏面板）
+                  onNavigate('service' as any);
                 }
               }}
             >

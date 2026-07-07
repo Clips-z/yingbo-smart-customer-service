@@ -298,4 +298,4 @@ const TransferKeyword = () => {
   );
 };
 
-export default TransferKeyword;
+export default React.memo(TransferKeyword);

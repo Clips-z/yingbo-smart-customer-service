@@ -318,4 +318,4 @@ const SessionHistory = () => {
   );
 };
 
-export default SessionHistory;
+export default React.memo(SessionHistory);

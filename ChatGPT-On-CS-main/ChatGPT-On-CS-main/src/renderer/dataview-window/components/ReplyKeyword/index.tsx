@@ -304,4 +304,4 @@ const ReplyKeyword = () => {
   );
 };
 
-export default ReplyKeyword;
+export default React.memo(ReplyKeyword);

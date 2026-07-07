@@ -171,8 +171,7 @@ const App = () => {
 
       electron.ipcRenderer.on(
         'update-settings-params',
-        // @ts-ignore
-        (receivedArgs: string[]) => {
+        (_event: unknown, ...receivedArgs: string[]) => {
           console.log('update-settings-params', receivedArgs);
           handleParams(receivedArgs);
         },
@@ -359,8 +358,9 @@ const App = () => {
           borderRadius="full"
           size="sm"
           onClick={() => {
-            // @ts-ignore
-            handleCheckboxChange({ target: { checked: false } });
+            handleCheckboxChange({
+              target: { checked: false },
+            } as React.ChangeEvent<HTMLInputElement>);
           }}
         >
           取消激活
