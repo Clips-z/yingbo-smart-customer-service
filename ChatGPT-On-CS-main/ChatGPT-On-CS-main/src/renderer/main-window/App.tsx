@@ -1,14 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { MemoryRouter as Router, Routes, Route } from 'react-router-dom';
-import { ChakraProvider, Box, Flex } from '@chakra-ui/react';
+import { ChakraProvider, Box } from '@chakra-ui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import Navbar from './components/layout/Navbar';
-import Footer from './components/layout/Footer';
 import ErrorBoundary from './components/ErrorBoundary';
-import HomePage from './pages/Home';
 import FullScreenLoader from './pages/FullScreenLoader';
 import Updater from './components/Updater';
 import SystemCheck from './components/SystemCheck';
+import MainLayout from './components/layout/MainLayout';
 import { BroadcastProvider } from './hooks/useBroadcastContext';
 import '../common/App.css';
 import theme from '../common/styles/theme';
@@ -66,23 +63,9 @@ function App() {
       <ChakraProvider theme={theme}>
         <BroadcastProvider>
           <ErrorBoundary>
-            <Router>
-              {isLoaded ? (
-                <Flex direction="column" minH="100vh">
-                  <Navbar />
-                  <Box flex="1" mt={{ base: '4rem', md: '5rem' }}>
-                    <Routes>
-                      <Route path="/" element={<HomePage />} />
-                    </Routes>
-                  </Box>
-                  <Footer />
-                </Flex>
-              ) : (
-                <FullScreenLoader />
-              )}
-              <SystemCheck />
-              <Updater />
-            </Router>
+            {isLoaded ? <MainLayout /> : <FullScreenLoader />}
+            <SystemCheck />
+            <Updater />
           </ErrorBoundary>
         </BroadcastProvider>
       </ChakraProvider>
