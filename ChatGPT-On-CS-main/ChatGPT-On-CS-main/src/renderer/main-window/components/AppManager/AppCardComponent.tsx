@@ -47,6 +47,16 @@ const PLATFORM_COLORS: Record<string, string> = {
   win_douyin: 'gray',
 };
 
+// intro.png 风格：每个平台一张彩色渐变卡片
+const PLATFORM_CARD: Record<string, { grad: string; iconBg: string; text: string }> = {
+  win_qianniu: { grad: 'linear-gradient(135deg, #FFEADB 0%, #FFD4BE 100%)', iconBg: '#F97B45', text: '#9A3412' },
+  win_wecom: { grad: 'linear-gradient(135deg, #DAFEFF 0%, #B0F7FA 100%)', iconBg: '#2A83FF', text: '#155E75' },
+  win_wechat: { grad: 'linear-gradient(135deg, #DCEDEB 0%, #B3D2D1 100%)', iconBg: '#10B981', text: '#065F46' },
+  win_jinmai: { grad: 'linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%)', iconBg: '#EF4444', text: '#991B1B' },
+  win_pdd: { grad: 'linear-gradient(135deg, #FEE2E2 0%, #FCA5A5 100%)', iconBg: '#EF4444', text: '#991B1B' },
+  win_douyin: { grad: 'linear-gradient(135deg, #EDE9FE 0%, #DDD6FE 100%)', iconBg: '#7C3AED', text: '#5B21B6' },
+};
+
 type AppCardComponentProps = {
   app: {
     id: string;
@@ -70,29 +80,30 @@ const AppCardComponent = ({
   const isSelected = selectedAppId === app.id;
   const platformColor = PLATFORM_COLORS[app.id] || 'gray';
   const platformLabel = PLATFORM_LABELS[app.id] || app.name;
+  const card = PLATFORM_CARD[app.id] || PLATFORM_CARD.win_douyin;
 
   return (
     <Flex
-      bg="white"
-      borderRadius="lg"
+      bg={card.grad}
+      borderRadius="xl"
       p={3}
       px={4}
       align="center"
       justify="space-between"
       gap={3}
       cursor={app.running ? 'pointer' : 'default'}
-      opacity={app.running ? 1 : 0.5}
+      opacity={app.running ? 1 : 0.55}
       transition="all 0.25s cubic-bezier(0.4, 0, 0.2, 1)"
       boxShadow={
         isSelected
-          ? `0 0 0 2px var(--chakra-colors-${platformColor}-400), 0 4px 12px rgba(0,0,0,0.08)`
-          : '0 1px 3px rgba(0,0,0,0.06)'
+          ? `0 0 0 2px var(--chakra-colors-${platformColor}-400), 0 10px 22px -6px rgba(74,91,179,0.35)`
+          : '0 4px 14px -6px rgba(15,23,42,0.18)'
       }
       _hover={
         app.running
           ? {
-            transform: 'translateY(-2px)',
-            boxShadow: `0 6px 16px rgba(0,0,0,0.1)`,
+            transform: 'translateY(-3px)',
+            boxShadow: '0 14px 28px -8px rgba(15,23,42,0.28)',
           }
           : {}
       }
@@ -105,26 +116,14 @@ const AppCardComponent = ({
       position="relative"
       overflow="hidden"
     >
-      {/* 左侧选中指示条 */}
-      {isSelected && (
-        <Box
-          position="absolute"
-          left={0}
-          top={0}
-          bottom={0}
-          w="3px"
-          bg={`${platformColor}.500`}
-          borderRightRadius="sm"
-        />
-      )}
-
       <HStack spacing={3}>
         {/* 平台图标 + 环境标识 */}
         <Box position="relative">
           <Box
-            p="6px"
-            borderRadius="md"
-            bg={isSelected ? `${platformColor}.50` : 'gray.50'}
+            p="7px"
+            borderRadius="lg"
+            bg="white"
+            boxShadow="0 2px 6px rgba(15,23,42,0.12)"
             transition="background 0.2s"
           >
             <Image
@@ -150,7 +149,7 @@ const AppCardComponent = ({
 
         <Box>
           <HStack spacing={2}>
-            <Text fontSize="13px" fontWeight="600" color="gray.800">
+            <Text fontSize="13px" fontWeight="700" color={card.text}>
               {platformLabel}
             </Text>
           </HStack>
@@ -160,10 +159,10 @@ const AppCardComponent = ({
               w="6px"
               h="6px"
               borderRadius="full"
-              bg={app.running ? 'green.400' : 'gray.300'}
+              bg={app.running ? 'green.500' : 'gray.400'}
               className={app.running ? 'pulse-dot' : ''}
             />
-            <Text fontSize="11px" color={app.running ? 'green.600' : 'gray.400'} fontWeight={500}>
+            <Text fontSize="11px" color={app.running ? 'green.700' : 'gray.500'} fontWeight={600}>
               {app.running ? '在线' : '离线'}
             </Text>
           </HStack>
@@ -173,13 +172,15 @@ const AppCardComponent = ({
       {/* 设置按钮 */}
       <Tooltip label={`设置 ${platformLabel} 平台`}>
         <IconButton
-          variant="ghost"
+          variant="solid"
           aria-label={`设置 ${platformLabel} 平台`}
           fontSize="14px"
           size="sm"
           icon={<SettingsIcon />}
-          color={isSelected ? `${platformColor}.500` : 'gray.400'}
-          _hover={{ bg: `${platformColor}.50`, color: `${platformColor}.600` }}
+          bg="white"
+          color={card.iconBg}
+          _hover={{ bg: 'whiteAlpha.800', transform: 'scale(1.08)' }}
+          boxShadow="0 2px 6px rgba(15,23,42,0.12)"
           borderRadius="lg"
           onClick={(e) => {
             e.stopPropagation();

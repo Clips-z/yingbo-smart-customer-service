@@ -7,7 +7,7 @@ const theme = extendTheme({
   styles: {
     global: {
       'html, body': {
-        bg: 'gray.50',
+        bg: '#F7FAFC',
         fontSize: 'md',
         fontWeight: 400,
         height: '100%',
@@ -38,16 +38,17 @@ const theme = extendTheme({
     base: '1px solid #E2E8F0',
   },
   radii: {
-    sm: '6px',
-    md: '10px',
-    lg: '16px',
-    xl: '20px',
+    sm: '8px',
+    md: '12px',
+    lg: '20px',
+    xl: '24px',
+    '2xl': '28px',
   },
   shadows: {
-    sm: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-    md: '0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
-    lg: '0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04)',
-    xl: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.04)',
+    sm: '0 1px 2px 0 rgba(15, 23, 42, 0.04)',
+    md: '0 4px 12px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -2px rgba(15, 23, 42, 0.04)',
+    lg: '0 12px 24px -6px rgba(15, 23, 42, 0.08), 0 4px 8px -4px rgba(15, 23, 42, 0.04)',
+    xl: '0 24px 40px -12px rgba(15, 23, 42, 0.12), 0 8px 16px -8px rgba(15, 23, 42, 0.05)',
   },
   colors: {
     ...colors,

@@ -9,15 +9,6 @@
  * `./src/main.js` using webpack. This gives us some performance wins.
  */
 
-// ========== 启动性能优化 ==========
-// 禁用不必要的 Chromium 特性以加快启动
-app?.commandLine?.appendSwitch('disable-gpu-vsync');
-app?.commandLine?.appendSwitch('disable-background-timer-throttling');
-app?.commandLine?.appendSwitch('disable-renderer-backgrounding');
-// 减少启动时的磁盘 I/O
-app?.commandLine?.appendSwitch('disable-features', 'OutOfBlinkCors');
-// 禁用拼写检查
-app?.commandLine?.appendSwitch('disable-spell-checking');
 import 'source-map-support/register';
 import './system/logger';
 import path from 'path';
@@ -28,6 +19,16 @@ import setupIpcHandlers from './ipcHandlers';
 import { setServerReadyState } from './ipcHandlers';
 import setupCron from './cron';
 import BackendServiceManager from './system/backend';
+
+// ========== 启动性能优化 ==========
+// 必须在 import { app } 之后执行，避免 ts-node 转译下的 TDZ 错误
+app?.commandLine?.appendSwitch('disable-gpu-vsync');
+app?.commandLine?.appendSwitch('disable-background-timer-throttling');
+app?.commandLine?.appendSwitch('disable-renderer-backgrounding');
+// 减少启动时的磁盘 I/O
+app?.commandLine?.appendSwitch('disable-features', 'OutOfBlinkCors');
+// 禁用拼写检查
+app?.commandLine?.appendSwitch('disable-spell-checking');
 
 // ⭐ 延迟导入 Server（含 sqlite3 数据库初始化），避免 gotTheLock=false 时
 //    数据库已初始化 → 退出时 napi 原生模块崩溃
