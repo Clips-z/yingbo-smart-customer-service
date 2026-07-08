@@ -28,6 +28,7 @@
     "postinstall": "node scripts/ensure-release-app.js",
     "prepare:dev": "pnpm run build:dll",
     "prepare:native-deps": "node scripts/ensure-release-app.js && node scripts/install-app-deps.js",
+    "preview:web": "node scripts/preview-web.js",
     "lint": "cross-env NODE_ENV=development eslint . --ext .js,.jsx,.ts,.tsx",
     "smoke:wechat-reply": "node scripts/smoke-auto-reply.js",
     "wechat:sidecar": "node scripts/start-wechat-sidecar.js --backend wechat39",
