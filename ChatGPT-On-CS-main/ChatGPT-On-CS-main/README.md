@@ -103,3 +103,32 @@ pnpm run package
 ```
 
 如果只是在本地调试，也可以通过 `BKEXE_PATH` 指向已有的后端可执行文件。
+
+## 11. 开发与打包命令
+
+首次拉取源码后安装依赖：
+
+```bash
+pnpm install
+```
+
+开发环境如需生成 renderer DLL，可手动执行：
+
+```bash
+pnpm run prepare:dev
+```
+
+正式打包前，先确认 Python 后端产物存在，然后执行：
+
+```bash
+pnpm run package
+```
+
+`package` 会自动执行：
+
+1. 检查后端可执行文件。
+2. 构建主进程和渲染进程。
+3. 复制 sqlite3 等运行时原生依赖到 `release/app/node_modules`。
+4. 生成安装包。
+
+平台支持状态见 `docs/platform-support.md`。
