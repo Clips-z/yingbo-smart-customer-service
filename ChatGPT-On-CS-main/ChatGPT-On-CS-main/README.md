@@ -82,3 +82,24 @@ Coze 模式直接使用智能体内的人设、知识库、插件和工作流，
 `文档\chatgpt-on-cs\msg.db`
 
 为避免原有配置丢失，升级后仍沿用该数据目录。
+
+## 10. 打包前检查
+
+平台自动化和消息采集依赖 Python 后端可执行文件。源码仓库默认不提交该二进制产物，打包前需要确认以下任一路径存在：
+
+- `assets/backend/__main__.exe`
+- `release/app/assets/backend/__main__.exe`
+
+可运行下面的检查命令：
+
+```bash
+pnpm run check:backend
+```
+
+正式打包会使用强制检查：
+
+```bash
+pnpm run package
+```
+
+如果只是在本地调试，也可以通过 `BKEXE_PATH` 指向已有的后端可执行文件。
