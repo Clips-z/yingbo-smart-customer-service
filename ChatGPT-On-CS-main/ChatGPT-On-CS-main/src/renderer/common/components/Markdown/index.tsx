@@ -10,8 +10,7 @@ interface MarkdownProps {
 const Markdown: React.FC<MarkdownProps> = ({ content }) => {
   // 使用正确的类型来确保与预期的ReactMarkdown组件兼容
   const components: Components = {
-    // @ts-ignore
-    a: ({ node, ...props }) => ( // eslint-disable-line
+    a: ({ node: _node, ...props }: any) => (
       <a {...props} target="_blank" rel="noopener noreferrer">
         {props.children}
       </a>

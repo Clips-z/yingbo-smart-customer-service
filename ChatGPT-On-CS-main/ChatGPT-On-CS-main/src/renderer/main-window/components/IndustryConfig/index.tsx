@@ -153,7 +153,8 @@ const IndustryConfig: React.FC = () => {
       setList(res.list);
       setTotal(res.total);
       setEnabledCount(res.enabledCount);
-    } catch {
+    } catch (err) {
+      console.error('[IndustryConfig] load failed:', err);
       toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
     } finally {
       setLoading(false);
@@ -170,7 +171,8 @@ const IndustryConfig: React.FC = () => {
     setEnabledCount((prev) => prev + (enabled ? 1 : -1));
     try {
       await toggleIndustry(id, enabled);
-    } catch {
+    } catch (err) {
+      console.error('[IndustryConfig] toggle failed:', err);
       toast({ title: '操作失败', status: 'error', duration: 1500, isClosest: true });
     }
   };

@@ -404,8 +404,7 @@ export class MessageService {
       const llmClient = this.createLLMClient(cfg, cfg.llmType);
       // 尝试使用它回复 Hi 来检查是否可用
       if ('chat' in llmClient) {
-        // @ts-ignore
-        const response = await llmClient.chat.completions.create({
+        const response = await (llmClient as any).chat.completions.create({
           model: cfg.model,
           messages: [
             {
@@ -508,8 +507,7 @@ export class MessageService {
         console.log('开始使用 GPT 生成回复....');
         console.log('messages:', messages);
 
-        // @ts-ignore
-        const response = await llmClient.chat.completions.create({
+        const response = await (llmClient as any).chat.completions.create({
           model: cfg.model,
           messages:
             llm_name === 'coze'

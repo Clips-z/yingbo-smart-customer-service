@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { Box, Flex, Tooltip, Icon, Text } from '@chakra-ui/react';
 import {
   FiGrid,
@@ -11,6 +11,7 @@ import {
   FiBell,
   FiHelpCircle,
 } from 'react-icons/fi';
+import useNotificationStore from '../../stores/useNotificationStore';
 
 /* ── 导航项定义 ── */
 export type NavSection = 'dashboard' | 'service' | 'knowledge' | 'security' | 'dataview';
@@ -66,6 +67,48 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   onNavigate,
   showKnowledgeSub,
 }) => {
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const togglePanel = useNotificationStore((s) => s.togglePanel);
+
+  // 定期轮询未读计数
+  useEffect(() => {
+    const store = useNotificationStore.getState();
+    store.loadUnreadCount();
+    const timer = setInterval(() => store.loadUnreadCount(), 30_000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 底部按钮点击处理 — 提取为 useCallback 避免每次渲染创建新函数
+  const handleBottomNavClick = useCallback(
+    (key: string) => {
+      if (key === 'notifications') {
+        togglePanel();
+      } else if (key === 'docs') {
+        window.electron.ipcRenderer.sendMessage('open-user-manual');
+      } else if (key === 'help') {
+        window.electron.ipcRenderer.sendMessage(
+          'open-url',
+          'https://github.com/Clips-z/yingbo-smart-customer-service',
+        );
+      } else if (key === 'favorites') {
+        onNavigate('service' as any);
+      }
+    },
+    [togglePanel, onNavigate],
+  );
+
+  // 主导航点击处理
+  const handleMainNavClick = useCallback(
+    (key: string) => {
+      if (key === 'dataview') {
+        window.electron.ipcRenderer.sendMessage('open-dataview-window', {});
+      } else {
+        onNavigate(key as NavSection);
+      }
+    },
+    [onNavigate],
+  );
+
   return (
     <Flex
       direction="column"
@@ -118,11 +161,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             >
               <Box
                 as="button"
-                onClick={() =>
-                  item.key === 'dataview'
-                    ? window.electron.ipcRenderer.sendMessage('open-dataview-window', {})
-                    : onNavigate(item.key)
-                }
+                onClick={() => handleMainNavClick(item.key)}
                 display="flex"
                 flexDirection="column"
                 alignItems="center"
@@ -202,15 +241,11 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               _focusVisible={{
                 boxShadow: '0 0 0 2px rgba(66, 99, 235, 0.4)',
               }}
-              onClick={() => {
-                if (item.key === 'notifications') {
-                  // TODO: 打开通知面板
-                }
-              }}
+              onClick={() => handleBottomNavClick(item.key)}
             >
               <Icon position="relative">
                 {item.icon}
-                {item.key === 'notifications' && (
+                {item.key === 'notifications' && unreadCount > 0 && (
                   <Box
                     position="absolute"
                     top="-4px"
@@ -229,7 +264,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                     lineHeight={1}
                     boxShadow="0 1px 3px rgba(220, 38, 38, 0.4)"
                   >
-                    99
+                    {unreadCount > 99 ? '99+' : unreadCount}
                   </Box>
                 )}
               </Icon>

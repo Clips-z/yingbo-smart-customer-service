@@ -302,4 +302,4 @@ const ReplaceKeyword = () => {
   );
 };
 
-export default ReplaceKeyword;
+export default React.memo(ReplaceKeyword);

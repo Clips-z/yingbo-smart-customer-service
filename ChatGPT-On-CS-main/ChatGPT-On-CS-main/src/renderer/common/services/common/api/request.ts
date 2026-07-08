@@ -1,3 +1,13 @@
+/**
+ * 统一 API 请求层 — 懒人客服
+ *
+ * 特性：
+ * - 自动端口探测（window.electron.getPort()）
+ * - 统一错误结构（ApiError）
+ * - 超时 + 重试 + 请求去重
+ * - 业务错误码检查
+ */
+
 import axios, {
   AxiosError,
   AxiosResponse,
@@ -21,6 +31,10 @@ export interface ConfigType {
   headers?: Record<string, string>;
   hold?: boolean;
   timeout?: number;
+  /** 失败重试次数，默认 0 */
+  retry?: number;
+  /** 重试延迟（ms），默认 1000 */
+  retryDelay?: number;
 }
 
 /**
@@ -33,9 +47,15 @@ export interface ApiError {
   details?: unknown;
 }
 
+/** 默认超时时间 */
+const DEFAULT_TIMEOUT = 60000;
+
+/** 请求去重 Map（key: method+url+JSON(params) → pending Promise） */
+const pendingRequests = new Map<string, Promise<unknown>>();
+
 /* 创建请求实例 */
 const instance = axios.create({
-  timeout: 60000,
+  timeout: DEFAULT_TIMEOUT,
   headers: {
     'content-type': 'application/json',
     'Cache-Control': 'no-cache',
@@ -44,13 +64,29 @@ const instance = axios.create({
 
 /* 请求拦截 */
 instance.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => config,
+  (config: InternalAxiosRequestConfig) => {
+    // 添加请求时间戳用于调试
+    (config as Record<string, unknown>)._startTime = Date.now();
+    return config;
+  },
   (err: unknown) => Promise.reject(err),
 );
 
 /* 响应拦截 */
 instance.interceptors.response.use(
-  (response: AxiosResponse) => response,
+  (response: AxiosResponse) => {
+    // 开发环境下记录请求耗时
+    if (process.env.NODE_ENV === 'development') {
+      const startTime = (response.config as Record<string, unknown>)._startTime as number;
+      if (startTime) {
+        const duration = Date.now() - startTime;
+        if (duration > 2000) {
+          console.warn(`[API] 慢请求 ${response.config.method?.toUpperCase()} ${response.config.url} — ${duration}ms`);
+        }
+      }
+    }
+    return response;
+  },
   (err: unknown) => Promise.reject(err),
 );
 
@@ -112,32 +148,74 @@ function responseError(err: AxiosError): Promise<never> {
 }
 
 /**
- * 内部请求方法
+ * 生成请求去重 key
+ */
+function dedupeKey(url: string, data: Record<string, unknown>, method: Method): string {
+  return `${method}:${url}:${JSON.stringify(data)}`;
+}
+
+/**
+ * 内部请求方法（带重试与去重）
  * T 是完整响应体类型（包含 code/message/data）
  */
-function request<T = ApiResponse>(
+async function request<T = ApiResponse>(
   url: string,
   data: Record<string, unknown>,
   config: ConfigType,
   method: Method,
 ): Promise<T> {
+  const { retry = 0, retryDelay = 1000, hold, ...restConfig } = config;
+
   const payload = Object.fromEntries(
     Object.entries(data).filter(
       ([, v]) => v !== null && v !== undefined,
     ),
   );
 
-  return instance
-    .request<T>({
-      baseURL: `http://127.0.0.1:${window.electron.getPort()}`,
-      url,
-      method,
-      data: ['POST', 'PUT'].includes(method) ? payload : null,
-      params: !['POST', 'PUT'].includes(method) ? payload : null,
-      ...config,
-    })
-    .then((res) => checkRes<T>(res.data))
-    .catch((err: AxiosError) => responseError(err));
+  // 请求去重：GET 请求相同参数不重复发
+  const key = method === 'GET' ? dedupeKey(url, payload, method) : '';
+  if (key && pendingRequests.has(key)) {
+    return pendingRequests.get(key) as Promise<T>;
+  }
+
+  const doRequest = (attempt: number): Promise<T> =>
+    instance
+      .request<T>({
+        baseURL: `http://127.0.0.1:${window.electron.getPort()}`,
+        url,
+        method,
+        data: ['POST', 'PUT'].includes(method) ? payload : null,
+        params: !['POST', 'PUT'].includes(method) ? payload : null,
+        timeout: config.timeout ?? DEFAULT_TIMEOUT,
+        ...restConfig,
+      })
+      .then((res) => checkRes<T>(res.data))
+      .catch(async (err: AxiosError) => {
+        // 可重试的错误：网络错误或 5xx
+        const canRetry =
+          attempt < retry &&
+          (err.message === 'Network Error' ||
+            err.code === 'ECONNABORTED' ||
+            (err.response && err.response.status >= 500));
+
+        if (canRetry) {
+          console.warn(`[API] 第 ${attempt + 1} 次请求失败，${retryDelay}ms 后重试: ${method} ${url}`);
+          await new Promise((r) => setTimeout(r, retryDelay));
+          return doRequest(attempt + 1);
+        }
+        return responseError(err);
+      });
+
+  const promise = doRequest(0);
+
+  if (key) {
+    pendingRequests.set(key, promise);
+    promise.finally(() => {
+      pendingRequests.delete(key);
+    });
+  }
+
+  return promise;
 }
 
 /**

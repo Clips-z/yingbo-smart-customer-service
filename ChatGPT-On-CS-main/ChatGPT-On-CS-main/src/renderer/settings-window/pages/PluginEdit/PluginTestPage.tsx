@@ -133,8 +133,7 @@ const PluginTestPage = ({ code }: { code?: string }) => {
 
     // eslint-disable-next-line no-restricted-syntax
     for (const msg of MockMessages) {
-      // @ts-ignore
-      addMessage(msg);
+      addMessage(msg as Parameters<typeof addMessage>[0]);
     }
   };
 

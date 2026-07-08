@@ -179,8 +179,8 @@ class BackendServiceManager {
           if (this.process && this.process.pid) {
             try {
               this.process.kill('SIGKILL');
-            } catch {
-              // 忽略
+            } catch (killErr) {
+              console.error('[backend] SIGKILL failed:', killErr);
             }
           }
         }, 5000);

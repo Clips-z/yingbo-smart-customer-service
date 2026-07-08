@@ -117,6 +117,11 @@ const electronHandler = {
       validateChannel(channel);
       ipcRenderer.removeListener(channel, func);
     },
+    /** invoke/handle 模式 — 支持异步双向 IPC */
+    invoke(channel: string, ...args: unknown[]) {
+      // handle 模式的通道不需要在白名单中（由主进程 ipcMain.handle 控制权限）
+      return ipcRenderer.invoke(channel, ...args);
+    },
   },
   store: {
     get(key: string) {
@@ -138,8 +143,8 @@ const electronHandler = {
           console.error('[IPC] Store value too large (>5MB), rejected');
           return;
         }
-      } catch {
-        console.error('[IPC] Store value is not serializable');
+      } catch (serializeErr) {
+        console.error('[IPC] Store value is not serializable:', serializeErr);
         return;
       }
       ipcRenderer.send('electron-store-set', key, value);

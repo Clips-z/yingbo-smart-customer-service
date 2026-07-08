@@ -25,9 +25,8 @@ export class Plugin extends Model {
 }
 
 export async function checkAndAddFields(sequelize: Sequelize) {
-  const tableDescription = await Plugin.describe();
+  const tableDescription = (await Plugin.describe()) as Record<string, unknown>;
 
-  // @ts-ignore
   if (!tableDescription.source) {
     await sequelize.getQueryInterface().addColumn('plugins', 'source', {
       type: DataTypes.STRING,
@@ -36,7 +35,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.author) {
     await sequelize.getQueryInterface().addColumn('plugins', 'author', {
       type: DataTypes.STRING,
@@ -45,7 +43,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.description) {
     await sequelize.getQueryInterface().addColumn('plugins', 'description', {
       type: DataTypes.STRING,
@@ -54,7 +51,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.icon) {
     await sequelize.getQueryInterface().addColumn('plugins', 'icon', {
       type: DataTypes.STRING,
@@ -63,7 +59,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.tags) {
     await sequelize.getQueryInterface().addColumn('plugins', 'tags', {
       type: DataTypes.TEXT,
@@ -72,7 +67,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.type) {
     await sequelize.getQueryInterface().addColumn('plugins', 'type', {
       type: DataTypes.STRING,
@@ -81,7 +75,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.title) {
     await sequelize.getQueryInterface().addColumn('plugins', 'title', {
       type: DataTypes.STRING,

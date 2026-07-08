@@ -1,6 +1,6 @@
 {
   "name": "yingbo-smart-customer-service",
-  "description": "迎波智能客服：支持微信、千牛等平台的智能回复工作台",
+  "description": "\u8fce\u6ce2\u667a\u80fd\u5ba2\u670d\uff1a\u652f\u6301\u5fae\u4fe1\u3001\u5343\u725b\u7b49\u5e73\u53f0\u7684\u667a\u80fd\u56de\u590d\u5de5\u4f5c\u53f0",
   "version": "1.4.5",
   "keywords": [
     "electron",
@@ -37,6 +37,11 @@
     "test": "jest"
   },
   "browserslist": [],
+  "sideEffects": [
+    "*.css",
+    "*.scss",
+    "*.ejs"
+  ],
   "prettier": {
     "singleQuote": true,
     "overrides": [
@@ -67,7 +72,10 @@
     ],
     "moduleNameMapper": {
       "\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$": "<rootDir>/.erb/mocks/fileMock.js",
-      "\\.(css|less|sass|scss)$": "identity-obj-proxy"
+      "\\.(css|less|sass|scss)$": "identity-obj-proxy",
+      "^socket\\.io$": "<rootDir>/.erb/mocks/socketMock.js",
+      "^electron$": "<rootDir>/.erb/mocks/electronMock.js",
+      "^uuid$": "<rootDir>/node_modules/.pnpm/uuid@8.3.2/node_modules/uuid/dist/index.js"
     },
     "setupFiles": [
       "./.erb/scripts/check-build-exists.ts"
@@ -79,10 +87,14 @@
     "testPathIgnorePatterns": [
       "release/app/dist",
       "release/app",
-      ".erb/dll"
+      ".erb/dll",
+      "gptproxy\\.test\\.js$"
+    ],
+    "modulePathIgnorePatterns": [
+      "\\.d\\.ts$"
     ],
     "transform": {
-      "\\.(ts|tsx|js|jsx)$": "ts-jest"
+      "\\.(ts|tsx)$": ["ts-jest", { "diagnostics": false, "tsconfig": "tsconfig.cjs.json" }]
     }
   },
   "dependencies": {

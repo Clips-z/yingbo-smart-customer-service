@@ -123,7 +123,8 @@ const ContentSecurity: React.FC = () => {
       const [ov, ws] = await Promise.all([fetchSecurityOverview(), fetchSensitiveWords()]);
       setOverview(ov);
       setWords(ws);
-    } catch {
+    } catch (err) {
+      console.error('[ContentSecurity] load failed:', err);
       toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
     } finally {
       setLoading(false);

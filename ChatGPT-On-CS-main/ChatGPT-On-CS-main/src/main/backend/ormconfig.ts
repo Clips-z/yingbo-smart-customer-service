@@ -30,6 +30,7 @@ import {
 } from './entities/keyword';
 import { TransferKeyword, initTransfer } from './entities/transfer';
 import { ReplaceKeyword, initReplace } from './entities/replace';
+import { initNotification } from './entities/notification';
 
 // Get user's documents directory path
 // 支持通过环境变量重定向数据库目录（用于沙箱/CI 环境）
@@ -94,6 +95,7 @@ initPlugin(sequelize);
 initInstance(sequelize);
 initTransfer(sequelize);
 initReplace(sequelize);
+initNotification(sequelize);
 
 // 异步初始化和数据填充函数
 async function initDb(): Promise<void> {

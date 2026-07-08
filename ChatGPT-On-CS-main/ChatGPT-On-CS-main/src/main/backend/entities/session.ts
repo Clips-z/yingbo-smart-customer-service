@@ -48,6 +48,12 @@ export function initSession(sequelize: Sequelize) {
       modelName: 'Session',
       tableName: 'n_sessions',
       timestamps: false,
+      indexes: [
+        { fields: ['platform'] },
+        { fields: ['platform_id'] },
+        { fields: ['instance_id'] },
+        { fields: ['platform', 'created_at'] },
+      ],
     },
   );
 }

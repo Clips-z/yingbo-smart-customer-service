@@ -89,4 +89,4 @@ const DisplayContextModal: React.FC<DisplayContextModalProps> = ({
   );
 };
 
-export default DisplayContextModal;
+export default React.memo(DisplayContextModal);

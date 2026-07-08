@@ -1,0 +1,81 @@
+{
+  "version": "1.0.0",
+  "description": "Qianniu (千牛) desktop client OCR capture system layout configuration. Extracted from qianniu-compat-capture.ps1 and qianniu-compat-send.ps1 hardcoded coordinates.",
+  "window": {
+    "title_keyword": "千牛接待台",
+    "process_name": "AliWorkbench"
+  },
+  "fingerprint": {
+    "description": "Chat fingerprint area for detecting message windows",
+    "maxX": 838,
+    "maxY": 705,
+    "yStart": 130,
+    "xStart": 305
+  },
+  "alert_centers": {
+    "description": "Alert center icon detection area",
+    "maxX": 900,
+    "maxY": 58,
+    "yStart": 6
+  },
+  "conversation_alerts": {
+    "description": "Conversation alert badge detection area",
+    "maxY": 930,
+    "yStart": 140,
+    "xStart": 220,
+    "xEnd": 300
+  },
+  "bubble_blue_bias": {
+    "description": "Blue bubble (incoming message) bias region",
+    "xStart": 305,
+    "xEnd": 838,
+    "yStart": 285,
+    "yEnd": 760
+  },
+  "outgoing_bubble": {
+    "description": "Lowest outgoing (self) bubble detection area",
+    "maxX": 838,
+    "maxY": 705,
+    "yStart": 290,
+    "xStart": 450
+  },
+  "sender_detection": {
+    "description": "Sender name line detection region",
+    "xStart": 320,
+    "xEnd": 620,
+    "yStart": 135,
+    "yEnd": 185
+  },
+  "candidate_detection": {
+    "description": "Candidate reply line detection region",
+    "xStart": 340,
+    "xEnd": 520,
+    "rightBound": 760,
+    "yStart": 300,
+    "yEnd": 750
+  },
+  "editor_focus": {
+    "description": "Editor area focus offsets (relative to window)",
+    "widthRatio": 0.44,
+    "heightOffset": -105
+  },
+  "search_focus": {
+    "description": "Search input focus coordinates (relative to window)",
+    "x": 180,
+    "widthRatio": 0.12,
+    "y": 164
+  },
+  "timing": {
+    "click_wait_ms": 900,
+    "search_wait_ms": 250,
+    "select_wait_ms": 350
+  },
+  "dpi_presets": {
+    "description": "DPI scaling presets. Actual DPI scaling behavior needs testing on target displays.",
+    "100": { "scale": 1.0 },
+    "125": { "scale": 1.25 },
+    "150": { "scale": 1.50 },
+    "175": { "scale": 1.75 },
+    "200": { "scale": 2.0 }
+  }
+}

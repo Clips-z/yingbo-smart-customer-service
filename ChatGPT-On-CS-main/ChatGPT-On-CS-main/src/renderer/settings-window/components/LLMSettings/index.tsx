@@ -327,4 +327,4 @@ const LLMSettings: React.FC<LLMSettingsProps> = ({ appId, instanceId }) => {
   );
 };
 
-export default LLMSettings;
+export default React.memo(LLMSettings);

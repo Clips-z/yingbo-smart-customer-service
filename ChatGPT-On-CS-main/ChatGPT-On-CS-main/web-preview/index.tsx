@@ -53,9 +53,9 @@ const mockPlatforms = [
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      keepPreviousData: true,
       refetchOnWindowFocus: false,
       retry: false,
+      staleTime: 30 * 1000,
     },
   },
 });

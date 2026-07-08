@@ -65,7 +65,8 @@ async function getProcessNames(): Promise<Set<string>> {
         .map((line) => line.match(/^"([^"]+)"/)?.[1]?.toLowerCase())
         .filter((name): name is string => Boolean(name)),
     );
-  } catch {
+  } catch (err) {
+    console.error('[platformRuntime] tasklist execution failed:', err);
     return new Set();
   }
 }
@@ -109,7 +110,8 @@ export async function isPlatformActive(platformId: string): Promise<boolean> {
     }
     const globalConfig = await Config.findOne({ where: { global: true } });
     return Boolean(globalConfig?.active);
-  } catch {
+  } catch (err) {
+    console.error('[platformRuntime] getPlatformEnabled failed:', err);
     return false;
   }
 }

@@ -15,8 +15,9 @@ const Editor = React.memo(function Editor({
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   onOpenModal?: () => void;
 }) {
-  // @ts-ignore
-  const [currentLength, setCurrentLength] = useState(value?.length || 0);
+  const [currentLength, setCurrentLength] = useState(
+    (value as string)?.length || 0,
+  );
 
   // 处理文本变化的函数
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -29,8 +30,7 @@ const Editor = React.memo(function Editor({
   // 处理初始值的情况
   useEffect(() => {
     if (value) {
-      // @ts-ignore
-      setCurrentLength(value.length);
+      setCurrentLength((value as string).length);
     }
   }, [value]);
 

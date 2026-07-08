@@ -6,18 +6,21 @@ import FullScreenLoader from './pages/FullScreenLoader';
 import Updater from './components/Updater';
 import SystemCheck from './components/SystemCheck';
 import MainLayout from './components/layout/MainLayout';
+import NotificationPanel from './components/NotificationPanel';
 import { BroadcastProvider } from './hooks/useBroadcastContext';
 import '../common/App.css';
 import theme from '../common/styles/theme';
 
 // Create a client
+// 注意：keepPreviousData 是 useQuery 级别的选项，不应放在 defaultOptions 中，
+// 否则生产构建下 Terser 压缩可能导致 QueryClient 构造失败，引发 React #130 错误。
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      keepPreviousData: true,
       refetchOnWindowFocus: false,
-      retry: false,
-      cacheTime: 5 * 60 * 1000, // 5分钟，避免缓存频繁失效
+      retry: 1,
+      gcTime: 5 * 60 * 1000, // 5分钟（React Query v4/v5 统一使用 gcTime）
+      staleTime: 30 * 1000, // 30秒内数据视为新鲜，避免重复请求
     },
   },
 });
@@ -64,6 +67,7 @@ function App() {
         <BroadcastProvider>
           <ErrorBoundary>
             {isLoaded ? <MainLayout /> : <FullScreenLoader />}
+            <NotificationPanel />
             <SystemCheck />
             <Updater />
           </ErrorBoundary>

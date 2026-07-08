@@ -18,9 +18,8 @@ export class Keyword extends Model {
 }
 
 export async function checkAndAddFields(sequelize: Sequelize) {
-  const tableDescription = await Keyword.describe();
+  const tableDescription = (await Keyword.describe()) as Record<string, unknown>;
 
-  // @ts-ignore
   if (!tableDescription.fuzzy) {
     await sequelize.getQueryInterface().addColumn('keyword', 'fuzzy', {
       type: DataTypes.BOOLEAN,
@@ -29,7 +28,6 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     });
   }
 
-  // @ts-ignore
   if (!tableDescription.has_regular) {
     await sequelize.getQueryInterface().addColumn('keyword', 'has_regular', {
       type: DataTypes.BOOLEAN,

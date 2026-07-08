@@ -114,7 +114,8 @@ const CorpusTest: React.FC = () => {
       try {
         const res = await fetchStoreQAList({ page: 1, pageSize: 100 });
         setCorpus(res.list);
-      } catch {
+      } catch (err) {
+        console.error('[CorpusTest] load failed:', err);
         toast({ title: '知识库加载失败', status: 'error', duration: 2000, isClosest: true });
       } finally {
         setLoading(false);

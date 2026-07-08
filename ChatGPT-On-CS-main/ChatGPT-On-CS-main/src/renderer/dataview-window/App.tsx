@@ -21,10 +21,10 @@ import '../common/App.css';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      keepPreviousData: true,
+      gcTime: 5 * 60 * 1000, // 5分钟垃圾回收（React Query v4+ 替代 cacheTime）
+      staleTime: 30 * 1000, // 30秒内数据视为新鲜，不重新请求
       refetchOnWindowFocus: false,
-      retry: false,
-      cacheTime: 10,
+      retry: 1, // 失败重试1次
     },
   },
 });

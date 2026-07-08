@@ -43,9 +43,18 @@ export class QianniuOcrWorker {
 
   private stderrTail = '';
 
+  private lastActivityAt = 0;
+
+  private healthCheckTimer?: NodeJS.Timeout;
+
+  private readonly IDLE_TIMEOUT_MS = 10 * 60_000; // 10分钟空闲后回收进程
+
+  private readonly HEALTH_CHECK_INTERVAL_MS = 30_000; // 每30秒检查一次进程健康
+
   public async recognize(image: string): Promise<QianniuOcrResult> {
     const worker = this.ensureProcess();
     const id = crypto.randomUUID();
+    this.lastActivityAt = Date.now();
     return new Promise<QianniuOcrResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
@@ -58,11 +67,50 @@ export class QianniuOcrWorker {
   }
 
   public stop(): void {
+    this.clearHealthCheck();
     this.resetProcess(new Error('RapidOCR worker stopped'));
   }
 
+  private clearHealthCheck(): void {
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = undefined;
+    }
+  }
+
+  private startHealthCheck(): void {
+    if (this.healthCheckTimer) return;
+    this.healthCheckTimer = setInterval(() => {
+      // 空闲超时检查：10分钟无活动则回收进程以节省资源
+      if (
+        this.pending.size === 0 &&
+        Date.now() - this.lastActivityAt > this.IDLE_TIMEOUT_MS
+      ) {
+        this.resetProcess();
+        this.clearHealthCheck();
+        return;
+      }
+
+      // 进程健康检查：确认进程仍在运行
+      const worker = this.process;
+      if (!worker) {
+        this.clearHealthCheck();
+        return;
+      }
+      if (worker.killed || worker.exitCode !== null) {
+        this.resetProcess(
+          new Error('RapidOCR worker health check failed: process exited'),
+        );
+        this.clearHealthCheck();
+      }
+    }, this.HEALTH_CHECK_INTERVAL_MS);
+  }
+
   private ensureProcess(): ChildProcessWithoutNullStreams {
-    if (this.process && !this.process.killed) return this.process;
+    if (this.process && !this.process.killed) {
+      this.lastActivityAt = Date.now();
+      return this.process;
+    }
 
     const python = path.resolve(process.cwd(), 'tools', 'python311', 'python.exe');
     const script = path.resolve(
@@ -77,6 +125,8 @@ export class QianniuOcrWorker {
     });
     this.process = worker;
     this.stderrTail = '';
+    this.lastActivityAt = Date.now();
+    this.startHealthCheck();
 
     const output = readline.createInterface({ input: worker.stdout });
     output.on('line', (line) => this.handleLine(line));
@@ -105,7 +155,8 @@ export class QianniuOcrWorker {
         id?: string;
         type?: string;
       };
-    } catch {
+    } catch (parseErr) {
+      // 非 JSON 行（如 stderr 日志），正常跳过
       return;
     }
     if (!response.id) return;
@@ -123,6 +174,7 @@ export class QianniuOcrWorker {
   private resetProcess(error?: Error): void {
     const worker = this.process;
     this.process = undefined;
+    this.clearHealthCheck();
     if (worker && !worker.killed) worker.kill();
     if (!error) return;
     for (const request of this.pending.values()) {

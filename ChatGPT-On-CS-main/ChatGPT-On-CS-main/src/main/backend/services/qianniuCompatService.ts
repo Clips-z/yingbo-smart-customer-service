@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import { promisify } from 'util';
+import { Op } from 'sequelize';
 import { AppService } from './appService';
 import { DispatchService } from './dispatchService';
 import { LoggerService } from './loggerService';
@@ -23,11 +24,26 @@ const execFileAsync = promisify(execFile);
 
 export type QianniuReplyMode = 'hint' | 'assist' | 'unattended';
 
-const MIN_OCR_CONFIDENCE = Number(
-  process.env.QIANNIU_OCR_MIN_CONFIDENCE || 0.88,
-);
+const MIN_OCR_CONFIDENCE = (() => {
+  const raw = process.env.QIANNIU_OCR_MIN_CONFIDENCE;
+  if (!raw) return 0.88;
+  const value = Number(raw);
+  if (Number.isNaN(value) || value < 0 || value > 1) {
+    // 环境变量值非法时使用默认值，避免 NaN 传播
+    return 0.88;
+  }
+  return value;
+})();
 
-const CONFIRM_OCR_BELOW = Number(process.env.QIANNIU_OCR_CONFIRM_BELOW || 0.92);
+const CONFIRM_OCR_BELOW = (() => {
+  const raw = process.env.QIANNIU_OCR_CONFIRM_BELOW;
+  if (!raw) return 0.92;
+  const value = Number(raw);
+  if (Number.isNaN(value) || value < 0 || value > 1) {
+    return 0.92;
+  }
+  return value;
+})();
 
 type CaptureResult = {
   hwnd: number;
@@ -188,7 +204,7 @@ export class QianniuCompatService {
     if (options?.status === 'handled') {
       // 已处理 = 非 pending/failed
       where.status = {
-        [require('sequelize').Op.notIn]: ['pending', 'failed'],
+        [Op.notIn]: ['pending', 'failed'],
       };
     } else if (options?.status) {
       where.status = options.status;
@@ -343,7 +359,6 @@ export class QianniuCompatService {
   }
 
   private handleScanError(error: unknown): void {
-    this.busy = false;
     const message = error instanceof Error ? error.message : String(error);
     const qianniuMissing = message.includes(
       'Qianniu reception window was not found',

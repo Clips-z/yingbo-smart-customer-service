@@ -115,6 +115,81 @@ const setupIpcHandlers = (
     new Notification(notification).show();
   });
 
+  // 通知面板 IPC — 获取通知列表
+  ipcMain.handle('notifications:list', async (_event, options?: {
+    unreadOnly?: boolean;
+    limit?: number;
+    offset?: number;
+  }) => {
+    try {
+      const { Notification } = require('./backend/entities/notification');
+      const where: Record<string, unknown> = {};
+      if (options?.unreadOnly) {
+        where.is_read = false;
+      }
+      const notifications = await Notification.findAll({
+        where,
+        order: [['created_at', 'DESC']],
+        limit: options?.limit ?? 50,
+        offset: options?.offset ?? 0,
+      });
+      return { ok: true, data: notifications.map((n: any) => n.toJSON()) };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  // 通知面板 IPC — 获取未读计数
+  ipcMain.handle('notifications:unread-count', async () => {
+    try {
+      const { Notification } = require('./backend/entities/notification');
+      const count = await Notification.count({ where: { is_read: false } });
+      return { ok: true, count };
+    } catch (error) {
+      return { ok: false, count: 0, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  // 通知面板 IPC — 标记为已读
+  ipcMain.handle('notifications:mark-read', async (_event, id: number) => {
+    try {
+      const { Notification } = require('./backend/entities/notification');
+      const notification = await Notification.findByPk(id);
+      if (!notification) {
+        return { ok: false, error: '通知不存在' };
+      }
+      await notification.update({ is_read: true });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  // 通知面板 IPC — 全部标记已读
+  ipcMain.handle('notifications:mark-all-read', async () => {
+    try {
+      const { Notification } = require('./backend/entities/notification');
+      await Notification.update(
+        { is_read: true },
+        { where: { is_read: false } },
+      );
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  // 通知面板 IPC — 删除通知
+  ipcMain.handle('notifications:delete', async (_event, id: number) => {
+    try {
+      const { Notification } = require('./backend/entities/notification');
+      await Notification.destroy({ where: { id } });
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
   ipcMain.on(
     'open-settings-window',
     async (event, { appId, instanceId } = {}) => {

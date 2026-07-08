@@ -317,4 +317,4 @@ const PromptKnowledge: React.FC<PromptKnowledgeProps> = ({
   );
 };
 
-export default PromptKnowledge;
+export default React.memo(PromptKnowledge);
