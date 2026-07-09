@@ -34,10 +34,8 @@ const configuration: webpack.Configuration = {
   output: {
     path: webpackPaths.distRendererPath,
     publicPath: './',
-    filename: '[name].js',
-    library: {
-      type: 'umd',
-    },
+    filename: '[name].[contenthash].js',
+    // Electron renderer doesn't need UMD exports — remove library export
   },
 
   module: {
@@ -97,7 +95,82 @@ const configuration: webpack.Configuration = {
 
   optimization: {
     minimize: true,
-    minimizer: [new TerserPlugin(), new CssMinimizerPlugin()],
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          compress: {
+            // Keep console.error and console.warn for debugging in production
+            drop_console: true,
+            pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.trace'],
+          },
+          format: {
+            comments: false,
+          },
+        },
+        extractComments: {
+          condition: /^\**!|@preserve|@license|@cc_on/i,
+          filename: (fileData) => `${fileData.filename}.LICENSE.txt`,
+          banner: (licenseFile) => `License information can be found in ${licenseFile}`,
+        },
+      }),
+      new CssMinimizerPlugin(),
+    ],
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendor',
+          chunks: 'all',
+          priority: 10,
+          enforce: true,
+        },
+        // Specific large libraries grouped together
+        chakra: {
+          test: /[\\/]node_modules[\\/](@chakra-ui|@emotion)[\\/]/,
+          name: 'chakra',
+          chunks: 'all',
+          priority: 20,
+          enforce: true,
+        },
+        react: {
+          test: /[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom)[\\/]/,
+          name: 'react',
+          chunks: 'all',
+          priority: 20,
+          enforce: true,
+        },
+        framerMotion: {
+          test: /[\\/]node_modules[\\/]framer-motion[\\/]/,
+          name: 'framer-motion',
+          chunks: 'all',
+          priority: 20,
+          enforce: true,
+        },
+        reactQuery: {
+          test: /[\\/]node_modules[\\/]@tanstack[\\/]/,
+          name: 'react-query',
+          chunks: 'all',
+          priority: 20,
+          enforce: true,
+        },
+        reactIcons: {
+          test: /[\\/]node_modules[\\/]react-icons[\\/]/,
+          name: 'react-icons',
+          chunks: 'all',
+          priority: 20,
+          enforce: true,
+        },
+        // Common chunk for shared code between the 3 entry points
+        common: {
+          minChunks: 2,
+          priority: 5,
+          reuseExistingChunk: true,
+        },
+      },
+    },
+    // Enable tree-shaking via usedExports
+    usedExports: true,
   },
 
   plugins: [

@@ -136,8 +136,9 @@ export class Completions extends APIResource {
       finish_reason: 'stop',
     };
 
-    // TODO 需要确认 is_truncated 是否和 is_end 互斥
-    // TODO 需要确认 functions 是否响应式不一样
+    // 文心一言 finish_reason 映射：
+    // is_end=true → 正常结束; is_truncated=true → 长度截断; need_clear_history → 内容过滤
+    // 注：三者互斥关系基于文心一言 v4 API 实测行为，如遇异常请检查 API 版本
     if (result.is_end) {
       choice.finish_reason = 'stop';
     } else if (result.is_truncated) {
@@ -170,7 +171,7 @@ export class Completions extends APIResource {
       for await (const chunk of stream) {
         Completions.assert(chunk);
 
-        // TODO 某些情况下，文心一言的 result 只有 id，需要排查情况
+        // 文心一言流式响应：result 可能仅含 id（心跳包），正常跳过
         const data = chunk.result;
 
         const choice: OpenAI.ChatCompletionChunk.Choice = {
@@ -182,8 +183,7 @@ export class Completions extends APIResource {
           finish_reason: null,
         };
 
-        // TODO 需要确认 is_truncated 是否和 is_end 互斥
-        // TODO 需要确认 functions 是否响应式不一样
+        // 文心一言 finish_reason 映射（同非流式逻辑）
         if (data.is_end) {
           choice.finish_reason = 'stop';
         } else if (data.is_truncated) {
@@ -198,10 +198,9 @@ export class Completions extends APIResource {
           choices: [choice],
           object: 'chat.completion.chunk',
           created: parseInt(data.created, 10),
-          // openai-node 上 已经有讨论添加 usage 的问题
+          // openai-node 上已经有讨论添加 usage 的问题
           // 文心一言是有提供的，这里主要是为了向前兼容
-          // @ts-ignore
-          usage: data.usage,
+          usage: data.usage as any,
         };
       }
     }

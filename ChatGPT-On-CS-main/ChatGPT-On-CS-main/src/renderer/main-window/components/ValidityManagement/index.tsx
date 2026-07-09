@@ -174,7 +174,8 @@ const ValidityManagement: React.FC = () => {
       const res = await fetchValidityRules();
       setList(res.list);
       setCounts(res.counts);
-    } catch {
+    } catch (err) {
+      console.error('[ValidityMgmt] load failed:', err);
       toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
     } finally {
       setLoading(false);

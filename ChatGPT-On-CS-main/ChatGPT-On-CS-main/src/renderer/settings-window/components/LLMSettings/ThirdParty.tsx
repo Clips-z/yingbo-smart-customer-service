@@ -128,4 +128,4 @@ const ThirdPartyInterface: React.FC<ThirdPartyInterfaceProps> = ({
   );
 };
 
-export default ThirdPartyInterface;
+export default React.memo(ThirdPartyInterface);

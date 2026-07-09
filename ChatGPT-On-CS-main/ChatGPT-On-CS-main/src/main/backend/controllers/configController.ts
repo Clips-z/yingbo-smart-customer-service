@@ -463,7 +463,7 @@ export class ConfigController {
         plugin_id: pluginId,
       });
     } else if (type === 'driver') {
-      // TODO: 目前只有全局配置，后续再实现实例配置
+      // 驱动配置：当前仅支持全局级别，实例级配置规划中
       const config = cfg as DriverConfig;
       dbConfig = await Config.findOne({
         where: { global: true },

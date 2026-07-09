@@ -42,19 +42,20 @@ import {
 import theme from '../common/styles/theme';
 import '../common/App.css';
 
-// TODO: 后续考虑将 monaco-editor 的路径改为本地路径
+// Monaco Editor CDN 路径 — 生产环境建议改为本地路径以避免外网依赖
 loader.config({
   paths: { vs: 'https://jsd.onmicrosoft.cn/npm/monaco-editor@0.43.0/min/vs' },
 });
 
 // Create a client
+// 注意：keepPreviousData 是 useQuery 级别的选项，不应放在 defaultOptions 中
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      keepPreviousData: true,
       refetchOnWindowFocus: false,
-      retry: false,
-      cacheTime: 10,
+      retry: 1,
+      gcTime: 5 * 60 * 1000, // 5分钟，避免缓存频繁失效
+      staleTime: 30 * 1000,
     },
   },
 });
@@ -170,8 +171,7 @@ const App = () => {
 
       electron.ipcRenderer.on(
         'update-settings-params',
-        // @ts-ignore
-        (receivedArgs: string[]) => {
+        (_event: unknown, ...receivedArgs: string[]) => {
           console.log('update-settings-params', receivedArgs);
           handleParams(receivedArgs);
         },
@@ -358,8 +358,9 @@ const App = () => {
           borderRadius="full"
           size="sm"
           onClick={() => {
-            // @ts-ignore
-            handleCheckboxChange({ target: { checked: false } });
+            handleCheckboxChange({
+              target: { checked: false },
+            } as React.ChangeEvent<HTMLInputElement>);
           }}
         >
           取消激活

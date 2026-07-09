@@ -1,29 +1,17 @@
 /* eslint-disable no-console */
 /**
- * install-app-deps.js
+ * Copy runtime native dependencies into release/app.
  *
- * 将主进程运行时所需的原生模块（sqlite3 及其加载器 @mapbox/node-pre-gyp）
- * 安装到 release/app/node_modules，使打包后的 main.js（require('sqlite3')）
- * 能在 Electron 运行时正确解析。
- *
- * 背景：
- *   - ERB 模板默认通过 `electron-builder install-app-deps` + `electron-rebuild`
- *     在 release/app 里重编译原生模块。但在缺少 MSVC / node-gyp 构建链、
- *     或预编译二进制下载失败的环境下会失败（见 TEST-REPORT.md sqlite3 阻塞项）。
- *   - sqlite3@5.1.6 提供的 napi-v6 预编译二进制对 Electron 26（N-API v8）
- *     向后兼容，因此直接复用已下载的二进制即可，无需重新编译。
- *
- * 用法： node scripts/install-app-deps.js
+ * electron-builder packages release/app as the real application root. Native
+ * modules required by the main process must therefore exist under
+ * release/app/node_modules, including their own dependency chain.
  */
 const fs = require('fs');
 const path = require('path');
 
 const root = path.resolve(__dirname, '..');
-const srcNodeModules = path.join(root, 'node_modules');
 const appNodeModules = path.join(root, 'release', 'app', 'node_modules');
-
-// 需要 copy 到 release/app/node_modules 的运行时依赖（包名 -> 目录名）
-const REQUIRED_PACKAGES = ['sqlite3', '@mapbox/node-pre-gyp'];
+const copied = new Set();
 
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
@@ -48,61 +36,93 @@ function dirSize(p) {
   return total;
 }
 
-function ensureNapiBindings(sqlite3Dir) {
-  // sqlite3 通过 node-pre-gyp 按 napi 版本查找二进制：
-  //   lib/binding/napi-v{napi_build_version}-{platform}-{libc}-{arch}/node_sqlite3.node
-  // Electron 26 使用 N-API v8，预编译包仅到 v6；v6 二进制对 v8 向后兼容，
-  // 这里把 v6 复制一份到 v8 路径，保证 pre-gyp 能定位到文件。
-  const v6 = path.join(sqlite3Dir, 'lib/binding/napi-v6-win32-unknown-x64');
-  const v8 = path.join(sqlite3Dir, 'lib/binding/napi-v8-win32-unknown-x64');
-  const v6Bin = path.join(v6, 'node_sqlite3.node');
+function packageDest(packageName) {
+  return path.join(appNodeModules, ...packageName.split('/'));
+}
 
-  if (!fs.existsSync(v6Bin)) {
-    throw new Error(`napi-v6 二进制缺失: ${v6Bin}（请先在项目根目录 npm install sqlite3）`);
+function packageRootFromJson(packageJsonPath) {
+  return path.dirname(packageJsonPath);
+}
+
+function readJson(file) {
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function copyPackage(packageName, resolveFrom) {
+  if (copied.has(packageName)) return packageDest(packageName);
+
+  const packageJsonPath = require.resolve(`${packageName}/package.json`, {
+    paths: [resolveFrom, root],
+  });
+  const src = packageRootFromJson(packageJsonPath);
+  const dest = packageDest(packageName);
+  const pkg = readJson(packageJsonPath);
+
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  copyDirSync(src, dest);
+  copied.add(packageName);
+
+  const sizeKB = Math.round(dirSize(dest) / 1024);
+  console.log(`  OK ${packageName} -> release/app/node_modules/${packageName} (${sizeKB} KB)`);
+
+  const dependencies = {
+    ...(pkg.dependencies || {}),
+    ...(pkg.optionalDependencies || {}),
+  };
+  for (const depName of Object.keys(dependencies)) {
+    copyPackage(depName, src);
   }
-  fs.mkdirSync(v8, { recursive: true });
-  const v8Bin = path.join(v8, 'node_sqlite3.node');
-  if (!fs.existsSync(v8Bin) || fs.statSync(v8Bin).size === 0) {
-    fs.copyFileSync(v6Bin, v8Bin);
-    console.log(`  ✓ 生成 napi-v8 绑定: ${path.relative(root, v8Bin)}`);
+
+  return dest;
+}
+
+function findBundledSqliteBinary() {
+  const candidates = [
+    path.join(root, 'node_modules', 'sqlite3', 'build', 'Release', 'node_sqlite3.node'),
+    path.join(root, 'node_modules', 'sqlite3', 'lib', 'binding', 'napi-v8-win32-unknown-x64', 'node_sqlite3.node'),
+    path.join(root, 'node_modules', 'sqlite3', 'lib', 'binding', 'napi-v6-win32-unknown-x64', 'node_sqlite3.node'),
+    path.resolve(root, '..', '..', '..', 'ChatGPT-On-CS-main', 'ChatGPT-On-CS-main', 'node_modules', 'sqlite3', 'lib', 'binding', 'napi-v8-win32-unknown-x64', 'node_sqlite3.node'),
+    path.resolve(root, '..', '..', '..', 'ChatGPT-On-CS-main', 'ChatGPT-On-CS-main', 'node_modules', 'sqlite3', 'lib', 'binding', 'napi-v6-win32-unknown-x64', 'node_sqlite3.node'),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate));
+}
+
+function ensureSqliteBinary(sqlite3Dir) {
+  const buildRelease = path.join(sqlite3Dir, 'build', 'Release');
+  const buildReleaseBin = path.join(buildRelease, 'node_sqlite3.node');
+  if (fs.existsSync(buildReleaseBin) && fs.statSync(buildReleaseBin).size > 0) {
+    return;
   }
+
+  const bundledBinary = findBundledSqliteBinary();
+  if (!bundledBinary) {
+    throw new Error('sqlite3 binary is missing. Run pnpm rebuild sqlite3 or provide node_sqlite3.node.');
+  }
+
+  fs.mkdirSync(buildRelease, { recursive: true });
+  fs.copyFileSync(bundledBinary, buildReleaseBin);
+  console.log(`  OK sqlite3 binary -> ${path.relative(root, buildReleaseBin)}`);
+}
+
+function selfTest() {
+  const resolved = require.resolve('sqlite3', { paths: [appNodeModules] });
+  const sqlite3 = require(resolved);
+  if (typeof sqlite3.Database !== 'function') {
+    throw new Error('sqlite3.Database is not available.');
+  }
+  console.log(`  OK sqlite3 self-test passed (${path.relative(root, resolved)})`);
 }
 
 function main() {
-  console.log('=== 安装 release/app 运行时原生依赖 ===');
-  if (!fs.existsSync(srcNodeModules)) {
-    throw new Error(`找不到源 node_modules: ${srcNodeModules}（请先在项目根目录 npm install）`);
-  }
+  console.log('=== Installing release/app runtime native dependencies ===');
   fs.mkdirSync(appNodeModules, { recursive: true });
 
-  for (const pkg of REQUIRED_PACKAGES) {
-    const src = path.join(srcNodeModules, pkg);
-    const dest = path.join(appNodeModules, pkg);
-    if (!fs.existsSync(src)) {
-      throw new Error(`源依赖缺失: ${src}`);
-    }
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    copyDirSync(src, dest);
-    const sizeKB = Math.round(dirSize(dest) / 1024);
-    console.log(`  ✓ ${pkg} → release/app/node_modules/${pkg} (${sizeKB} KB)`);
-  }
+  const sqlite3Dir = copyPackage('sqlite3', root);
+  ensureSqliteBinary(sqlite3Dir);
+  selfTest();
 
-  // 确保两个 napi 版本的绑定都在（兼容 Electron 的 N-API 版本解析）
-  ensureNapiBindings(path.join(appNodeModules, 'sqlite3'));
-
-  // 自检：尝试在 Node 下加载 sqlite3（确认 binding 路径与 node-pre-gyp 链路完整）
-  try {
-    const resolved = require.resolve('sqlite3', { paths: [appNodeModules] });
-    const sqlite3 = require(resolved);
-    if (typeof sqlite3.Database !== 'function') {
-      throw new Error('sqlite3.Database 不是构造函数');
-    }
-    console.log(`  ✓ 自检通过：sqlite3 可正常加载 (${path.relative(root, resolved)})`);
-  } catch (e) {
-    throw new Error(`sqlite3 自检失败: ${e.message}`);
-  }
-
-  console.log('=== 完成 ===\n');
+  console.log('=== Done ===\n');
 }
 
 main();

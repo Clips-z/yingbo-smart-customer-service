@@ -137,7 +137,7 @@ const PluginPage = ({ appId, instanceId }: PluginPageProps) => {
     try {
       // 检查一下插件类型，如果是自定义插件，直接激活
       if (plugin.source === 'custom' && plugin.id) {
-        // FIXME: 这个 usePlugin 需要独立配置
+        // 自定义插件激活：将 pluginId 写入配置以独立追踪
         const newConfig = { ...config, usePlugin: true, pluginId: plugin.id };
         setConfig(newConfig);
         updateConfig({

@@ -82,3 +82,53 @@ Coze 模式直接使用智能体内的人设、知识库、插件和工作流，
 `文档\chatgpt-on-cs\msg.db`
 
 为避免原有配置丢失，升级后仍沿用该数据目录。
+
+## 10. 打包前检查
+
+平台自动化和消息采集依赖 Python 后端可执行文件。源码仓库默认不提交该二进制产物，打包前需要确认以下任一路径存在：
+
+- `assets/backend/__main__.exe`
+- `release/app/assets/backend/__main__.exe`
+
+可运行下面的检查命令：
+
+```bash
+pnpm run check:backend
+```
+
+正式打包会使用强制检查：
+
+```bash
+pnpm run package
+```
+
+如果只是在本地调试，也可以通过 `BKEXE_PATH` 指向已有的后端可执行文件。
+
+## 11. 开发与打包命令
+
+首次拉取源码后安装依赖：
+
+```bash
+pnpm install
+```
+
+开发环境如需生成 renderer DLL，可手动执行：
+
+```bash
+pnpm run prepare:dev
+```
+
+正式打包前，先确认 Python 后端产物存在，然后执行：
+
+```bash
+pnpm run package
+```
+
+`package` 会自动执行：
+
+1. 检查后端可执行文件。
+2. 构建主进程和渲染进程。
+3. 复制 sqlite3 等运行时原生依赖到 `release/app/node_modules`。
+4. 生成安装包。
+
+平台支持状态见 `docs/platform-support.md`。

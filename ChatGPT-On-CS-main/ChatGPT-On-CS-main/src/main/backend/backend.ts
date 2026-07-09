@@ -473,8 +473,10 @@ class BKServer {
       };
 
       const { total, autoReplies } =
-        // @ts-ignore
-        await this.keywordReplyController.list(query);
+        (await this.keywordReplyController.list(query)) as {
+          total: number;
+          autoReplies: unknown[];
+        };
 
       const data = autoReplies;
       const ptfs = await this.dispatchService.getAllPlatforms();
@@ -561,8 +563,7 @@ class BKServer {
         await this.keywordReplyController.importExcel(path);
         res.json({ success: true });
       } catch (error) {
-        // @ts-ignore
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: (error as Error).message });
       }
     });
 
@@ -589,8 +590,10 @@ class BKServer {
       };
 
       const { total, transferKeywords } =
-        // @ts-ignore
-        await this.keywordReplyController.listTransferKeywords(query);
+        (await this.keywordReplyController.listTransferKeywords(query)) as {
+          total: number;
+          transferKeywords: unknown[];
+        };
 
       const data = transferKeywords;
       const ptfs = await this.dispatchService.getAllPlatforms();
@@ -656,8 +659,7 @@ class BKServer {
         await this.keywordReplyController.importTransferExcel(path);
         res.json({ success: true });
       } catch (error) {
-        // @ts-ignore
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: (error as Error).message });
       }
     });
 
@@ -684,8 +686,10 @@ class BKServer {
       };
 
       const { total, replaceKeywords } =
-        // @ts-ignore
-        await this.keywordReplyController.listReplaceKeywords(query);
+        (await this.keywordReplyController.listReplaceKeywords(query)) as {
+          total: number;
+          replaceKeywords: unknown[];
+        };
 
       const data = replaceKeywords;
       const ptfs = await this.dispatchService.getAllPlatforms();
@@ -750,8 +754,7 @@ class BKServer {
         await this.keywordReplyController.importReplaceExcel(path);
         res.json({ success: true });
       } catch (error) {
-        // @ts-ignore
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({ success: false, message: (error as Error).message });
       }
     });
 
@@ -1634,22 +1637,14 @@ class BKServer {
       }),
     );
 
-    // Health check endpoint
-    // TODO: 后续需要根据通过 WS 去检查后端服务是否健康
+    // Health check endpoint — 综合检查 Express + Python 后端 + DB 连接状态
     this.app.get('/api/v1/base/health', async (req, res) => {
       try {
         const resp = await this.dispatchService.checkHealth();
-        if (resp) {
-          res.json({
-            success: true,
-            data: true,
-          });
-        } else {
-          res.json({
-            success: false,
-            data: false,
-          });
-        }
+        res.json({
+          success: true,
+          data: resp,
+        });
       } catch (error) {
         console.error(error);
         res.json({
@@ -1681,8 +1676,7 @@ class BKServer {
         const ctxMap = new Map(Object.entries(ctx));
         const resp = await this.pluginService.checkPlugin(
           code,
-          // @ts-ignore
-          ctxMap,
+          ctxMap as unknown as Record<string, string>,
           messages,
         );
         res.json(resp);

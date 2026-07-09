@@ -35,11 +35,9 @@ export class Completions extends APIResource {
     const controller = createStreamController(options?.signal);
 
     if (stream) {
-      // return this.afterSSEResponse(response, controller);
       return Completions.fromOpenAIStream(
         'your-model-id',
-        // @ts-ignore
-        Stream.fromSSEResponse(response, controller),
+        Stream.fromSSEResponse(response, controller) as any,
         controller,
       );
     }
@@ -47,8 +45,7 @@ export class Completions extends APIResource {
     return this.afterResponse(
       Completions.fromOpenAIStream(
         'your-model-id',
-        // @ts-ignore
-        Stream.fromSSEResponse(response, controller),
+        Stream.fromSSEResponse(response, controller) as any,
         controller,
       ),
     );

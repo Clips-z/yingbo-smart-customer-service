@@ -143,4 +143,4 @@ const CozeSettings: React.FC<CozeSettingsProps> = ({
   </VStack>
 );
 
-export default CozeSettings;
+export default React.memo(CozeSettings);

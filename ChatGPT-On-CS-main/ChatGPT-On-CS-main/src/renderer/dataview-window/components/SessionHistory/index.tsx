@@ -146,8 +146,7 @@ const SessionHistory = () => {
   );
 
   const tableInstance = useTable(
-    // @ts-ignore
-    { columns, data: currentPageData },
+    { columns, data: currentPageData } as any,
     useGlobalFilter,
     useFilters,
   );
@@ -318,4 +317,4 @@ const SessionHistory = () => {
   );
 };
 
-export default SessionHistory;
+export default React.memo(SessionHistory);

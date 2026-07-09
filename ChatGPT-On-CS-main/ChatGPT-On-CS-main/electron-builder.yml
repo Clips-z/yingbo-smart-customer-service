@@ -2,8 +2,9 @@ appId: com.yinbo.smartcustomer
 productName: 迎波智能客服
 copyright: Copyright © 2026 YinBo
 asar: true
-asarUnpack: "**\\*.{node,dll}"
+asarUnpack: "**/*.{node,dll}"
 compression: maximum
+npmRebuild: false
 files:
   - dist
   - node_modules
