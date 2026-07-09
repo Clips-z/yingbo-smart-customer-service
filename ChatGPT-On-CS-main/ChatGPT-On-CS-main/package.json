@@ -23,6 +23,7 @@
     "build:renderer": "cross-env NODE_ENV=production TS_NODE_TRANSPILE_ONLY=true TS_NODE_PROJECT=tsconfig.cjs.json webpack --config ./.erb/configs/webpack.config.renderer.prod.ts",
     "check:backend": "node scripts/check-backend-assets.js",
     "check:backend:required": "node scripts/check-backend-assets.js --required",
+    "check:package": "node scripts/check-package-artifacts.js",
     "ci": "pnpm run typecheck && pnpm run build && pnpm test -- --runInBand",
     "typecheck": "tsc --noEmit --skipLibCheck",
     "postinstall": "node scripts/ensure-release-app.js",
