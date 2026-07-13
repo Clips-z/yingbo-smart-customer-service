@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('electron', {
   ipcRenderer: {
     // 同步获取值 —— 关键！让 App 的健康检查通过
     get: (channel) => {
-      if (channel === 'get-version') return '1.4.5';
+      if (channel === 'get-version') return '1.5.0';
       if (channel === 'get-browser-version') return '26.6.10';
       if (channel === 'get-health-status') return true; // ⭐ 让 UI 立即显示
       return null;
