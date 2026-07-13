@@ -7,7 +7,7 @@ const wechatConfig: SidecarConfig = {
   platformName: '微信',
   platformKey: 'wechat',
   scriptName: 'wechat-sidecar.py',
-  backendArg: 'wechat39',
+  backendArg: 'auto',
   heartbeatTimeoutMs: 15_000,
   healthEventName: 'wechat_collector_health_changed',
   modeEventName: 'wechat_reply_mode_changed',

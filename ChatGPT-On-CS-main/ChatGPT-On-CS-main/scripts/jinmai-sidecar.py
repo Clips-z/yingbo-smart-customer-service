@@ -11,6 +11,7 @@
 
 import argparse
 import ctypes
+from ctypes import wintypes
 import json
 import logging
 import os
@@ -28,6 +29,14 @@ COMMAND_FILE = ROOT / ".tmp-userdata" / "jinmai-sidecar-command.json"
 COMMAND_RESULT_FILE = ROOT / ".tmp-userdata" / "jinmai-sidecar-command-result.json"
 
 DEFAULT_INSTANCE_ID = "jinmai-default"
+JINMAI_UI_NAMES = {
+    "联系人",
+    "列表分组开启",
+    "列表分组关闭",
+    "正在接待",
+    "全部买家",
+    "其他消息",
+}
 
 
 def configure_logging() -> None:
@@ -79,18 +88,22 @@ def find_jinmai_window_handle() -> int | None:
         if h:
             return h
 
-    # 宽泛搜索：遍历所有顶层窗口找包含"京麦"或"jingmai"的窗口
-    def enum_cb(hwnd, results):
+    # 宽泛搜索：兼容新版京麦“咚咚融合工作台”等动态账号标题。
+    results = []
+
+    def enum_cb(hwnd, _lparam):
         length = user32.GetWindowTextLengthW(hwnd)
         if length > 0:
             buf = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buf, length + 1)
             title_str = buf.value
-            if any(kw in title_str.lower() for kw in ["京麦", "jinmai", "京东工作台"]):
+            if any(
+                kw in title_str.lower()
+                for kw in ["京麦", "jinmai", "京东工作台", "咚咚", "融合工作台"]
+            ):
                 results.append(hwnd)
         return True  # 继续枚举
 
-    results = []
     WNDENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
     user32.EnumWindows(WNDENUMPROC(enum_cb), None)
 
@@ -103,13 +116,13 @@ def find_jinmai_window_handle() -> int | None:
 
 
 def _get_window_area(handle) -> int:
-    rect = ctypes.wintypes.RECT()
+    rect = wintypes.RECT()
     user32.GetWindowRect(handle, ctypes.byref(rect))
     return (rect.right - rect.left) * (rect.bottom - rect.top)
 
 
 def get_window_rect(handle) -> tuple:
-    rect = ctypes.wintypes.RECT()
+    rect = wintypes.RECT()
     user32.GetWindowRect(handle, ctypes.byref(rect))
     return (rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top)
 
@@ -721,6 +734,9 @@ def run_jinmai(duration, instance_id, api_port, dry_run, debounce_seconds):
 
     seen = {}  # 去重表
     last_health_at = 0.0
+    conversation_baselines = {}
+    conversation_baselines_initialized = False
+    current_chat_baseline = None
 
     logging.info("JinMai OCR sidecar started: port=%s ocr=%s dryRun=%s",
                  port, ocr.available(), dry_run)
@@ -752,11 +768,37 @@ def run_jinmai(duration, instance_id, api_port, dry_run, debounce_seconds):
                 convs = layout["conversations"]
 
                 # 过滤有效会话
-                filtered = [c for c in convs if c.get("name")]
+                filtered = [
+                    c for c in convs
+                    if c.get("name")
+                    and c.get("name") not in JINMAI_UI_NAMES
+                    and not str(c.get("preview", "")).startswith("正在接待")
+                ]
+
+                changed_convs = []
+                for conv in filtered:
+                    name = str(conv.get("name", "")).strip()
+                    preview = str(conv.get("preview", "")).strip()
+                    state = (preview, int(conv.get("unread", 0)))
+                    previous = conversation_baselines.get(name)
+                    conversation_baselines[name] = state
+                    if previous is None:
+                        continue
+                    if preview != previous[0] or previous[1] <= 0 < state[1]:
+                        changed_convs.append(conv)
+
+                if not conversation_baselines_initialized:
+                    conversation_baselines_initialized = True
+                    logging.info(
+                        "Conversation baseline initialized: %d conversations; existing messages ignored",
+                        len(conversation_baselines),
+                    )
+                    time.sleep(2.0)
+                    continue
 
                 # 检测有未读消息的会话
                 unread_convs = [
-                    c for c in filtered
+                    c for c in changed_convs
                     if c.get("unread", 0) > 0
                     and now - seen.get(("__unread__", c.get("name", "")), 0) >= 180
                 ]
@@ -764,7 +806,7 @@ def run_jinmai(duration, instance_id, api_port, dry_run, debounce_seconds):
                 # 检测预览变化的新消息
                 new_message_convs = []
                 DRAFT_PREFIXES = ("[草稿]", "[已发送]", "[发送失败]", "[Draft]")
-                for conv in filtered:
+                for conv in changed_convs:
                     name = conv.get("name", "")
                     preview = conv.get("preview", "")
                     if not preview:
@@ -790,6 +832,15 @@ def run_jinmai(duration, instance_id, api_port, dry_run, debounce_seconds):
                     if chat_msgs:
                         latest_msg = find_latest_customer_msg(chat_msgs, "")
                         if latest_msg and len(latest_msg) >= 3:
+                            if current_chat_baseline is None:
+                                current_chat_baseline = latest_msg
+                                logging.info("Current chat baseline initialized")
+                                time.sleep(2.0)
+                                continue
+                            if latest_msg == current_chat_baseline:
+                                time.sleep(2.0)
+                                continue
+                            current_chat_baseline = latest_msg
                             fp = ("__current__", latest_msg)
                             if now - seen.get(fp, 0) >= 180:
                                 seen[fp] = now

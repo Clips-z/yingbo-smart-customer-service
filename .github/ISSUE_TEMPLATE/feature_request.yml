@@ -1,0 +1,36 @@
+name: 功能建议
+description: 提出桌面应用的改进建议。
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 希望解决的问题
+      description: 请说明实际使用流程或限制，而不只是预想的实现方式。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议的方案
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 相关平台
+      options:
+        - 通用应用功能
+        - 微信
+        - 千牛
+        - 企业微信
+        - 京麦
+        - 其他
+    validations:
+      required: true

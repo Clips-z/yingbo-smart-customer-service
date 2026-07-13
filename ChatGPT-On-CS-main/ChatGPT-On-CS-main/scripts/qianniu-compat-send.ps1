@@ -140,7 +140,8 @@ try {
   if ($SelectOnly) {
     [ordered]@{
       success = $true
-      selected = $Sender.Trim()
+      selected = $true
+      filled = $false
       submitted = $false
     } | ConvertTo-Json -Compress
     return
@@ -164,6 +165,8 @@ try {
 
 [ordered]@{
   success = $true
+  selected = [bool]($Sender.Trim())
+  filled = $true
   submitted = [bool]$Submit
   length = $reply.Length
 } | ConvertTo-Json -Compress

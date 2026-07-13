@@ -66,9 +66,12 @@ const platformColorMap: Record<string, string> = {
 
 const leftBorderColorMap: Record<string, string> = {
   pending: 'orange.400',
+  preparing: 'blue.400',
+  sending: 'purple.400',
   prepared: 'blue.400',
   sent: 'green.400',
   failed: 'red.400',
+  cancelled: 'gray.300',
   dismissed: 'gray.200',
 };
 
@@ -87,15 +90,25 @@ function extractErrorMessage(error: unknown): string {
 function CollectorHealthBadge({
   state,
   lastError,
+  recoveryAction,
+  nextRetryAt,
   label,
 }: {
   state?: string;
   lastError?: string;
+  recoveryAction?: string;
+  nextRetryAt?: string;
   label: string;
 }) {
   if (!state) return null;
+  const retryText = nextRetryAt
+    ? `下次重试：${new Date(nextRetryAt).toLocaleTimeString('zh-CN')}`
+    : '';
+  const tooltip = [lastError, recoveryAction, retryText]
+    .filter(Boolean)
+    .join('；');
   return (
-    <Tooltip label={lastError || `${label}运行正常`}>
+    <Tooltip label={tooltip || `${label}运行正常`}>
       <Badge mt={2} colorScheme={getHealthColorScheme(state)} variant="subtle" borderRadius="sm">
         {healthLabels[state as keyof typeof healthLabels] || state}
       </Badge>
@@ -230,6 +243,7 @@ const ConversationDetail = React.memo(
           onChanged();
         } catch (error) {
           toast({ title: errorTitle, description: extractErrorMessage(error), status: 'error', duration: 5000, isClosable: true });
+          onChanged();
         } finally {
           setIsWorking(false);
         }
@@ -260,6 +274,7 @@ const ConversationDetail = React.memo(
     const fillConfig = fillButtonConfig[item.platform_id];
     const pColor = platformColorMap[item.platform_id] || 'gray';
     const isSent = item.status === 'sent';
+    const deliveryInProgress = item.status === 'preparing' || item.status === 'sending';
 
     return (
       <Box h="full" display="flex" flexDirection="column">
@@ -369,9 +384,15 @@ const ConversationDetail = React.memo(
             borderRadius="md"
             fontSize="13px"
             _focus={{ borderColor: 'brand.400', boxShadow: '0 0 0 1px var(--chakra-colors-brand-200)' }}
-            isDisabled={isSent}
+            isDisabled={isSent || deliveryInProgress}
             mb={3}
           />
+          {item.delivery_error && item.status === 'failed' && (
+            <Alert status="error" mb={2} borderRadius="md" py={2}>
+              <AlertIcon />
+              <Text fontSize="12px">{item.delivery_error}，检查千牛状态后可重试。</Text>
+            </Alert>
+          )}
           <Flex justify="space-between" align="center" gap={2}>
             {/* 左侧图标按钮 */}
             <HStack spacing={0.5}>
@@ -426,7 +447,7 @@ const ConversationDetail = React.memo(
                   leftIcon={<FiSend />}
                   colorScheme={fillConfig.colorScheme}
                   isLoading={isWorking}
-                  isDisabled={mode !== 'assist' || !content.trim()}
+                  isDisabled={isWorking || deliveryInProgress || mode !== 'assist' || !content.trim()}
                   onClick={fillConfig.onClick}
                   borderRadius="lg"
                   fontWeight={600}
@@ -487,6 +508,7 @@ const ReplyWorkbench = () => {
     handled,
     suggestionsLoading,
     collectorHealth,
+    qianniuCollectorHealth,
     wecomCollectorHealth,
     jinmaiCollectorHealth,
     refresh,
@@ -498,6 +520,7 @@ const ReplyWorkbench = () => {
     handleBatchDelete,
     handleClearHandled,
     changeMode,
+    emergencyStop,
   } = useReplyWorkbench();
 
   // 当前选中的会话（右侧详情）
@@ -630,6 +653,15 @@ const ReplyWorkbench = () => {
           {isWechat && collectorHealth && (
             <CollectorHealthBadge state={collectorHealth.state} lastError={collectorHealth.lastError} label="微信消息采集" />
           )}
+          {isQianniu && qianniuCollectorHealth && (
+            <CollectorHealthBadge
+              state={qianniuCollectorHealth.state}
+              lastError={qianniuCollectorHealth.lastError}
+              recoveryAction={qianniuCollectorHealth.recoveryAction}
+              nextRetryAt={qianniuCollectorHealth.nextRetryAt}
+              label="千牛消息采集"
+            />
+          )}
           {isWecom && wecomCollectorHealth && (
             <CollectorHealthBadge state={wecomCollectorHealth.state} lastError={wecomCollectorHealth.lastError} label="企微消息采集" />
           )}
@@ -639,6 +671,7 @@ const ReplyWorkbench = () => {
         </Box>
 
         {supportsModes && (
+          <HStack spacing={2}>
           <Flex bg="gray.100" borderRadius="xl" p="3px" gap="2px">
             {(Object.keys(modeLabels) as QianniuReplyMode[]).map((value) => {
               const isActive = mode === value;
@@ -667,6 +700,19 @@ const ReplyWorkbench = () => {
               );
             })}
           </Flex>
+          {(isQianniu || isWechat) && (
+            <Button
+              size="sm"
+              colorScheme="red"
+              variant="outline"
+              onClick={emergencyStop}
+              isDisabled={changingMode}
+              borderRadius="lg"
+            >
+              紧急停止
+            </Button>
+          )}
+          </HStack>
         )}
       </Flex>
 
@@ -675,7 +721,7 @@ const ReplyWorkbench = () => {
         <Alert status="warning" mb={3} borderRadius="lg" variant="left-accent">
           <AlertIcon />
           <Text fontSize="13px" flex="1">无人值守已开启，AI 将自动发送回复</Text>
-          <Button size="xs" colorScheme="red" variant="outline" onClick={() => changeMode('hint')} borderRadius="full">
+          <Button size="xs" colorScheme="red" variant="outline" onClick={emergencyStop} borderRadius="full">
             立即停止
           </Button>
         </Alert>

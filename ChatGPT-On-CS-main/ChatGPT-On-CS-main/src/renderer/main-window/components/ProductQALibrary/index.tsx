@@ -43,7 +43,6 @@ import {
 import {
   FiSearch,
   FiChevronDown,
-  FiRefreshCw,
   FiPlus,
   FiMoreHorizontal,
   FiList,
@@ -51,6 +50,7 @@ import {
   FiTrash2,
   FiCheckCircle,
   FiXCircle,
+  FiUpload,
 } from 'react-icons/fi';
 import {
   fetchProductQAList,
@@ -61,7 +61,13 @@ import {
   productPlaceholderImage,
   SHOP_OPTIONS,
   ProductQA,
+  retryProductSync,
+  bulkImportProducts,
 } from '../../../common/services/knowledge/productQA';
+import {
+  ImportPreview,
+  parseProductImport,
+} from '../../../common/services/knowledge/knowledgeImport';
 
 /* ════════════════════ 新增商品弹窗 ════════════════════ */
 const AddProductModal: React.FC<{
@@ -156,7 +162,8 @@ const ProductCard: React.FC<{
   onCheck: (id: string, checked: boolean) => void;
   onToggle: (id: string, onSale: boolean) => void;
   onCopyId: (id: string) => void;
-}> = ({ product, batchMode, checked, onCheck, onToggle, onCopyId }) => {
+  onRetrySync: (id: string) => void;
+}> = ({ product, batchMode, checked, onCheck, onToggle, onCopyId, onRetrySync }) => {
   return (
     <Box
       bg="white"
@@ -220,6 +227,14 @@ const ProductCard: React.FC<{
             <Switch size="sm" colorScheme="green" isChecked={product.onSale} onChange={(e) => onToggle(product.id, e.target.checked)} sx={{ '& .chakra-switch__track': { borderRadius: 'full' } }} />
           )}
         </Flex>
+        <HStack mt={2} spacing={2}>
+          <Badge colorScheme={product.syncStatus === 'synced' ? 'green' : product.syncStatus === 'failed' ? 'red' : 'orange'} fontSize="9px" borderRadius="full">
+            {product.syncStatus === 'synced' ? '已同步' : product.syncStatus === 'failed' ? '同步失败' : '待同步'}
+          </Badge>
+          {product.syncStatus !== 'synced' && product.onSale && (
+            <Button size="xs" variant="link" colorScheme={product.syncStatus === 'failed' ? 'red' : 'orange'} onClick={() => onRetrySync(product.id)}>同步</Button>
+          )}
+        </HStack>
       </Box>
     </Box>
   );
@@ -274,6 +289,9 @@ const ProductQALibrary: React.FC = () => {
   const [products, setProducts] = useState<ProductQA[]>([]);
   const [total, setTotal] = useState(0);
   const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+  const importDisclosure = useDisclosure();
+  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -333,6 +351,38 @@ const ProductQALibrary: React.FC = () => {
     toast({ title: '已复制商品ID', status: 'info', duration: 1200, isClosest: true });
   };
 
+  const handleRetrySync = async (id: string) => {
+    await retryProductSync(id);
+    await loadData();
+    toast({ title: '已重试同步', status: 'info', duration: 1600 });
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      setImportPreview(await parseProductImport(file));
+    } catch (error) {
+      toast({ title: '文件解析失败', description: String(error), status: 'error' });
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview?.valid.length) return;
+    setImporting(true);
+    try {
+      const results = await bulkImportProducts(importPreview.valid);
+      const failed = results.filter((item) => !item.success).length;
+      toast({ title: `导入完成：成功 ${results.length - failed}，失败 ${failed}`, status: failed ? 'warning' : 'success' });
+      importDisclosure.onClose();
+      setImportPreview(null);
+      setPage(1);
+      await loadData();
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const statusLabel = useMemo(() => ({ all: '上架状态', on: '已上架', off: '未上架' }[status]), [status]);
   const shopLabel = SHOP_OPTIONS.find((s) => s.id === shop)?.name ?? '全部店铺';
 
@@ -385,8 +435,8 @@ const ProductQALibrary: React.FC = () => {
 
         <Box flex="1" />
 
-        <Button size="sm" variant="outline" colorScheme="gray" leftIcon={<FiRefreshCw />} borderRadius="lg" onClick={() => toast({ title: '正在同步平台商品…', status: 'info', duration: 1500, isClosest: true })}>
-          同步平台商品
+        <Button size="sm" variant="outline" colorScheme="gray" leftIcon={<FiUpload />} borderRadius="lg" onClick={importDisclosure.onOpen}>
+          导入 CSV / Excel
         </Button>
         <Button size="sm" colorScheme="brand" leftIcon={<FiPlus />} borderRadius="lg" bgGradient="linear-gradient(135deg, #4A5BB3, #3866D4)" _hover={{ bgGradient: 'linear-gradient(135deg, #43529F, #2F5AC0)' }} onClick={addOnOpen}>
           添加商品
@@ -407,7 +457,7 @@ const ProductQALibrary: React.FC = () => {
             {products.map((p) => (
               <ProductCard key={p.id} product={p} batchMode={batchMode} checked={selected.has(p.id)}
                 onCheck={(id, c) => setSelected((prev) => { const n = new Set(prev); c ? n.add(id) : n.delete(id); return n; })}
-                onToggle={handleToggle} onCopyId={handleCopyId} />
+                onToggle={handleToggle} onCopyId={handleCopyId} onRetrySync={handleRetrySync} />
             ))}
           </SimpleGrid>
         )}
@@ -419,6 +469,35 @@ const ProductQALibrary: React.FC = () => {
       )}
 
       <AddProductModal isOpen={addOpen} onClose={addOnClose} onSubmit={handleAdd} />
+
+      <Modal isOpen={importDisclosure.isOpen} onClose={importDisclosure.onClose} size="lg" isCentered>
+        <ModalOverlay bg="blackAlpha.400" />
+        <ModalContent borderRadius="xl">
+          <ModalHeader fontSize="16px">导入商品预览</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack align="stretch" spacing={3}>
+              <Input type="file" accept=".csv,.xlsx" p={1} onChange={handleImportFile} />
+              <Text fontSize="12px" color="gray.500">必需列：商品名称、平台商品ID、店铺ID。可选列：商品条码、店铺名称、上架状态。</Text>
+              {importPreview && (
+                <Box bg="gray.50" borderRadius="lg" p={3}>
+                  <HStack spacing={3}>
+                    <Badge colorScheme="green">可导入 {importPreview.valid.length}</Badge>
+                    <Badge colorScheme={importPreview.invalid.length ? 'red' : 'gray'}>错误 {importPreview.invalid.length}</Badge>
+                  </HStack>
+                  {importPreview.invalid.slice(0, 8).map((item) => (
+                    <Text key={item.row} fontSize="11px" color="red.500" mt={1}>第 {item.row} 行：{item.error}</Text>
+                  ))}
+                </Box>
+              )}
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button size="sm" variant="ghost" onClick={importDisclosure.onClose}>取消</Button>
+            <Button size="sm" colorScheme="brand" ml={2} isLoading={importing} isDisabled={!importPreview?.valid.length} onClick={confirmImport}>导入有效行</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
 
       {/* 批量删除确认 */}
       <AlertDialog isOpen={confirmDelete} leastDestructiveRef={cancelRef} onClose={() => setConfirmDelete(false)} isCentered>

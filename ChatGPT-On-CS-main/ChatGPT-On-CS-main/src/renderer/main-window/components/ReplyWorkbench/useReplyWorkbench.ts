@@ -4,7 +4,9 @@ import {
   batchDeleteSuggestions,
   batchUpdateSuggestionsStatus,
   clearSuggestions,
+  emergencyStopReplies,
   getJinmaiCollectorHealth,
+  getQianniuCollectorHealth,
   getQianniuSuggestions,
   getReplyMode,
   getWechatCollectorHealth,
@@ -53,6 +55,11 @@ export function useReplyWorkbench() {
     ['wechat-collector-health'],
     getWechatCollectorHealth,
     { enabled: isWechat, refetchInterval: 5000 },
+  );
+  const qianniuHealthQuery = useQuery(
+    ['qianniu-collector-health'],
+    getQianniuCollectorHealth,
+    { enabled: isQianniu, refetchInterval: 5000 },
   );
   const wecomHealthQuery = useQuery(
     ['wecom-collector-health'],
@@ -265,6 +272,34 @@ export function useReplyWorkbench() {
     [activePlatformId, modeQuery, toast],
   );
 
+  const emergencyStop = useCallback(async () => {
+    if (
+      !activePlatformId ||
+      !['win_qianniu', 'win_wechat'].includes(activePlatformId)
+    )
+      return;
+    setChangingMode(true);
+    try {
+      const result = await emergencyStopReplies(activePlatformId);
+      await modeQuery.refetch();
+      refresh();
+      toast({
+        title: '已停止自动投递并切回辅助回复',
+        description: `已取消 ${result.data.cancelled} 条待执行任务`,
+        status: 'success',
+        duration: 3000,
+      });
+    } catch (error) {
+      toast({
+        title: '紧急停止失败',
+        description: extractErrorMessage(error),
+        status: 'error',
+      });
+    } finally {
+      setChangingMode(false);
+    }
+  }, [activePlatformId, modeQuery, refresh, toast]);
+
   // WebSocket 事件监听
   useEffect(() => {
     return registerEventHandler((message) => {
@@ -336,6 +371,7 @@ export function useReplyWorkbench() {
     suggestionsLoading: suggestionsQuery.isLoading,
     // health
     collectorHealth: healthQuery.data?.data,
+    qianniuCollectorHealth: qianniuHealthQuery.data?.data,
     wecomCollectorHealth: wecomHealthQuery.data?.data,
     jinmaiCollectorHealth: jinmaiHealthQuery.data?.data,
     // actions
@@ -348,5 +384,6 @@ export function useReplyWorkbench() {
     handleBatchDelete,
     handleClearHandled,
     changeMode,
+    emergencyStop,
   };
 }

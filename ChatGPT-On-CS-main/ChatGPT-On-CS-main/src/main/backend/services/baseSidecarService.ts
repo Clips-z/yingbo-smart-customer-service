@@ -5,6 +5,16 @@ import { LoggerService } from './loggerService';
 import { DispatchService } from './dispatchService';
 import { isPlatformRunning, isPlatformActive } from './platformRuntimeService';
 import { Config } from '../entities/config';
+import {
+  assertReplyModeAllowed,
+  evaluateReplyModeChange,
+  getDefaultReplyMode,
+  getUnattendedConfigKey,
+  normalizeReplyMode,
+} from './replySafetyPolicy';
+import { getRuntimeRoot, runtimePath } from './runtimePaths';
+import { normalizePlatformHealthError, PlatformHealthReason } from './platformHealth';
+import { cancelQueuedUnattendedDeliveries } from './deliveryGuard';
 
 // ========== 通用类型定义 ==========
 
@@ -16,6 +26,9 @@ export interface CollectorHealth {
   processRunning: boolean;
   lastHeartbeatAt?: string;
   lastError?: string;
+  reasonCode?: PlatformHealthReason;
+  recoveryAction?: string;
+  nextRetryAt?: string;
   restartAttempts: number;
 }
 
@@ -68,8 +81,14 @@ export abstract class BaseSidecarService {
 
   protected static readonly QUICK_FAIL_THRESHOLD = 10; // 秒
   protected static readonly QUICK_FAIL_LIMIT = 3;
-  protected static readonly LONG_RETRY_DELAY = 5 * 60_000; // 5 分钟
+  protected static readonly LONG_RETRY_DELAY = 30_000; // 30 秒（原 5 分钟太长）
   protected static readonly LOG_DEDUP_INTERVAL = 5 * 60_000;
+  // RapidOCR 在低负载机器上单轮可能超过 60 秒，并会短暂占用 Python GIL。
+  // 看门狗必须覆盖最慢一轮，否则会在首轮 OCR 完成前误杀正常采集器。
+  protected static readonly HEARTBEAT_WATCHDOG_MS = 180_000;
+  protected static readonly STARTUP_GRACE_MS = 120_000;
+  protected static readonly NO_HEARTBEAT_TIMEOUT_MS = 180_000;
+  protected static readonly SIDECAR_DURATION = '12h';
 
   constructor(
     protected port: number,
@@ -102,17 +121,32 @@ export abstract class BaseSidecarService {
   }
 
   public async setMode(mode: ReplyMode): Promise<void> {
-    this.replyMode = mode;
     const config = await Config.findOne({ where: { global: true } });
+    const unattendedConfigKey = getUnattendedConfigKey(this.config.platformId);
+    const decision = evaluateReplyModeChange({
+      platformId: this.config.platformId,
+      requestedMode: mode,
+      unattendedEnabled: Boolean(
+        unattendedConfigKey && config?.[unattendedConfigKey],
+      ),
+    });
+    assertReplyModeAllowed(decision);
+
+    this.replyMode = decision.mode;
     if (config) {
       await config.update({
-        [this.config.configModeKey]: mode,
+        [this.config.configModeKey]: decision.mode,
       } as any);
     }
     this.dispatchService.receiveBroadcast({
       event: this.config.modeEventName,
-      data: { mode },
+      data: { mode: decision.mode },
     });
+  }
+
+  public async emergencyStop(): Promise<number> {
+    await this.setMode('assist');
+    return cancelQueuedUnattendedDeliveries(this.config.platformId);
   }
 
   public getHealth(): CollectorHealth {
@@ -122,15 +156,21 @@ export abstract class BaseSidecarService {
       this.lastHeartbeatAt > 0 &&
       Date.now() - this.lastHeartbeatAt > timeout;
     const state = heartbeatStale ? 'degraded' : this.collectorState;
+    const lastError = heartbeatStale
+      ? `${this.config.platformName}采集心跳超时，正在等待自动恢复`
+      : this.lastError || undefined;
+    const normalized = normalizePlatformHealthError(lastError);
     return {
       state,
       processRunning: Boolean(this.child),
       lastHeartbeatAt: this.lastHeartbeatAt
         ? new Date(this.lastHeartbeatAt).toISOString()
         : undefined,
-      lastError: heartbeatStale
-        ? `${this.config.platformName}采集心跳超时，正在等待自动恢复`
-        : this.lastError || undefined,
+      lastError,
+      ...normalized,
+      nextRetryAt: this.nextStartAt
+        ? new Date(this.nextStartAt).toISOString()
+        : undefined,
       restartAttempts: this.restartAttempts,
     };
   }
@@ -165,7 +205,7 @@ export abstract class BaseSidecarService {
     }
     this.commandBusy = true;
     try {
-      const root = process.cwd();
+      const root = getRuntimeRoot();
       const commandFileName = `${this.config.platformKey}-sidecar-command.json`;
       const resultFileName = `${this.config.platformKey}-sidecar-command-result.json`;
       const commandFile = path.join(root, '.tmp-userdata', commandFileName);
@@ -224,12 +264,7 @@ export abstract class BaseSidecarService {
    * 默认使用 .venv-wechat，子类可覆盖
    */
   protected getPythonPath(): string {
-    return path.join(
-      process.cwd(),
-      '.venv-wechat',
-      'Scripts',
-      'python.exe',
-    );
+    return runtimePath('.venv-wechat', 'Scripts', 'python.exe');
   }
 
   /**
@@ -256,6 +291,42 @@ export abstract class BaseSidecarService {
       const active = await isPlatformActive(this.config.platformId);
       const shouldRun = running && active;
 
+      // ===== 心跳看门狗：检测死掉的子进程并强制重启 =====
+      if (shouldRun && this.child) {
+        const cls = this.constructor as typeof BaseSidecarService;
+        const now = Date.now();
+        const sinceStart = now - this.childStartedAt;
+
+        // 备用检查：子进程已退出但 exit 事件未触发（Windows 偶发）
+        if (this.child.exitCode !== null && this.child.exitCode !== undefined) {
+          this.log.warn(
+            `${this.config.platformName}采集进程已退出（代码 ${this.child.exitCode}）但未触发退出事件，清理并准备重启`,
+          );
+          this.forceRestart();
+        }
+        // 启动后超过宽限期才检查心跳
+        else if (sinceStart > cls.STARTUP_GRACE_MS) {
+          if (
+            this.lastHeartbeatAt > 0 &&
+            now - this.lastHeartbeatAt > cls.HEARTBEAT_WATCHDOG_MS
+          ) {
+            const staleSec = Math.ceil((now - this.lastHeartbeatAt) / 1000);
+            this.log.warn(
+              `${this.config.platformName}采集心跳超时（${staleSec}s 无心跳），强制重启`,
+            );
+            this.forceRestart();
+          } else if (
+            this.lastHeartbeatAt === 0 &&
+            sinceStart > cls.NO_HEARTBEAT_TIMEOUT_MS
+          ) {
+            this.log.warn(
+              `${this.config.platformName}采集启动后 ${Math.ceil(sinceStart / 1000)}s 无心跳，强制重启`,
+            );
+            this.forceRestart();
+          }
+        }
+      }
+
       if (shouldRun && !this.child && Date.now() >= this.nextStartAt) {
         this.startChild();
       }
@@ -274,8 +345,25 @@ export abstract class BaseSidecarService {
 
   protected async loadMode(): Promise<void> {
     const config = await Config.findOne({ where: { global: true } });
-    const mode =
-      ((config as any)?.[this.config.configModeKey] as ReplyMode) || 'hint';
+    const rawStoredMode = (config as any)?.[this.config.configModeKey];
+    const storedMode = normalizeReplyMode(
+      this.config.platformId,
+      rawStoredMode,
+    );
+    const unattendedConfigKey = getUnattendedConfigKey(this.config.platformId);
+    const decision = evaluateReplyModeChange({
+      platformId: this.config.platformId,
+      requestedMode: storedMode,
+      unattendedEnabled: Boolean(
+        unattendedConfigKey && config?.[unattendedConfigKey],
+      ),
+    });
+    const mode = decision.allowed
+      ? decision.mode
+      : getDefaultReplyMode(this.config.platformId);
+    if (config && mode !== rawStoredMode) {
+      await config.update({ [this.config.configModeKey]: mode } as any);
+    }
     this.replyMode = mode;
     this.dispatchService.receiveBroadcast({
       event: this.config.modeEventName,
@@ -285,7 +373,7 @@ export abstract class BaseSidecarService {
   }
 
   protected startChild(): void {
-    const root = process.cwd();
+    const root = getRuntimeRoot();
     const python = this.getPythonPath();
     const script = path.join(root, 'scripts', this.config.scriptName);
     if (!fs.existsSync(python) || !fs.existsSync(script)) {
@@ -305,7 +393,7 @@ export abstract class BaseSidecarService {
       '--backend',
       this.config.backendArg,
       '--duration',
-      '12h',
+      (this.constructor as typeof BaseSidecarService).SIDECAR_DURATION,
       '--api-port',
       String(this.port),
       ...this.getExtraArgs(),
@@ -347,13 +435,25 @@ export abstract class BaseSidecarService {
         lifetime <
         (this.constructor as typeof BaseSidecarService).QUICK_FAIL_THRESHOLD *
           1000;
+      const childError = this.lastError.trim();
 
       if (isQuickFail) {
         this.quickFailCount += 1;
-        if (!this.longWaitMode) {
+        // 连续 QUICK_FAIL_LIMIT 次快速失败才进入 long wait
+        if (
+          this.quickFailCount >=
+            (this.constructor as typeof BaseSidecarService).QUICK_FAIL_LIMIT &&
+          !this.longWaitMode
+        ) {
           this.longWaitMode = true;
+          const retrySeconds = Math.ceil(
+            (this.constructor as typeof BaseSidecarService).LONG_RETRY_DELAY /
+              1000,
+          );
           this.log.warn(
-            `${this.config.platformName}采集启动失败（${this.config.platformName}可能未运行或未登录），${Math.ceil((this.constructor as typeof BaseSidecarService).LONG_RETRY_DELAY / 60000)} 分钟后自动重试`,
+            childError
+              ? `${this.config.platformName}采集连续 ${this.quickFailCount} 次启动失败：${childError}，${retrySeconds} 秒后自动重试`
+              : `${this.config.platformName}采集连续 ${this.quickFailCount} 次启动失败（可能未运行或未登录），${retrySeconds} 秒后自动重试`,
           );
         }
       } else {
@@ -370,7 +470,9 @@ export abstract class BaseSidecarService {
       this.nextStartAt = Date.now() + retryDelay;
       this.collectorState = 'degraded';
       this.lastError = this.longWaitMode
-        ? `${this.config.platformName}采集未运行（${this.config.platformName}可能未登录），${Math.ceil(retryDelay / 60000)} 分钟后重试`
+        ? childError
+          ? `${this.config.platformName}采集启动失败：${childError}，${Math.ceil(retryDelay / 1000)} 秒后重试`
+          : `${this.config.platformName}采集未运行（${this.config.platformName}可能未登录），${Math.ceil(retryDelay / 1000)} 秒后重试`
         : `${this.config.platformName}采集异常退出（代码 ${code ?? '未知'}），${Math.ceil(retryDelay / 1000)} 秒后重试`;
 
       if (!isQuickFail) {
@@ -399,16 +501,80 @@ export abstract class BaseSidecarService {
     this.log.info(this.getStopLogMessage());
   }
 
+  /**
+   * 强制重启：kill 当前子进程并立即允许重启。
+   * 用于心跳超时或进程假死场景，不走正常的 quick-fail/long-wait 逻辑。
+   */
+  protected forceRestart(): void {
+    if (!this.child) return;
+    // 标记为主动停止，让 exit handler 走 clean-stop 路径（不设 nextStartAt）
+    this.stoppingChild = true;
+    try {
+      this.child.kill();
+    } catch {
+      // 进程可能已死
+    }
+    this.child = undefined;
+    this.childStartedAt = 0;
+    this.lastHeartbeatAt = 0;
+    this.nextStartAt = 0; // 允许立即重启
+    this.collectorState = 'degraded';
+    this.lastError = `${this.config.platformName}采集正在重启`;
+    this.broadcastHealth();
+  }
+
   protected handleOutput(chunk: string, isError = false): void {
     const lines = chunk.split(/\r?\n/).filter(Boolean);
-    const important = lines.find(
-      (line) =>
-        isError || line.includes('[ERROR]') || line.includes('[CRITICAL]'),
-    );
+
+    // 错误级：Traceback / ModuleNotFoundError / RuntimeError / [ERROR] / [CRITICAL]
+    const errorLine =
+      [...lines].reverse().find((line) =>
+        /(?:Error|Exception|Traceback|ModuleNotFoundError|RuntimeError):/.test(
+          line,
+        ),
+      ) ||
+      lines.find(
+        (line) =>
+          line.includes('[ERROR]') || line.includes('[CRITICAL]'),
+      );
+
+    // 警告级：[WARNING]（OCR 失败、窗口异常等关键警告）
+    const warningLine = !errorLine
+      ? lines.find((line) => line.includes('[WARNING]'))
+      : undefined;
+
+    // 兜底：stderr 最后一行
+    const fallbackLine =
+      !errorLine && !warningLine && isError
+        ? lines[lines.length - 1]
+        : undefined;
+
+    const important = errorLine || warningLine || fallbackLine;
     if (!important) return;
-    this.lastError = important.slice(-500);
-    this.collectorState = 'degraded';
-    this.broadcastHealth();
+
+    const normalized = this.normalizeSidecarError(important);
+
+    if (errorLine || fallbackLine) {
+      // 错误：更新 lastError 并标记 degraded
+      this.lastError = normalized.slice(-500);
+      this.collectorState = 'degraded';
+      this.log.warn(
+        `[${this.config.platformKey}] ${normalized.slice(-200)}`,
+      );
+      this.broadcastHealth();
+    } else if (warningLine) {
+      // 警告：透传到日志但不改变采集状态
+      this.log.info(
+        `[${this.config.platformKey}] ${normalized.slice(-200)}`,
+      );
+    }
+  }
+
+  protected normalizeSidecarError(line: string): string {
+    return line
+      .replace(/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2},\d{3}\s+\[[^\]]+\]\s*/, '')
+      .replace(/^\[[^\]]+\]\s*/, '')
+      .trim();
   }
 
   protected broadcastHealth(): void {

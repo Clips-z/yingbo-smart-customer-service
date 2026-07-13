@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pull-request-title:
+    name: Validate PR title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check Conventional Commit title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          if [[ ! "$TITLE" =~ ^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\(.+\))?!?:\ .+ ]]; then
+            echo "PR 标题请使用 Conventional Commit 格式，例如：feat: 新增消息筛选"
+            exit 1
+          fi
+
+  build-and-test:
+    name: Build and test
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ChatGPT-On-CS-main/ChatGPT-On-CS-main
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ChatGPT-On-CS-main/ChatGPT-On-CS-main/package-lock.json
+
+      # Native Electron dependencies and the local Python runtime are not part of
+      # the source checkout, so package lifecycle scripts are intentionally skipped.
+      - name: Install JavaScript dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Verify installed dependency tree
+        run: npm ls --omit=optional --depth=0
+
+      - name: Build Electron bundles
+        run: npm run build
+
+      - name: Run unit tests
+        run: npm test -- --runInBand
+
+      - name: Validate GitHub configuration formatting
+        run: npx prettier --check "../../.github/**/*.yml" "../../.github/pull_request_template.md"

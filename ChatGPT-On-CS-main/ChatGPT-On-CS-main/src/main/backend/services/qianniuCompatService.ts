@@ -18,6 +18,25 @@ import {
   QianniuOcrWorker,
 } from './qianniuOcrWorker';
 import { isPlatformRunning, isPlatformActive } from './platformRuntimeService';
+import { createIncomingMessageFingerprint } from './incomingMessageFingerprint';
+import {
+  cancelQueuedUnattendedDeliveries,
+  finishSuggestionDelivery,
+  reserveSuggestionDelivery,
+} from './deliveryGuard';
+import { runtimePath } from './runtimePaths';
+import {
+  assertReplyModeAllowed,
+  evaluateReplyModeChange,
+  getDefaultReplyMode,
+  normalizeReplyMode,
+} from './replySafetyPolicy';
+import { evaluateQianniuCapture } from './qianniuCapturePolicy';
+import { QianniuHealthTracker } from './qianniuHealth';
+import {
+  assertQianniuFillResult,
+  parseQianniuFillResult,
+} from './qianniuFillResult';
 
 const execFileAsync = promisify(execFile);
 
@@ -67,9 +86,11 @@ export class QianniuCompatService {
 
   private lastRecognizedFingerprint = '';
 
-  private replyMode: QianniuReplyMode = 'hint';
+  private replyMode: QianniuReplyMode = 'assist';
 
   private clientRunning = false;
+
+  private health = new QianniuHealthTracker();
 
   constructor(
     private dispatchService: DispatchService,
@@ -81,14 +102,30 @@ export class QianniuCompatService {
     return this.replyMode;
   }
 
+  public getHealth() {
+    return this.health.getHealth();
+  }
+
   public async setMode(mode: QianniuReplyMode): Promise<void> {
-    this.replyMode = mode;
     const config = await Config.findOne({ where: { global: true } });
-    if (config) await config.update({ qianniu_reply_mode: mode });
+    const decision = evaluateReplyModeChange({
+      platformId: 'win_qianniu',
+      requestedMode: mode,
+      unattendedEnabled: Boolean(config?.qianniu_unattended_enabled),
+    });
+    assertReplyModeAllowed(decision);
+
+    this.replyMode = decision.mode;
+    if (config) await config.update({ qianniu_reply_mode: decision.mode });
     this.dispatchService.receiveBroadcast({
       event: 'qianniu_reply_mode_changed',
-      data: { mode },
+      data: { mode: decision.mode },
     });
+  }
+
+  public async emergencyStop(): Promise<number> {
+    await this.setMode('assist');
+    return cancelQueuedUnattendedDeliveries('win_qianniu');
   }
 
   public async listSuggestions(
@@ -119,12 +156,26 @@ export class QianniuCompatService {
     const suggestion = await ReplySuggestion.findByPk(id);
     if (!suggestion) throw new Error('待回复记录不存在');
     const replyContent = editedContent?.trim() || suggestion.reply_content;
-    await this.sendReply(replyContent, false, suggestion.sender);
-    await suggestion.update({
-      reply_content: replyContent,
-      status: 'prepared',
-      updated_at: new Date(),
-    });
+    const requestId = await reserveSuggestionDelivery(id, 'prepare');
+    try {
+      await this.sendReply(replyContent, false, suggestion.sender);
+      const completed = await finishSuggestionDelivery({
+        id,
+        requestId,
+        status: 'prepared',
+      });
+      if (!completed) throw new Error('填入结果已过期，未更新回复状态');
+      await suggestion.update({ reply_content: replyContent });
+    } catch (error) {
+      await finishSuggestionDelivery({
+        id,
+        requestId,
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+    await suggestion.reload();
     this.broadcastSuggestion('qianniu_suggestion_updated', suggestion);
     return suggestion;
   }
@@ -203,18 +254,21 @@ export class QianniuCompatService {
 
   private async loadMode(): Promise<void> {
     const config = await Config.findOne({ where: { global: true } });
-    const stored = config?.qianniu_reply_mode;
-    if (stored === 'unattended') {
-      this.replyMode = 'hint';
-      await config.update({ qianniu_reply_mode: 'hint' });
-      return;
-    }
-    if (stored === 'assist' || stored === 'hint') {
-      this.replyMode = stored;
-      return;
-    }
-    if (process.env.QIANNIU_COMPAT_AUTO_SEND === '1') {
-      this.replyMode = 'unattended';
+    const rawStoredMode = config?.qianniu_reply_mode;
+    const stored = normalizeReplyMode(
+      'win_qianniu',
+      rawStoredMode,
+    ) as QianniuReplyMode;
+    const decision = evaluateReplyModeChange({
+      platformId: 'win_qianniu',
+      requestedMode: stored,
+      unattendedEnabled: Boolean(config?.qianniu_unattended_enabled),
+    });
+    this.replyMode = decision.allowed
+      ? decision.mode
+      : getDefaultReplyMode('win_qianniu');
+    if (config && this.replyMode !== rawStoredMode) {
+      await config.update({ qianniu_reply_mode: this.replyMode });
     }
   }
 
@@ -226,12 +280,7 @@ export class QianniuCompatService {
   }
 
   public start(): void {
-    if (
-      process.platform !== 'win32' ||
-      process.env.QIANNIU_COMPAT_ENABLED !== '1'
-    ) {
-      return;
-    }
+    if (process.platform !== 'win32') return;
     void this.loadMode().catch(() => {
       setTimeout(() => {
         void this.loadMode().catch((error) => {
@@ -249,6 +298,9 @@ export class QianniuCompatService {
         const active = await isPlatformActive('win_qianniu');
         const shouldRun = running && active;
         if (!shouldRun) {
+          this.health.markStopped(
+            running ? '千牛平台未激活' : '千牛客户端未启动',
+          );
           if (this.clientRunning) {
             this.clientRunning = false;
             this.ocrWorker.stop();
@@ -272,6 +324,7 @@ export class QianniuCompatService {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
     this.clientRunning = false;
+    this.health.markStopped();
     this.ocrWorker.stop();
   }
 
@@ -279,11 +332,7 @@ export class QianniuCompatService {
     click?: { x: number; y: number };
     skipOcr?: boolean;
   }): Promise<CaptureResult> {
-    const scriptPath = path.resolve(
-      process.cwd(),
-      'scripts',
-      'qianniu-compat-capture.ps1',
-    );
+    const scriptPath = runtimePath('scripts', 'qianniu-compat-capture.ps1');
     const args = [
       '-NoProfile',
       '-ExecutionPolicy',
@@ -350,6 +399,7 @@ export class QianniuCompatService {
     );
     const now = Date.now();
     this.nextScanAt = now + (qianniuMissing ? 30_000 : 10_000);
+    this.health.markFailure(message, this.nextScanAt);
     const key = qianniuMissing
       ? 'qianniu-window-missing'
       : message.slice(0, 200);
@@ -366,6 +416,7 @@ export class QianniuCompatService {
 
   private markScanHealthy(): void {
     this.nextScanAt = 0;
+    this.health.markRunning();
     if (this.lastFailureKey) {
       this.log.info('千牛兼容采集已恢复');
       this.lastFailureKey = '';
@@ -373,17 +424,8 @@ export class QianniuCompatService {
   }
 
   private async recognizeOnce(image: string): Promise<QianniuOcrResult> {
-    const python = path.resolve(
-      process.cwd(),
-      'tools',
-      'python311',
-      'python.exe',
-    );
-    const script = path.resolve(
-      process.cwd(),
-      'scripts',
-      'qianniu-rapidocr.py',
-    );
+    const python = runtimePath('tools', 'python311', 'python.exe');
+    const script = runtimePath('scripts', 'qianniu-rapidocr.py');
     const { stdout } = await execFileAsync(
       python,
       ['-X', 'utf8', script, image],
@@ -453,25 +495,28 @@ export class QianniuCompatService {
         this.lastRecognizedFingerprint = fingerprint;
       }
 
-      const rawSender = capture.candidate?.sender?.replace(/\s+/g, '') || '';
-      const sender = rawSender.match(/tb[A-Za-z0-9]{5,}/i)?.[0] || rawSender;
-      const content = capture.candidate?.content?.trim();
-      if (!sender || !content || content.length < 2) return;
-      if (capture.candidate?.direction !== 'incoming') return;
-      if (capture.candidate?.latest_direction !== 'incoming') return;
-      if (capture.ocr_engine !== 'rapidocr') {
-        this.log.warn(
-          'Qianniu compatibility capture skipped: RapidOCR unavailable',
-        );
+      const decision = evaluateQianniuCapture(
+        {
+          sender: capture.candidate?.sender,
+          content: capture.candidate?.content,
+          direction: capture.candidate?.direction,
+          latestDirection: capture.candidate?.latest_direction,
+          confidence: capture.candidate?.confidence,
+          ocrEngine: capture.ocr_engine,
+        },
+        MIN_OCR_CONFIDENCE,
+      );
+      if (!decision.accepted) {
+        if (
+          decision.reasonCode === 'ocr_unavailable' ||
+          decision.reasonCode === 'ocr_low_confidence'
+        ) {
+          this.log.warn(`Qianniu capture skipped: ${decision.reasonCode}`);
+        }
         return;
       }
+      const { sender, content } = decision;
       const confidence = capture.candidate?.confidence || 0;
-      if (confidence < MIN_OCR_CONFIDENCE) {
-        this.log.warn(
-          `Qianniu OCR confidence too low (${confidence.toFixed(3)}): ${content}`,
-        );
-        return;
-      }
       if (confidence < CONFIRM_OCR_BELOW) {
         const confirmation = await this.capture();
         const confirmedContent = confirmation.candidate?.content?.trim();
@@ -489,23 +534,26 @@ export class QianniuCompatService {
           return;
         }
       }
-      if (content.includes('\uFFFD')) {
-        this.log.warn(`千牛兼容采集跳过乱码消息: ${sender}`);
-        return;
-      }
-      if (/^tb[A-Za-z0-9]{5,}(?:20\d{2})?/i.test(content)) return;
-      if (/^20\d{2}[.\-/]/.test(content)) return;
-
       const now = Date.now();
       const lastSeen = this.recentSenders.get(sender) || 0;
       if (now - lastSeen < 45_000) return;
 
-      const key = crypto
-        .createHash('sha256')
-        .update(`${sender}\n${content}`)
-        .digest('hex');
+      const key = createIncomingMessageFingerprint({
+        platformId: 'win_qianniu',
+        chatFingerprint: capture.chat_fingerprint,
+        sender,
+        content,
+      });
       if (key === this.lastMessageKey) return;
       this.lastMessageKey = key;
+
+      const existingSuggestion = await ReplySuggestion.findOne({
+        where: { message_key: key },
+      });
+      if (existingSuggestion) {
+        this.log.info(`千牛重复采集事件已忽略: ${sender}`);
+        return;
+      }
 
       const task = (await this.appService.getTasks()).find(
         (item) => item.app_id === 'win_qianniu',
@@ -534,16 +582,24 @@ export class QianniuCompatService {
 
       this.recentSenders.set(sender, now);
 
-      const suggestion = await ReplySuggestion.create({
-        platform_id: 'win_qianniu',
-        store: 'qianniu-9.96-compat',
-        sender,
-        incoming_content: content,
-        reply_content: reply.content.trim().slice(0, 300),
-        status: 'pending',
-        created_at: new Date(),
-        updated_at: new Date(),
+      const [suggestion, created] = await ReplySuggestion.findOrCreate({
+        where: { message_key: key },
+        defaults: {
+          platform_id: 'win_qianniu',
+          store: 'qianniu-9.96-compat',
+          sender,
+          incoming_content: content,
+          reply_content: reply.content.trim().slice(0, 300),
+          message_key: key,
+          status: 'pending',
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
       });
+      if (!created) {
+        this.log.info(`千牛重复采集事件已忽略: ${sender}`);
+        return;
+      }
       this.broadcastSuggestion('qianniu_suggestion_created', suggestion);
 
       this.log.success(`千牛兼容采集: ${sender} -> ${content}`);
@@ -552,8 +608,25 @@ export class QianniuCompatService {
         reply.type === 'TEXT' &&
         reply.safeToAutoSend === true
       ) {
-        await this.sendReply(reply.content, true, sender);
-        await suggestion.update({ status: 'sent', updated_at: new Date() });
+        const requestId = await reserveSuggestionDelivery(suggestion.id, 'send');
+        try {
+          await this.sendReply(reply.content, true, sender);
+          const completed = await finishSuggestionDelivery({
+            id: suggestion.id,
+            requestId,
+            status: 'sent',
+          });
+          if (!completed) throw new Error('发送结果已过期，未更新回复状态');
+        } catch (error) {
+          await finishSuggestionDelivery({
+            id: suggestion.id,
+            requestId,
+            status: 'failed',
+            error: error instanceof Error ? error.message : String(error),
+          });
+          throw error;
+        }
+        await suggestion.reload();
         this.broadcastSuggestion('qianniu_suggestion_updated', suggestion);
         this.log.success(`千牛兼容回复已发送: ${sender}`);
       } else {
@@ -579,11 +652,7 @@ export class QianniuCompatService {
       os.tmpdir(),
       `chatgpt-on-cs-qianniu-reply-${crypto.randomUUID()}.txt`,
     );
-    const scriptPath = path.resolve(
-      process.cwd(),
-      'scripts',
-      'qianniu-compat-send.ps1',
-    );
+    const scriptPath = runtimePath('scripts', 'qianniu-compat-send.ps1');
     await fs.writeFile(replyPath, reply, 'utf8');
     try {
       const runScript = async (options: {
@@ -604,11 +673,17 @@ export class QianniuCompatService {
         if (options.sender) args.push('-Sender', options.sender);
         if (options.selectOnly) args.push('-SelectOnly');
         if (options.submit) args.push('-Submit');
-        await execFileAsync('powershell.exe', args, {
+        const { stdout } = await execFileAsync('powershell.exe', args, {
           encoding: 'utf8',
           windowsHide: true,
           maxBuffer: 1024 * 1024,
         });
+        const result = parseQianniuFillResult(stdout);
+        assertQianniuFillResult(
+          result,
+          options.selectOnly ? 'select' : 'fill',
+          options.submit === true,
+        );
       };
 
       if (sender) {

@@ -8,9 +8,12 @@ export const modeLabels: Record<QianniuReplyMode, string> = {
 
 export const statusLabels: Record<ReplySuggestion['status'], string> = {
   pending: '待回复',
+  preparing: '正在填入',
+  sending: '正在发送',
   prepared: '已填入',
   sent: '已发送',
   failed: '发送失败',
+  cancelled: '已取消',
   dismissed: '已处理',
 };
 
@@ -32,17 +35,23 @@ export const healthLabels = {
 
 export const statusColorMap: Record<ReplySuggestion['status'], string> = {
   pending: 'orange',
+  preparing: 'blue',
+  sending: 'purple',
   prepared: 'blue',
   sent: 'green',
   failed: 'red',
+  cancelled: 'gray',
   dismissed: 'gray',
 };
 
 export const borderColorMap: Record<ReplySuggestion['status'], string> = {
   pending: 'orange.200',
+  preparing: 'blue.300',
+  sending: 'purple.300',
   prepared: 'gray.200',
   sent: 'gray.200',
   failed: 'red.300',
+  cancelled: 'gray.300',
   dismissed: 'gray.200',
 };
 

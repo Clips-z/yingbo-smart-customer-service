@@ -15,6 +15,12 @@ export class Config extends Model {
 
   declare wecom_reply_mode: string;
 
+  declare wechat_unattended_enabled: boolean;
+
+  declare wecom_unattended_enabled: boolean;
+
+  declare qianniu_unattended_enabled: boolean;
+
   declare id: number;
 
   declare global: boolean;
@@ -127,6 +133,39 @@ export async function checkAndAddFields(sequelize: Sequelize) {
         type: DataTypes.STRING(32),
         allowNull: false,
         defaultValue: 'hint',
+      });
+  }
+
+  // @ts-ignore
+  if (!tableDescription.wechat_unattended_enabled) {
+    await sequelize
+      .getQueryInterface()
+      .addColumn('n_config', 'wechat_unattended_enabled', {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      });
+  }
+
+  // @ts-ignore
+  if (!tableDescription.wecom_unattended_enabled) {
+    await sequelize
+      .getQueryInterface()
+      .addColumn('n_config', 'wecom_unattended_enabled', {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      });
+  }
+
+  // @ts-ignore
+  if (!tableDescription.qianniu_unattended_enabled) {
+    await sequelize
+      .getQueryInterface()
+      .addColumn('n_config', 'qianniu_unattended_enabled', {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       });
   }
 
@@ -409,17 +448,32 @@ export function initConfig(sequelize: Sequelize) {
       qianniu_reply_mode: {
         type: DataTypes.STRING(32),
         allowNull: false,
-        defaultValue: 'hint',
+        defaultValue: 'assist',
       },
       wechat_reply_mode: {
         type: DataTypes.STRING(32),
         allowNull: false,
-        defaultValue: 'hint',
+        defaultValue: 'assist',
       },
       wecom_reply_mode: {
         type: DataTypes.STRING(32),
         allowNull: false,
         defaultValue: 'hint',
+      },
+      wechat_unattended_enabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      wecom_unattended_enabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+      qianniu_unattended_enabled: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
       },
     },
     {

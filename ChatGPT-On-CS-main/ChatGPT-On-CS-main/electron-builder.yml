@@ -3,6 +3,7 @@ productName: 迎波智能客服
 copyright: Copyright © 2026 YinBo
 asar: true
 asarUnpack: "**\\*.{node,dll}"
+npmRebuild: false
 compression: maximum
 files:
   - dist
@@ -31,5 +32,14 @@ directories:
   buildResources: assets
   output: release/build
 extraResources:
-  - "./assets/**"
+  - from: assets
+    to: assets
+  - from: scripts
+    to: scripts
+  - from: ../../rag-server
+    to: rag-server
+  - from: .venv-wechat
+    to: .venv-wechat
+  - from: ../../rag-server/.venv
+    to: rag-server/.venv
 afterPack: "./removeLocales.js"

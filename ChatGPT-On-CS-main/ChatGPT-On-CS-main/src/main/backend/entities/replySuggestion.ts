@@ -2,9 +2,12 @@ import { DataTypes, Model, Sequelize } from 'sequelize';
 
 export type ReplySuggestionStatus =
   | 'pending'
+  | 'preparing'
+  | 'sending'
   | 'prepared'
   | 'sent'
   | 'failed'
+  | 'cancelled'
   | 'dismissed';
 
 export class ReplySuggestion extends Model {
@@ -19,6 +22,12 @@ export class ReplySuggestion extends Model {
   declare incoming_content: string;
 
   declare reply_content: string;
+
+  declare message_key: string | null;
+
+  declare delivery_request_id: string | null;
+
+  declare delivery_error: string | null;
 
   declare status: ReplySuggestionStatus;
 
@@ -56,6 +65,18 @@ export function initReplySuggestion(sequelize: Sequelize) {
         type: DataTypes.TEXT,
         allowNull: false,
       },
+      message_key: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+      delivery_request_id: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+      delivery_error: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+      },
       status: {
         type: DataTypes.STRING(32),
         allowNull: false,
@@ -77,7 +98,44 @@ export function initReplySuggestion(sequelize: Sequelize) {
       modelName: 'ReplySuggestion',
       tableName: 'n_reply_suggestions',
       timestamps: false,
-      indexes: [{ fields: ['status', 'created_at'] }, { fields: ['sender'] }],
+      indexes: [
+        { fields: ['status', 'created_at'] },
+        { fields: ['sender'] },
+      ],
     },
+  );
+}
+
+export async function checkAndAddFields(sequelize: Sequelize) {
+  const tableDescription = await ReplySuggestion.describe();
+  // @ts-ignore
+  if (!tableDescription.message_key) {
+    await sequelize
+      .getQueryInterface()
+      .addColumn('n_reply_suggestions', 'message_key', {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      });
+  }
+  // @ts-ignore
+  if (!tableDescription.delivery_request_id) {
+    await sequelize
+      .getQueryInterface()
+      .addColumn('n_reply_suggestions', 'delivery_request_id', {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      });
+  }
+  // @ts-ignore
+  if (!tableDescription.delivery_error) {
+    await sequelize
+      .getQueryInterface()
+      .addColumn('n_reply_suggestions', 'delivery_error', {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+      });
+  }
+  await sequelize.query(
+    'CREATE UNIQUE INDEX IF NOT EXISTS n_reply_suggestions_message_key_unique ON n_reply_suggestions (message_key) WHERE message_key IS NOT NULL',
   );
 }

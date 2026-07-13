@@ -7,6 +7,7 @@ import re
 import sys
 import time
 import unicodedata
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -106,8 +107,9 @@ def normalize_contact_name(value: str) -> str:
 def ensure_wechat39_window() -> None:
     import psutil
 
+    wechat_process_names = {"wechat.exe", "weixin.exe"}
     running = any(
-        (process.info.get("name") or "").lower() == "wechat.exe"
+        (process.info.get("name") or "").lower() in wechat_process_names
         for process in psutil.process_iter(["name"])
     )
     if not running:
@@ -117,6 +119,25 @@ def ensure_wechat39_window() -> None:
             raise RuntimeError(f"Customer WeChat not found. Searched: {searched}")
         os.startfile(executable)
         time.sleep(5)
+
+
+def detect_backend() -> str:
+    """Prefer the legacy 3.9 UIA backend when its real main window exists."""
+    import psutil
+    import win32gui
+
+    if win32gui.FindWindow("WeChatMainWndForPC", None):
+        return "wechat39"
+    running = {
+        (process.info.get("name") or "").lower()
+        for process in psutil.process_iter(["name"])
+    }
+    if "wechat.exe" in running:
+        return "wechat39"
+    if "weixin.exe" in running:
+        return "weixin4"
+    # Keep the error specific to the modern backend when neither client runs.
+    return "weixin4"
 
 
 class ReplyBridge:
@@ -203,45 +224,113 @@ def run_weixin4(
     api_port: int | None,
     dry_run: bool,
 ) -> None:
-    from pyweixin import AutoReply, Navigator
+    import importlib.util
 
     ensure_weixin_window()
-    window = Navigator.open_weixin(is_maximize=False)
+    module_path = ROOT / "scripts" / "wecom-sidecar.py"
+    spec = importlib.util.spec_from_file_location("wecom_ocr_sidecar", module_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"Weixin OCR sidecar module not found: {module_path}")
+    wecom_ocr = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(wecom_ocr)
+
+    wecom_ocr.SIDECAR_LOG = SIDECAR_LOG
+    wecom_ocr.COMMAND_FILE = COMMAND_FILE
+    wecom_ocr.COMMAND_RESULT_FILE = COMMAND_RESULT_FILE
+    wecom_ocr.SCREENSHOT_DIR = ROOT / ".tmp-userdata" / "logs" / "wechat-screenshots"
+    wecom_ocr.WECOM_WINDOW_CLASSES = ("Qt51514QWindowIcon", "WeChatMainWndForPC")
+    wecom_ocr.WECOM_PROCESS_NAMES = ("weixin.exe", "wechat.exe")
+    wecom_ocr.WECOM_WINDOW_TITLES = ("微信", "Weixin")
+    wecom_ocr.PLATFORM_ID = "win_wechat"
+    wecom_ocr.PLATFORM_NAME = "微信"
+    wecom_ocr.COMPAT_KEY = "wechat"
+    wecom_ocr.WINDOW_DISPLAY_NAME = "微信窗口"
+    wecom_ocr.REQUIRE_UNREAD_TO_PROCESS = True
+    wecom_ocr.PROCESS_CURRENT_CHAT_WITHOUT_UNREAD = True
+
+    def _assume_message_module(_self, _img):
+        return "消息"
+
+    wecom_ocr.WeComLayoutParser.detect_current_module = _assume_message_module
+    original_should_process = wecom_ocr.should_process_message
+
+    def _should_process_wechat_message(conv: dict, my_name: str = ""):
+        name = str(conv.get("name", "")).strip()
+        preview = str(conv.get("preview", "")).strip()
+        text = " ".join(
+            [
+                name,
+                preview,
+                *[str(item) for item in conv.get("raw_texts", [])],
+            ]
+        )
+        blocked_keywords = (
+            "通知",
+            "公众号",
+            "服务号",
+            "订阅号",
+            "服务通知",
+            "微信公众平台",
+            "微信团队",
+            "视频号",
+            "小程序",
+            "小助手",
+            "微信支付",
+            "文件传输助手",
+            "群发助手",
+            "大家庭",
+            "家族",
+            "俱乐部",
+            "战队",
+            "淘宝",
+            "闪购",
+            "外卖",
+            "省钱",
+            "必领",
+            "优惠",
+            "政务",
+            "市民中心",
+            "基金",
+            "收益",
+            "机票",
+            "KTV",
+            "追剧",
+            "活动",
+            "招聘",
+            "工作推",
+            "直聘",
+            "新闻",
+            "热点",
+            "推送",
+        )
+        if any(keyword in text for keyword in blocked_keywords):
+            return False, "微信服务/公众号会话"
+        normalized_name = normalize_contact_name(name)
+        if len(normalized_name) > 12:
+            return False, "微信会话名称过长，疑似服务号/群/营销会话"
+        if re.search(r"[!！?？,，.。:：;；【】\[\]（）()《》<>]", name):
+            return False, "微信会话名称含营销/系统标点"
+        if re.match(r"^(昨天|前天|星期[一二三四五六日天]|周[一二三四五六日天]|\d{1,2}:\d{2})", preview):
+            return False, "微信预览像时间/历史消息"
+        if len(normalize_contact_name(preview)) < 2:
+            return False, "微信预览过短"
+        return original_should_process(conv, my_name)
+
+    wecom_ocr.should_process_message = _should_process_wechat_message
     logging.info(
-        "Weixin window ready: title=%s class=%s",
-        window.window_text(),
-        window.class_name(),
-    )
-
-    port = api_port or discover_api_port()
-    bridge = ReplyBridge(port, instance_id, dry_run=dry_run)
-
-    def reply_when_unattended(friend: str, content: str) -> str:
-        decision = bridge(friend, content)
-        if (
-            not decision
-            or decision["mode"] != "unattended"
-            or not decision["safeToAutoSend"]
-        ):
-            return ""
-        return decision["content"]
-
-    logging.info(
-        "Sidecar started: api=http://127.0.0.1:%s duration=%s maxPages=%s dryRun=%s",
-        port,
+        "Weixin OCR sidecar started: duration=%s maxPages=%s dryRun=%s",
         duration,
         max_pages,
         dry_run,
     )
-    details = AutoReply.auto_reply_messages(
-        callback=reply_when_unattended,
-        duration=duration,
-        chatOnly=True,
-        maxPages=max_pages,
-        is_maximize=False,
-        close_weixin=False,
+    wecom_ocr.run_wecom(
+        duration,
+        instance_id,
+        api_port,
+        dry_run,
+        debounce_seconds=2.0,
+        my_name="",
     )
-    logging.info("Sidecar finished: %s", details)
 
 
 def run_wechat39(
@@ -256,6 +345,7 @@ def run_wechat39(
     from pywechat.WeChatTools import Tools
     from pywechat.WinSettings import SystemSettings
     from pywinauto import Desktop
+    import win32api
     import win32con
     import win32gui
 
@@ -264,6 +354,20 @@ def run_wechat39(
         if not handle:
             raise RuntimeError("WeChat main window was not found")
         return Desktop(backend="uia").window(handle=handle)
+
+    def post_control_click(control) -> None:
+        rect = control.rectangle()
+        screen_point = (
+            (rect.left + rect.right) // 2,
+            (rect.top + rect.bottom) // 2,
+        )
+        client_x, client_y = win32gui.ScreenToClient(window.handle, screen_point)
+        lparam = win32api.MAKELONG(client_x, client_y)
+        win32api.PostMessage(window.handle, win32con.WM_MOUSEMOVE, 0, lparam)
+        win32api.PostMessage(
+            window.handle, win32con.WM_LBUTTONDOWN, win32con.MK_LBUTTON, lparam
+        )
+        win32api.PostMessage(window.handle, win32con.WM_LBUTTONUP, 0, lparam)
 
     def select_contact(target: str):
         target_key = normalize_contact_name(target)
@@ -281,21 +385,119 @@ def run_wechat39(
             None,
         )
         if exact is not None:
-            exact.click_input()
+            post_control_click(exact)
             time.sleep(0.4)
             return verify_current_chat(target)
         raise RuntimeError(
             f"联系人“{target}”不在当前微信会话列表中，已停止操作"
         )
 
+    def find_chat_input():
+        refresh_controls()
+        candidates = []
+        for edit in window.descendants(control_type="Edit"):
+            rect = edit.rectangle()
+            if edit.window_text() == "搜索":
+                continue
+            if rect.width() >= 200 and rect.height() >= 40:
+                candidates.append(edit)
+        if len(candidates) != 1:
+            raise RuntimeError(
+                f"微信输入框定位失败：匹配到 {len(candidates)} 个候选控件"
+            )
+        return candidates[0]
+
+    def find_send_button():
+        buttons = [
+            button
+            for button in window.descendants(control_type="Button")
+            if button.window_text() in ("发送(S)", "发送")
+        ]
+        if len(buttons) != 1:
+            raise RuntimeError(
+                f"微信发送按钮定位失败：匹配到 {len(buttons)} 个候选控件"
+            )
+        return buttons[0]
+
+    @contextmanager
+    def prevent_wechat_activation():
+        """Keep UIA operations from stealing foreground or moving the cursor."""
+        handle = window.handle
+        foreground = win32gui.GetForegroundWindow()
+        cursor = pyautogui.position()
+        ex_style = win32gui.GetWindowLong(handle, win32con.GWL_EXSTYLE)
+        flags = (
+            win32con.SWP_NOMOVE
+            | win32con.SWP_NOSIZE
+            | win32con.SWP_NOZORDER
+            | win32con.SWP_NOACTIVATE
+            | win32con.SWP_FRAMECHANGED
+        )
+        try:
+            win32gui.SetWindowLong(
+                handle,
+                win32con.GWL_EXSTYLE,
+                ex_style | win32con.WS_EX_NOACTIVATE,
+            )
+            win32gui.SetWindowPos(handle, 0, 0, 0, 0, 0, flags)
+            yield
+        finally:
+            if win32gui.IsWindow(handle):
+                win32gui.SetWindowLong(handle, win32con.GWL_EXSTYLE, ex_style)
+                win32gui.SetWindowPos(handle, 0, 0, 0, 0, 0, flags)
+            try:
+                pyautogui.moveTo(cursor.x, cursor.y, _pause=False)
+            except Exception:
+                pass
+            if (
+                foreground
+                and foreground != handle
+                and win32gui.IsWindow(foreground)
+                and win32gui.GetForegroundWindow() != foreground
+            ):
+                try:
+                    win32gui.SetForegroundWindow(foreground)
+                except Exception:
+                    pass
+
+    def post_unicode_text(text: str) -> None:
+        # WM_CHAR accepts UTF-16 code units; split non-BMP emoji into surrogates.
+        encoded = text.encode("utf-16-le")
+        for offset in range(0, len(encoded), 2):
+            code_unit = int.from_bytes(encoded[offset : offset + 2], "little")
+            win32api.PostMessage(window.handle, win32con.WM_CHAR, code_unit, 0)
+
+    def clear_reply_text(edit) -> None:
+        # The custom WeChat editor ignores ValuePattern and WM_CHAR backspace,
+        # but handles background VK_BACK key messages.
+        current = edit.get_value()
+        for _ in range(max(len(current.encode("utf-16-le")) // 2 + 4, 8)):
+            win32api.PostMessage(
+                window.handle, win32con.WM_KEYDOWN, win32con.VK_BACK, 0
+            )
+            win32api.PostMessage(
+                window.handle, win32con.WM_KEYUP, win32con.VK_BACK, 0
+            )
+
+    def set_reply_text(text: str):
+        edit = find_chat_input()
+        if edit.get_value():
+            raise RuntimeError("微信输入框存在人工草稿，已停止自动发送")
+        post_control_click(edit)
+        post_unicode_text(text)
+        time.sleep(0.2)
+        actual = edit.get_value()
+        if actual != text:
+            clear_reply_text(edit)
+            raise RuntimeError("微信回复填入校验失败，已停止发送")
+        return edit
+
     def fill_contact(target: str, text: str) -> None:
         refresh_controls()
-        bring_wechat_to_front()
-        edit = select_contact(target)
-        edit.set_focus()
-        SystemSettings.copy_text_to_clipboard(text)
-        pyautogui.hotkey("ctrl", "a", _pause=False)
-        pyautogui.hotkey("ctrl", "v", _pause=False)
+        with prevent_wechat_activation():
+            select_contact(target)
+            verify_current_chat(target)
+            set_reply_text(text)
 
     def process_command() -> None:
         if not COMMAND_FILE.exists():
@@ -327,12 +529,23 @@ def run_wechat39(
                 encoding="utf-8",
             )
 
-    def send_reply(edit, text: str) -> None:
-        edit.set_focus()
-        SystemSettings.copy_text_to_clipboard(text)
-        pyautogui.hotkey("ctrl", "a", _pause=False)
-        pyautogui.hotkey("ctrl", "v", _pause=False)
-        pyautogui.hotkey("alt", "s", _pause=False)
+    def send_reply(target: str, text: str) -> None:
+        verify_current_chat(target)
+        edit = set_reply_text(text)
+        post_control_click(find_send_button())
+        deadline = time.time() + 4.0
+        while time.time() < deadline:
+            time.sleep(0.2)
+            refresh_controls()
+            if find_chat_input().get_value() == "":
+                latest, _ = Tools.pull_latest_message(chat_list)
+                if normalize_contact_name(latest) == normalize_contact_name(text):
+                    logging.info("Verified unattended reply sent for %s", target)
+                    return
+        # Never report a successful delivery without both UI confirmations.
+        if edit.get_value() == text:
+            clear_reply_text(edit)
+        raise RuntimeError("微信发送后校验失败，未确认消息进入聊天记录")
 
     from _retry_utils import wait_for_window
 
@@ -404,6 +617,16 @@ def run_wechat39(
     deadline = time.time() + parse_duration(duration)
     seen: dict[tuple[str, str], float] = {}
     last_health_at = 0.0
+    system_conversation_keywords = (
+        "腾讯新闻",
+        "微信团队",
+        "微信支付",
+        "微信运动",
+        "服务通知",
+        "订阅号",
+        "公众号",
+        "文件传输助手",
+    )
     logging.info(
         "WeChat 3.9 sidecar started: api=%s duration=%s dryRun=%s",
         port,
@@ -434,45 +657,46 @@ def run_wechat39(
             for item in unread_items:
                 text_nodes = item.descendants(control_type="Text")
                 friend = text_nodes[0].window_text() if text_nodes else item.window_text()
-                desktop_state = bring_wechat_to_front()
+                if any(keyword in friend for keyword in system_conversation_keywords):
+                    logging.info("Ignored WeChat system conversation: %s", friend)
+                    continue
                 decision = None
                 try:
-                    item.click_input()
-                    verified_chat = verify_current_chat(friend)
-                    # Give customers a brief typing window so fragmented messages produce one reply.
-                    time.sleep(max(debounce_seconds, 0.5))
-                    refresh_controls()
-                    verify_current_chat(friend)
-                    content, sender = Tools.pull_latest_message(chat_list)
-                    fingerprint = (friend, content)
-                    if not content or now - seen.get(fingerprint, 0) < 30:
-                        continue
-                    if sender and normalize_contact_name(sender) != normalize_contact_name(friend):
-                        logging.info("Ignored non-customer message in %s", friend)
-                        continue
-                    seen[fingerprint] = now
-                    decision = bridge(friend, content)
-                    if not decision:
-                        continue
-                    if decision["mode"] != "unattended":
-                        logging.info("Reply retained in %s mode for %s", decision["mode"], friend)
-                        continue
-                    if not decision["safeToAutoSend"]:
-                        logging.warning(
-                            "Unsafe fallback reply retained for manual confirmation: %s",
-                            friend,
-                        )
-                        continue
-                    verify_current_chat(friend)
-                    send_reply(verified_chat, decision["content"])
-                    bridge.report_delivery(decision.get("suggestionId"), "sent")
+                    with prevent_wechat_activation():
+                        post_control_click(item)
+                        verified_chat = verify_current_chat(friend)
+                        # Give customers a brief typing window so fragmented messages produce one reply.
+                        time.sleep(max(debounce_seconds, 0.5))
+                        refresh_controls()
+                        verify_current_chat(friend)
+                        content, sender = Tools.pull_latest_message(chat_list)
+                        fingerprint = (friend, content)
+                        if not content or now - seen.get(fingerprint, 0) < 30:
+                            continue
+                        if sender and normalize_contact_name(sender) != normalize_contact_name(friend):
+                            logging.info("Ignored non-customer message in %s", friend)
+                            continue
+                        seen[fingerprint] = now
+                        decision = bridge(friend, content)
+                        if not decision:
+                            continue
+                        if decision["mode"] != "unattended":
+                            logging.info("Reply retained in %s mode for %s", decision["mode"], friend)
+                            continue
+                        if not decision["safeToAutoSend"]:
+                            logging.warning(
+                                "Unsafe fallback reply retained for manual confirmation: %s",
+                                friend,
+                            )
+                            continue
+                        verify_current_chat(friend)
+                        send_reply(friend, decision["content"])
+                        bridge.report_delivery(decision.get("suggestionId"), "sent")
                 except Exception as error:
                     if decision and decision.get("mode") == "unattended":
                         bridge.report_delivery(decision.get("suggestionId"), "failed")
                     bridge.report_health("running", str(error))
                     logging.exception("WeChat conversation verification failed: %s", friend)
-                finally:
-                    restore_desktop_state(desktop_state)
             time.sleep(0.8)
     finally:
         SystemSettings.close_listening_mode()
@@ -490,14 +714,16 @@ def main() -> int:
     parser.add_argument("--debounce-seconds", type=float, default=2.0)
     parser.add_argument(
         "--backend",
-        choices=("wechat39", "weixin4"),
-        default="wechat39",
+        choices=("auto", "wechat39", "weixin4"),
+        default="auto",
     )
     args = parser.parse_args()
 
     configure_logging()
     try:
-        if args.backend == "wechat39":
+        backend = detect_backend() if args.backend == "auto" else args.backend
+        logging.info("Selected WeChat backend: %s", backend)
+        if backend == "wechat39":
             run_wechat39(
                 args.duration,
                 args.instance_id,

@@ -1,0 +1,11 @@
+{
+  "name": "yingbo-smart-customer-service-runtime",
+  "version": "1.4.5",
+  "description": "迎波智能客服：支持微信、千牛等平台的智能回复工作台",
+  "main": "./dist/main/main.js",
+  "author": "YinBo",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "sqlite3": "^5.1.6"
+  }
+}

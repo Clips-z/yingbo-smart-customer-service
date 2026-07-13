@@ -3,6 +3,12 @@ const { app, BrowserWindow, session } = require('electron');
 const path = require('path');
 const http = require('http');
 
+for (const stream of [process.stdout, process.stderr]) {
+  stream?.on('error', (error) => {
+    if (error.code !== 'EPIPE') throw error;
+  });
+}
+
 app.commandLine.appendSwitch('no-sandbox');
 
 const TARGET_URL = process.env.TARGET_URL || 'http://localhost:1212/main.html';
@@ -11,12 +17,12 @@ const MOCK_PORT = 33847;
 
 const now = new Date();
 const MOCK_RESPONSES = {
-  '/api/v1/base/platform/all': { code: 0, message: 'ok', data: [
+  '/api/v1/base/platform/all': { success: true, data: [
     { id: 'win_qianniu', name: '千牛客服', platform_id: 'win_qianniu', status: 'running', running: true, instances: [{ id: 'inst_1', name: '默认实例', status: 'running', running: true }] },
     { id: 'win_wechat', name: '微信客服', platform_id: 'win_wechat', status: 'running', running: true, instances: [{ id: 'inst_2', name: '默认实例', status: 'running', running: true }] },
     { id: 'win_wecom', name: '企业微信客服', platform_id: 'win_wecom', status: 'running', running: true, instances: [{ id: 'inst_3', name: '默认实例', status: 'running', running: true }] },
   ]},
-  '/api/v1/compat/qianniu/suggestions': { code: 0, message: 'ok', data: [
+  '/api/v1/compat/qianniu/suggestions': { success: true, data: [
     { id: 101, sender: '买家小明', incoming_content: '这个衣服是什么材质的？会缩水吗？', reply_content: '亲，这款衣服是95%棉+5%氨纶，已经做过预缩处理，正常洗涤不会缩水哦~', status: 'pending', platform_id: 'win_qianniu', created_at: new Date(now - 120000).toISOString() },
     { id: 102, sender: '张女士', incoming_content: '我买了两件只收到一件，麻烦帮我查一下物流', reply_content: '非常抱歉给您带来不便！我马上帮您查一下物流信息，请稍等片刻~', status: 'pending', platform_id: 'win_wechat', created_at: new Date(now - 300000).toISOString() },
     { id: 103, sender: '老客户王哥', incoming_content: '上次买的茶叶不错，这次想再买两盒送人，有礼盒装吗？', reply_content: '王哥好！有的，我们新出了精装礼盒款，两盒装送礼很大气，今天下单还送手提袋哦~', status: 'prepared', platform_id: 'win_qianniu', created_at: new Date(now - 600000).toISOString() },
@@ -35,10 +41,14 @@ const server = http.createServer((req, res) => {
   let mockData = null;
   
   if (url.includes('/api/v1/base/platform/all')) mockData = MOCK_RESPONSES['/api/v1/base/platform/all'];
+  else if (url.includes('/api/v1/base/setting')) mockData = { success: true, data: {
+    hasPaused: false, hasKeywordMatch: true, hasUseGpt: true,
+    hasMouseClose: true, hasEscClose: true, hasTransfer: true, hasReplace: true,
+  }};
   else if (url.includes('suggestions')) mockData = MOCK_RESPONSES['/api/v1/compat/qianniu/suggestions'];
-  else if (url.includes('reply-mode')) mockData = { code: 0, message: 'ok', data: { mode: 'hint' } };
-  else if (url.includes('health') || url.includes('collector')) mockData = { code: 0, message: 'ok', data: { state: 'running', lastError: null } };
-  else if (url.includes('/api/v1/')) mockData = { code: 0, message: 'ok', data: null };
+  else if (url.includes('reply-mode') || url.includes('/mode')) mockData = { success: true, data: { mode: 'assist' } };
+  else if (url.includes('health') || url.includes('collector')) mockData = { success: true, data: { state: 'running', processRunning: true, lastError: null, restartAttempts: 0 } };
+  else if (url.includes('/api/v1/')) mockData = { success: true, data: null };
   
   if (mockData) {
     console.log('[mock-http]', url);
@@ -55,16 +65,21 @@ server.listen(MOCK_PORT, '127.0.0.1', () => {
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
-    width: 528, height: 1024, show: true,
+    width: 1280, height: 820, show: true,
     webPreferences: { contextIsolation: true, nodeIntegration: false, preload: MOCK_PRELOAD },
   });
 
   await win.loadURL(TARGET_URL);
   await new Promise((r) => setTimeout(r, 6000));
+  win.setSize(1280, 820);
 
-  // 点击「客服中心」
+  // 进入客服中心
   await win.webContents.executeJavaScript(`
     (function() {
+      if (window.__navigateTo) {
+        window.__navigateTo('service');
+        return;
+      }
       const all = document.querySelectorAll('*');
       for (const el of all) {
         if (el.children.length === 0 && el.textContent && el.textContent.trim() === '客服中心') {
@@ -107,7 +122,7 @@ app.whenReady().then(async () => {
   console.log('DEBUG:', debug);
 
   const img = await win.capturePage();
-  require('fs').writeFileSync(path.join(__dirname, 'ui-preview.png'), img.toPNG());
+  require('fs').writeFileSync(path.join(__dirname, 'ui-service2.png'), img.toPNG());
   console.log('截图完成');
   
   server.close();

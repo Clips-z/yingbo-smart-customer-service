@@ -2,6 +2,7 @@ import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import crypto from 'crypto';
 import path from 'path';
 import readline from 'readline';
+import { getRuntimeRoot, runtimePath } from './runtimePaths';
 
 export type QianniuOcrCandidate = {
   sender: string;
@@ -64,14 +65,10 @@ export class QianniuOcrWorker {
   private ensureProcess(): ChildProcessWithoutNullStreams {
     if (this.process && !this.process.killed) return this.process;
 
-    const python = path.resolve(process.cwd(), 'tools', 'python311', 'python.exe');
-    const script = path.resolve(
-      process.cwd(),
-      'scripts',
-      'qianniu-rapidocr-worker.py',
-    );
+    const python = runtimePath('tools', 'python311', 'python.exe');
+    const script = runtimePath('scripts', 'qianniu-rapidocr-worker.py');
     const worker = spawn(python, ['-X', 'utf8', script], {
-      cwd: process.cwd(),
+      cwd: getRuntimeRoot(),
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     });

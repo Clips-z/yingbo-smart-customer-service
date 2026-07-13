@@ -18,6 +18,7 @@ import {
   ReplySuggestion,
   ReplySuggestionStatus,
   WechatCollectorHealth,
+  QianniuCollectorHealth,
   WecomCollectorHealth,
 } from './platform';
 import { GET, POST } from '../common/api/request';
@@ -372,8 +373,20 @@ export async function setReplyMode(platformId: string, mode: QianniuReplyMode) {
   );
 }
 
+export async function emergencyStopReplies(platformId: string) {
+  const platform = platformId === 'win_wechat' ? 'wechat' : 'qianniu';
+  return POST<{ data: { mode: 'assist'; cancelled: number } }>(
+    `/api/v1/compat/${platform}/emergency-stop`,
+    {},
+  );
+}
+
 export async function getWechatCollectorHealth() {
   return GET<{ data: WechatCollectorHealth }>('/api/v1/compat/wechat/health');
+}
+
+export async function getQianniuCollectorHealth() {
+  return GET<{ data: QianniuCollectorHealth }>('/api/v1/compat/qianniu/health');
 }
 
 export async function getWecomCollectorHealth() {

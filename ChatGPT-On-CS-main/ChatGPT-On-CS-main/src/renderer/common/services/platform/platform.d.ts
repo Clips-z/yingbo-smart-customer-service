@@ -122,10 +122,23 @@ export type QianniuReplyMode = 'hint' | 'assist' | 'unattended';
 
 export type ReplySuggestionStatus =
   | 'pending'
+  | 'preparing'
+  | 'sending'
   | 'prepared'
   | 'sent'
   | 'failed'
+  | 'cancelled'
   | 'dismissed';
+
+export interface QianniuCollectorHealth {
+  state: 'stopped' | 'running' | 'degraded';
+  processRunning: boolean;
+  lastSuccessAt?: string;
+  lastError?: string;
+  reasonCode?: string;
+  recoveryAction?: string;
+  nextRetryAt?: string;
+}
 
 export interface WechatCollectorHealth {
   state: 'stopped' | 'starting' | 'running' | 'degraded';
@@ -159,6 +172,8 @@ export interface ReplySuggestion {
   incoming_content: string;
   reply_content: string;
   status: ReplySuggestionStatus;
+  delivery_error?: string | null;
+  delivery_request_id?: string | null;
   created_at: string;
   updated_at: string;
 }

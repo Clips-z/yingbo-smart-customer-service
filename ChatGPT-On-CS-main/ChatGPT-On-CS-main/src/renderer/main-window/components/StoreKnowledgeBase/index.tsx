@@ -51,9 +51,6 @@ import {
   FiChevronRight,
   FiChevronDown as FiChevronDownSmall,
   FiUpload,
-  FiRefreshCw,
-  FiCopy,
-  FiBookmark,
   FiFilter,
 } from 'react-icons/fi';
 import {
@@ -67,7 +64,13 @@ import {
   STAGE_LABELS,
   SHOP_OPTIONS,
   formatRelativeTime,
+  retryStoreKnowledgeSync,
+  bulkImportStoreKnowledge,
 } from '../../../common/services/knowledge/storeKB';
+import {
+  parseStoreImport,
+  StoreImportPreview,
+} from '../../../common/services/knowledge/knowledgeImport';
 
 const STAGE_COLOR: Record<QAStage, string> = { presale: 'blue', mid: 'orange', aftersale: 'purple' };
 
@@ -171,7 +174,8 @@ const QAListItem: React.FC<{
   onToggleSelect: (id: string, checked: boolean) => void;
   onEdit: (item: QAItem) => void;
   onRequestDelete: (item: QAItem) => void;
-}> = ({ item, selected, defaultExpanded = false, onToggleSelect, onEdit, onRequestDelete }) => {
+  onRetrySync: (id: string) => void;
+}> = ({ item, selected, defaultExpanded = false, onToggleSelect, onEdit, onRequestDelete, onRetrySync }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [checked, setChecked] = useState(false);
 
@@ -184,6 +188,12 @@ const QAListItem: React.FC<{
             <Badge colorScheme="gray" bg="gray.100" color="gray.600" borderRadius="full" fontSize="10px" px={2} fontWeight={700}>触发 {item.triggerCount}</Badge>
             <Badge colorScheme={STAGE_COLOR[item.stage]} borderRadius="full" fontSize="10px" px={2} fontWeight={600}>{STAGE_LABELS[item.stage]}</Badge>
             {item.matchType === 'fuzzy' && <Badge colorScheme="teal" variant="subtle" borderRadius="full" fontSize="10px" px={2}>模糊</Badge>}
+            <Badge colorScheme={item.syncStatus === 'synced' ? 'green' : item.syncStatus === 'failed' ? 'red' : 'orange'} borderRadius="full" fontSize="10px" px={2}>
+              {item.syncStatus === 'synced' ? '已同步' : item.syncStatus === 'failed' ? '同步失败' : '待同步'}
+            </Badge>
+            {item.syncStatus !== 'synced' && (
+              <Button size="xs" variant="link" colorScheme={item.syncStatus === 'failed' ? 'red' : 'orange'} onClick={(event) => { event.stopPropagation(); onRetrySync(item.id); }}>同步</Button>
+            )}
           </HStack>
           <Text fontSize="13.5px" fontWeight={600} color="gray.800" lineHeight={1.45}>{item.question}</Text>
           {item.tags.length > 0 && (
@@ -228,7 +238,8 @@ const StatsPanel: React.FC<{
   shop: string; onShop: (v: string) => void;
   stage: QAStage | 'all'; onStage: (v: QAStage | 'all') => void;
   onAdd: () => void;
-}> = ({ stats, keyword, onKeyword, shop, onShop, stage, onStage, onAdd }) => {
+  onImport: () => void;
+}> = ({ stats, keyword, onKeyword, shop, onShop, stage, onStage, onAdd, onImport }) => {
   const [showProductFilter, setShowProductFilter] = useState(false);
   const statCards = [
     { key: 'all' as const, label: '全部', value: stats.total, color: 'gray.600' },
@@ -259,10 +270,7 @@ const StatsPanel: React.FC<{
         新增问答
       </Button>
       <SimpleGrid columns={2} spacing={2}>
-        <ActionTile icon={FiUpload} label="上传语料训练" />
-        <ActionTile icon={FiRefreshCw} label="同步历史记录" />
-        <ActionTile icon={FiCopy} label="去重" />
-        <ActionTile icon={FiBookmark} label="订阅知识库" />
+        <ActionTile icon={FiUpload} label="导入 CSV / Excel" onClick={onImport} />
       </SimpleGrid>
       <Divider borderColor="gray.100" />
       <VStack spacing={2} align="stretch">
@@ -287,8 +295,8 @@ const StatsPanel: React.FC<{
   );
 };
 
-const ActionTile: React.FC<{ icon: React.ElementType; label: string }> = ({ icon, label }) => (
-  <Button variant="outline" colorScheme="gray" size="sm" borderRadius="lg" h="auto" py={2.5} flexDir="column" gap={1} fontSize="11px" fontWeight={600} color="gray.600" _hover={{ borderColor: 'brand.300', color: 'brand.600', bg: 'brand.50' }}>
+const ActionTile: React.FC<{ icon: React.ElementType; label: string; onClick: () => void }> = ({ icon, label, onClick }) => (
+  <Button variant="outline" colorScheme="gray" size="sm" borderRadius="lg" h="auto" py={2.5} flexDir="column" gap={1} fontSize="11px" fontWeight={600} color="gray.600" _hover={{ borderColor: 'brand.300', color: 'brand.600', bg: 'brand.50' }} onClick={onClick}>
     <Icon as={icon} boxSize={4} />
     {label}
   </Button>
@@ -313,6 +321,9 @@ const StoreKnowledgeBase: React.FC = () => {
   const [items, setItems] = useState<QAItem[]>([]);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState({ total: 0, presale: 0, mid: 0, aftersale: 0 });
+  const importDisclosure = useDisclosure();
+  const [importPreview, setImportPreview] = useState<StoreImportPreview | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -353,6 +364,33 @@ const StoreKnowledgeBase: React.FC = () => {
     toast({ title: '已删除该问答', status: 'warning', duration: 1800, isClosest: true });
   };
 
+  const retrySync = async (id: string) => {
+    await retryStoreKnowledgeSync(id);
+    await loadData();
+    toast({ title: '已重试 RAG 同步', status: 'info', duration: 1600 });
+  };
+
+  const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try { setImportPreview(await parseStoreImport(file)); }
+    catch (error) { toast({ title: '文件解析失败', description: String(error), status: 'error' }); }
+  };
+
+  const confirmImport = async () => {
+    if (!importPreview?.valid.length) return;
+    setImporting(true);
+    try {
+      const results = await bulkImportStoreKnowledge(importPreview.valid);
+      const failed = results.filter((item) => !item.success).length;
+      toast({ title: `导入完成：成功 ${results.length - failed}，失败 ${failed}`, status: failed ? 'warning' : 'success' });
+      importDisclosure.onClose();
+      setImportPreview(null);
+      setPage(1);
+      await loadData();
+    } finally { setImporting(false); }
+  };
+
   return (
     <Flex h="full" gap={4} align="stretch">
       <Box flex="1" minW="0" display="flex" flexDirection="column">
@@ -375,7 +413,7 @@ const StoreKnowledgeBase: React.FC = () => {
           ) : (
             <VStack spacing={0} align="stretch">
               {items.map((it) => (
-                <QAListItem key={it.id} item={it} selected={selectedIds.has(it.id)} onToggleSelect={(id, checked) => setSelectedIds((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; })} onEdit={openEdit} onRequestDelete={(item) => { setPendingDelete(item); delOnOpen(); }} />
+                <QAListItem key={it.id} item={it} selected={selectedIds.has(it.id)} onToggleSelect={(id, checked) => setSelectedIds((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; })} onEdit={openEdit} onRequestDelete={(item) => { setPendingDelete(item); delOnOpen(); }} onRetrySync={retrySync} />
               ))}
             </VStack>
           )}
@@ -394,10 +432,31 @@ const StoreKnowledgeBase: React.FC = () => {
       </Box>
 
       <Box w="300px" flexShrink={0} bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="sm" p={4} overflowY="auto">
-        <StatsPanel stats={stats} keyword={keyword} onKeyword={(v) => { setKeyword(v); setPage(1); }} shop={shop} onShop={(v) => { setShop(v); setPage(1); }} stage={stage} onStage={(v) => { setStage(v); setPage(1); }} onAdd={openAdd} />
+        <StatsPanel stats={stats} keyword={keyword} onKeyword={(v) => { setKeyword(v); setPage(1); }} shop={shop} onShop={(v) => { setShop(v); setPage(1); }} stage={stage} onStage={(v) => { setStage(v); setPage(1); }} onAdd={openAdd} onImport={importDisclosure.onOpen} />
       </Box>
 
       <QAEditModal isOpen={modalOpen} editing={editing} onClose={modalOnClose} onSubmit={handleSubmit} />
+
+      <Modal isOpen={importDisclosure.isOpen} onClose={importDisclosure.onClose} size="lg" isCentered>
+        <ModalOverlay bg="blackAlpha.400" />
+        <ModalContent borderRadius="xl">
+          <ModalHeader fontSize="16px">导入店铺问答预览</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack align="stretch" spacing={3}>
+              <Input type="file" accept=".csv,.xlsx" p={1} onChange={handleImportFile} />
+              <Text fontSize="12px" color="gray.500">必需列：问题、回复、店铺ID。可选列：相似问法、标签、阶段、匹配方式。</Text>
+              {importPreview && (
+                <Box bg="gray.50" borderRadius="lg" p={3}>
+                  <HStack><Badge colorScheme="green">可导入 {importPreview.valid.length}</Badge><Badge colorScheme={importPreview.invalid.length ? 'red' : 'gray'}>错误 {importPreview.invalid.length}</Badge></HStack>
+                  {importPreview.invalid.slice(0, 8).map((item) => <Text key={item.row} fontSize="11px" color="red.500" mt={1}>第 {item.row} 行：{item.error}</Text>)}
+                </Box>
+              )}
+            </VStack>
+          </ModalBody>
+          <ModalFooter><Button size="sm" variant="ghost" onClick={importDisclosure.onClose}>取消</Button><Button size="sm" colorScheme="brand" ml={2} isLoading={importing} isDisabled={!importPreview?.valid.length} onClick={confirmImport}>导入有效行</Button></ModalFooter>
+        </ModalContent>
+      </Modal>
 
       <AlertDialog isOpen={delOpen} leastDestructiveRef={cancelRef} onClose={delOnClose} isCentered>
         <AlertDialogOverlay bg="blackAlpha.300" />

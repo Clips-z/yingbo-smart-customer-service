@@ -36,7 +36,7 @@ import win32api
 import win32gui
 import win32ui
 import win32con
-from PIL import Image
+from PIL import Image, ImageGrab
 
 # 尝试导入 RapidOCR
 try:
@@ -65,13 +65,27 @@ SCREENSHOT_DIR = ROOT / ".tmp-userdata" / "logs" / "wecom-screenshots"
 
 WECOM_WINDOW_CLASSES = ("WeWorkWindow", "WeWorkMainWndForPC")
 WECOM_PROCESS_NAMES = ("wxwork.exe", "wecom.exe")
+WECOM_WINDOW_TITLES = ()
+PLATFORM_ID = "win_wecom"
+PLATFORM_NAME = "企微"
+COMPAT_KEY = "wecom"
+WINDOW_DISPLAY_NAME = "企业微信窗口"
+# The currently selected conversation is marked read by WeCom even while its
+# window is minimized.  Preview changes therefore have to remain eligible when
+# unread == 0; persisted baselines and outgoing-prefix checks prevent replay.
+REQUIRE_UNREAD_TO_PROCESS = False
+PROCESS_CURRENT_CHAT_WITHOUT_UNREAD = True
 DEFAULT_INSTANCE_ID = "12"
 
 # ============================================================
 # 布局常量
 # ============================================================
-NAV_WIDTH_RATIO = 0.09
-CONV_LIST_WIDTH_RATIO = 0.28
+# Enterprise WeChat 4.x uses a two-column left rail.  The module rail is
+# roughly 14% wide and the conversation list roughly 30% wide at the
+# supported 1146x770 layout.  The old 9% boundary cut through the module
+# names and made the collector report an empty conversation baseline.
+NAV_WIDTH_RATIO = 0.14
+CONV_LIST_WIDTH_RATIO = 0.30
 HEADER_HEIGHT_PX = 75
 INPUT_HEIGHT_PX = 90
 TIME_PATTERN = re.compile(r"^\d{1,2}:\d{2}$")
@@ -81,7 +95,7 @@ UNREAD_BADGE_PATTERN = re.compile(r"^\[(\d+)\]$")  # 红点数字
 # ---- 消息过滤：只处理私聊或@我的消息 ----
 # 群聊特征：名称含 &、【】、群、组、团队 等
 GROUP_INDICATOR_PATTERN = re.compile(
-    r"[&【】]|群|团队|team|组|项目组|部门|工作群|通知群|交流群|讨论群|沟通群",
+    r"[&+＋【】]|群|团队|team|组|项目组|部门|工作群|通知群|交流群|讨论群|沟通群|大家庭|家族|俱乐部|战队",
     re.IGNORECASE,
 )
 # @我 的检测模式：企微中有人@我时会显示这些文字
@@ -370,11 +384,67 @@ def normalize_contact_name(value: str) -> str:
 # ============================================================
 def find_wecom_window_handle() -> int:
     """查找企业微信主窗口句柄"""
+    candidates: list[tuple[int, int]] = []
+    titles = {title.lower() for title in WECOM_WINDOW_TITLES}
+    process_names = {name.lower() for name in WECOM_PROCESS_NAMES}
+
+    def _collect(hwnd: int, _: object) -> None:
+        if not win32gui.IsWindow(hwnd):
+            return
+        cls = win32gui.GetClassName(hwnd)
+        if cls not in WECOM_WINDOW_CLASSES:
+            return
+        title = win32gui.GetWindowText(hwnd).lower()
+        if titles and title not in titles:
+            return
+        try:
+            import psutil
+            import win32process
+
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            process_name = psutil.Process(pid).name().lower()
+        except Exception:
+            process_name = ""
+        if process_names and process_name not in process_names:
+            return
+        # Weixin 4.x keeps several tiny hidden Qt helper windows. Never call
+        # ShowWindow/SW_RESTORE for them: doing so creates the blank green
+        # mini-window users can see even though the window is rejected later.
+        try:
+            _, _, original_width, original_height = get_window_rect(hwnd)
+        except Exception:
+            return
+        if original_width < 400 or original_height < 300:
+            return
+        usable = ensure_usable_window(hwnd)
+        if not usable:
+            return
+        _, _, width, height = get_window_rect(usable)
+        if width < 400 or height < 300:
+            return
+        candidates.append((width * height, usable))
+
+    try:
+        win32gui.EnumWindows(_collect, None)
+    except Exception:
+        candidates = []
+
+    if candidates:
+        return max(candidates)[1]
+
     for cls in WECOM_WINDOW_CLASSES:
         handle = win32gui.FindWindow(cls, None)
         if handle:
-            if win32gui.IsWindow(handle) and win32gui.IsWindowVisible(handle):
-                return handle
+            if win32gui.IsWindow(handle):
+                try:
+                    _, _, width, height = get_window_rect(handle)
+                except Exception:
+                    continue
+                if width < 400 or height < 300:
+                    continue
+                usable = ensure_usable_window(handle)
+                if usable:
+                    return usable
     return 0
 
 
@@ -383,6 +453,43 @@ def get_window_rect(handle: int) -> tuple:
     rect = win32gui.GetWindowRect(handle)
     x, y, x2, y2 = rect
     return x, y, x2 - x, y2 - y
+
+
+def ensure_usable_window(handle: int) -> int:
+    """恢复并确认窗口尺寸足够 OCR 采集。"""
+    if not handle or not win32gui.IsWindow(handle):
+        return 0
+
+    try:
+        x, y, width, height = get_window_rect(handle)
+    except Exception:
+        return 0
+
+    # Visibility is capture state, not a reason to show the client while the
+    # polling loop is merely locating it. Showing here caused Weixin helpers to
+    # leak onto the desktop as small green windows.
+    if False and not win32gui.IsWindowVisible(handle):
+        try:
+            win32gui.ShowWindow(handle, win32con.SW_SHOW)
+            time.sleep(0.3)
+        except Exception:
+            return 0
+
+    if not win32gui.IsIconic(handle) and (x <= -10000 or y <= -10000 or width < 400 or height < 300):
+        try:
+            win32gui.ShowWindow(handle, win32con.SW_RESTORE)
+            time.sleep(0.5)
+        except Exception:
+            return 0
+
+    try:
+        x, y, width, height = get_window_rect(handle)
+    except Exception:
+        return 0
+
+    if not win32gui.IsWindow(handle) or width < 400 or height < 300:
+        return 0
+    return handle
 
 
 def capture_window(handle: int) -> Image.Image | None:
@@ -409,10 +516,128 @@ def capture_window(handle: int) -> Image.Image | None:
         saveDC.DeleteDC()
         win32gui.ReleaseDC(handle, hwndDC)
         win32gui.DeleteObject(bitmap.GetHandle())
+
+        # CEF/GPU 窗口有时会让 PrintWindow 成功返回但图像实际为空白。
+        # 仅在确认空白时短暂置前做屏幕区域抓取，随后恢复原前台窗口。
+        if float(np.asarray(img.convert("L")).std()) < 3.0:
+            previous = win32gui.GetForegroundWindow()
+            try:
+                win32gui.ShowWindow(handle, win32con.SW_RESTORE)
+                win32gui.SetForegroundWindow(handle)
+                time.sleep(0.2)
+                img = ImageGrab.grab(
+                    bbox=(x, y, x + w, y + h),
+                    all_screens=True,
+                ).convert("RGB")
+            finally:
+                if previous and previous != handle and win32gui.IsWindow(previous):
+                    try:
+                        win32gui.SetForegroundWindow(previous)
+                    except Exception:
+                        pass
         return img
     except Exception as e:
         logging.warning("Capture window failed: %s", e)
         return None
+
+
+def _capture_has_content(img: Image.Image | None) -> bool:
+    """Reject blank GPU/CEF frames before OCR can consume them."""
+    if img is None or img.width < 100 or img.height < 100:
+        return False
+    gray = np.asarray(img.convert("L"))
+    return float(gray.std()) >= 3.0 and int(gray.max()) - int(gray.min()) >= 12
+
+
+def _capture_print_window(handle: int) -> Image.Image | None:
+    """Read the HWND surface, never pixels belonging to an occluding app."""
+    hwnd_dc = mfc_dc = save_dc = bitmap = None
+    try:
+        _, _, width, height = get_window_rect(handle)
+        if width < 100 or height < 100:
+            return None
+        hwnd_dc = win32gui.GetWindowDC(handle)
+        mfc_dc = win32ui.CreateDCFromHandle(hwnd_dc)
+        save_dc = mfc_dc.CreateCompatibleDC()
+        bitmap = win32ui.CreateBitmap()
+        bitmap.CreateCompatibleBitmap(mfc_dc, width, height)
+        save_dc.SelectObject(bitmap)
+        if not windll.user32.PrintWindow(handle, save_dc.GetSafeHdc(), 2):
+            return None
+        bits = bitmap.GetBitmapBits(True)
+        return Image.frombuffer(
+            "RGB", (width, height), bits, "raw", "BGRX", 0, 1
+        ).copy()
+    finally:
+        if save_dc is not None:
+            save_dc.DeleteDC()
+        if mfc_dc is not None:
+            mfc_dc.DeleteDC()
+        if hwnd_dc:
+            win32gui.ReleaseDC(handle, hwnd_dc)
+        if bitmap is not None:
+            win32gui.DeleteObject(bitmap.GetHandle())
+
+
+def capture_window_hybrid(handle: int) -> Image.Image | None:
+    """Capture covered/minimized clients without focus, cursor, or desktop theft."""
+    placement = None
+    was_minimized = False
+    was_hidden = False
+    foreground = 0
+    try:
+        foreground = win32gui.GetForegroundWindow()
+        was_minimized = bool(win32gui.IsIconic(handle))
+        was_hidden = not bool(win32gui.IsWindowVisible(handle))
+        if was_minimized or was_hidden:
+            placement = win32gui.GetWindowPlacement(handle)
+            win32gui.ShowWindow(handle, win32con.SW_SHOWNOACTIVATE)
+            win32gui.SetWindowPos(
+                handle,
+                win32con.HWND_BOTTOM,
+                0,
+                0,
+                0,
+                0,
+                win32con.SWP_NOMOVE | win32con.SWP_NOSIZE | win32con.SWP_NOACTIVATE,
+            )
+            time.sleep(0.45)
+
+        image = _capture_print_window(handle)
+        if _capture_has_content(image):
+            return image
+
+        # A desktop-region fallback is safe only if the target already owns
+        # foreground. Otherwise it would OCR whichever app covers that region.
+        if foreground == handle and not was_minimized:
+            x, y, width, height = get_window_rect(handle)
+            visible = ImageGrab.grab(
+                bbox=(x, y, x + width, y + height), all_screens=True
+            ).convert("RGB")
+            if _capture_has_content(visible):
+                return visible
+        logging.warning("Background capture returned an empty or unsafe frame")
+        return None
+    except Exception as error:
+        logging.warning("Hybrid capture failed: %s", error)
+        return None
+    finally:
+        if (was_minimized or was_hidden) and win32gui.IsWindow(handle):
+            try:
+                if placement is not None:
+                    win32gui.SetWindowPlacement(handle, placement)
+                if was_hidden:
+                    win32gui.ShowWindow(handle, win32con.SW_HIDE)
+                elif was_minimized:
+                    win32gui.ShowWindow(handle, win32con.SW_MINIMIZE)
+            except Exception as error:
+                logging.warning("Could not restore minimized state: %s", error)
+        if foreground and foreground != handle and win32gui.IsWindow(foreground):
+            try:
+                if win32gui.GetForegroundWindow() == handle:
+                    win32gui.SetForegroundWindow(foreground)
+            except Exception:
+                pass
 
 
 def post_click_background(handle: int, screen_x: int, screen_y: int) -> bool:
@@ -549,6 +774,8 @@ class OcrEngine:
                 raw_results = list(zip(boxes, texts, scores))
             else:
                 raw_results = []
+            if raw_results is None:
+                return []
 
             lines = []
             for item in raw_results:
@@ -681,7 +908,7 @@ class WeComLayoutParser:
 
     def capture_and_parse(self, handle: int) -> dict:
         """截屏并解析整个企微窗口"""
-        img = capture_window(handle)
+        img = capture_window_hybrid(handle)
         if img is None:
             return {"ok": False, "error": "截图失败"}
 
@@ -707,6 +934,9 @@ class WeComLayoutParser:
             "header_height": HEADER_HEIGHT_PX,
             "input_height": INPUT_HEIGHT_PX,
             "current_module": current_module,  # 新增：当前模块
+            "current_conversation": self._extract_current_chat_title(
+                img, nav_w + conv_w
+            ),
             "conversations": [],
             "chat_messages": [],
         }
@@ -733,6 +963,29 @@ class WeComLayoutParser:
                 pass
 
         return result
+
+    def _extract_current_chat_title(self, img: Image.Image, chat_x: int) -> str:
+        """Read the selected chat title even when its list item is off screen."""
+        if not self.ocr.available() or chat_x >= img.width:
+            return ""
+
+        header = img.crop((chat_x, 0, img.width, HEADER_HEIGHT_PX))
+        candidates = []
+        for line in self.ocr.recognize(header):
+            text = str(line.get("text") or "").strip()
+            if len(text) < 2:
+                continue
+            # The selected chat title is the left-most label in the chat header.
+            # Ignore timestamps and window/action labels near the right edge.
+            if TIME_PATTERN.match(text) or text in ("搜索", "更多"):
+                continue
+            if line.get("x", 0) > header.width * 0.55:
+                continue
+            candidates.append(line)
+
+        if not candidates:
+            return ""
+        return str(min(candidates, key=lambda item: item.get("x", 0))["text"]).strip()
 
     def _parse_conversation_list(
         self, img: Image.Image, offset_x: int, offset_y: int, win_x: int, win_y: int
@@ -964,6 +1217,11 @@ class WeComLayoutParser:
             text = line["text"].strip()
             if not text or len(text) < 2:
                 continue
+            # Toolbar/icon fragments occasionally become long gibberish at a
+            # very low confidence and would otherwise look like the newest
+            # incoming message.
+            if float(line.get("score", 0)) < 0.75:
+                continue
             if text in ("发送(S)", "快速会议"):
                 continue
             messages.append({
@@ -973,6 +1231,9 @@ class WeComLayoutParser:
                 "w": line["w"],
                 "h": line["h"],
                 "score": line.get("score", 0),
+                # 微信/企微聊天气泡：客户消息靠左，己方消息靠右。
+                # 使用文本框中心点做保守判断；中线右侧一律不自动处理。
+                "is_incoming": (line["x"] + line["w"] / 2) < (img.width * 0.52),
             })
         return messages
 
@@ -1020,8 +1281,8 @@ class WeComLayoutParser:
 class ReplyBridge:
     def __init__(self, api_port: int, instance_id: str, dry_run: bool = False):
         self.url = f"http://127.0.0.1:{api_port}/api/v1/message/simulate"
-        self.delivery_url = f"http://127.0.0.1:{api_port}/api/v1/compat/wecom/suggestions/delivery"
-        self.health_url = f"http://127.0.0.1:{api_port}/api/v1/compat/wecom/health"
+        self.delivery_url = f"http://127.0.0.1:{api_port}/api/v1/compat/{COMPAT_KEY}/suggestions/delivery"
+        self.health_url = f"http://127.0.0.1:{api_port}/api/v1/compat/{COMPAT_KEY}/health"
         self.instance_id = instance_id
         self.dry_run = dry_run
 
@@ -1035,14 +1296,14 @@ class ReplyBridge:
             return None
 
         payload = {
-            "platformId": "win_wecom",
-            "platformName": "企微",
+            "platformId": PLATFORM_ID,
+            "platformName": PLATFORM_NAME,
             "instanceId": self.instance_id,
             "sender": friend,
             "content": content,
             "ctx": {
                 "CTX_USERNAME": friend,
-                "CTX_PLATFORM": "企微",
+                "CTX_PLATFORM": PLATFORM_NAME,
                 "CTX_HAS_NEW_MESSAGE": "true",
             },
         }
@@ -1229,6 +1490,9 @@ def should_process_message(conv: dict, my_name: str = "") -> tuple[bool, str]:
     raw_texts = conv.get("raw_texts", [])
     preview = conv.get("preview", "")
 
+    if conv.get("unread", 0) > 20 and not is_at_me(conv, my_name):
+        return False, "高未读会话疑似群/系统积压"
+
     # === 层级 0：铁证级邮件检测 ===
     all_text = name + " " + preview + " " + " ".join(raw_texts)
     # 含邮件地址 → 100% 是邮件内容
@@ -1335,6 +1599,42 @@ def _normalize_msg_fp(name: str, content: str) -> tuple[str, str]:
     return (name, normalized)
 
 
+def _conversation_baseline_file() -> Path:
+    return ROOT / ".tmp-userdata" / f"{COMPAT_KEY}-conversation-baselines.json"
+
+
+def _load_conversation_baselines() -> tuple[dict[str, tuple[str, int]], bool]:
+    path = _conversation_baseline_file()
+    if not path.exists():
+        return {}, False
+    try:
+        # PowerShell and some Windows editors may prepend a UTF-8 BOM.
+        raw = json.loads(path.read_text(encoding="utf-8-sig"))
+        baselines = {
+            str(name): (str(state[0]), int(state[1]))
+            for name, state in raw.items()
+            if isinstance(state, list) and len(state) == 2
+        }
+        return baselines, True
+    except Exception as exc:
+        logging.warning("Conversation baseline load failed, rebuilding safely: %s", exc)
+        return {}, False
+
+
+def _save_conversation_baselines(baselines: dict[str, tuple[str, int]]) -> None:
+    path = _conversation_baseline_file()
+    temp_path = path.with_suffix(".tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path.write_text(
+            json.dumps(baselines, ensure_ascii=False, separators=(",", ":")),
+            encoding="utf-8",
+        )
+        temp_path.replace(path)
+    except Exception as exc:
+        logging.warning("Conversation baseline save failed: %s", exc)
+
+
 def run_wecom(
     duration: str,
     instance_id: str,
@@ -1347,15 +1647,18 @@ def run_wecom(
 
     handle = wait_for_window(
         find_wecom_window_handle,
-        window_name="企业微信窗口",
+        window_name=WINDOW_DISPLAY_NAME,
         max_wait=60,
         interval=2,
     )
+    handle = ensure_usable_window(handle)
+    if not handle:
+        raise RuntimeError(f"{WINDOW_DISPLAY_NAME}不可用：窗口最小化、隐藏或尺寸异常")
 
     rect = get_window_rect(handle)
     logging.info(
-        "WeCom window: handle=%d size=%dx%d pos=(%d,%d)",
-        handle, rect[2], rect[3], rect[0], rect[1],
+        "%s window: handle=%d size=%dx%d pos=(%d,%d)",
+        PLATFORM_NAME, handle, rect[2], rect[3], rect[0], rect[1],
     )
 
     port = api_port or discover_api_port()
@@ -1368,10 +1671,15 @@ def run_wecom(
     seen: dict[tuple[str, str], float] = {}
     last_full_scan_at = 0.0
     last_current_chat_name = ""
+    conversation_baselines, conversation_baselines_initialized = (
+        _load_conversation_baselines()
+    )
+    current_chat_baselines: dict[str, tuple[str, ...]] = {}
+    current_chat_candidates: dict[str, tuple[tuple[str, ...], int]] = {}
 
     logging.info(
-        "WeCom OCR sidecar started: port=%s ocr=%s dryRun=%s",
-        port, ocr.available(), dry_run,
+        "%s OCR sidecar started: port=%s ocr=%s dryRun=%s",
+        PLATFORM_NAME, port, ocr.available(), dry_run,
     )
 
     # 启动独立心跳线程，避免主循环阻塞导致 Node.js 侧心跳超时
@@ -1393,6 +1701,7 @@ def run_wecom(
 
             # 确保窗口还存在
             handle = find_wecom_window_handle()
+            handle = ensure_usable_window(handle)
             if not handle:
                 logging.debug("WeCom window gone, waiting...")
                 time.sleep(3.0)
@@ -1446,9 +1755,37 @@ def run_wecom(
                     skipped_count, len(filtered_convs),
                 )
 
-            # ---- 策略 1：在过滤后的会话中检测有未读消息的 ----
+            # ---- 启动基线：忽略采集器启动前已经存在的未读/历史消息 ----
+            changed_convs = []
+            for conv in filtered_convs:
+                name = str(conv.get("name", "")).strip()
+                preview = str(conv.get("preview", "")).strip()
+                if not name:
+                    continue
+                state = (_normalize_msg_fp(name, preview)[1], int(conv.get("unread", 0)))
+                previous = conversation_baselines.get(name)
+                conversation_baselines[name] = state
+                if previous is None:
+                    continue
+                preview_changed = bool(state[0]) and state[0] != previous[0]
+                became_unread = previous[1] <= 0 < state[1]
+                if preview_changed or became_unread:
+                    changed_convs.append(conv)
+
+            _save_conversation_baselines(conversation_baselines)
+
+            if not conversation_baselines_initialized:
+                conversation_baselines_initialized = True
+                logging.info(
+                    "Conversation baseline initialized: %d conversations; existing unread messages ignored",
+                    len(conversation_baselines),
+                )
+                time.sleep(2.0)
+                continue
+
+            # ---- 策略 1：只处理基线建立后发生变化的未读消息 ----
             # 去重：同一会话 3 分钟内不重复处理（避免未读数持续导致反复采集）
-            unread_convs = [c for c in filtered_convs if c.get("unread", 0) > 0]
+            unread_convs = [c for c in changed_convs if c.get("unread", 0) > 0]
             unread_convs = [
                 c for c in unread_convs
                 if now - seen.get(("__unread__", c.get("name", "")), 0) >= 180
@@ -1457,14 +1794,19 @@ def run_wecom(
             # ---- 策略 2：检测会话列表预览变化（新消息）----
             # 通过预览文本变化来检测新消息，不需要点击
             # 草稿/自己回复的文本也要跳过（以[草稿]开头或含"已发送"等）
-            DRAFT_PREFIXES = ("[草稿]", "[已发送]", "[发送失败]", "[Draft]")
+            DRAFT_PREFIXES = (
+                "[草稿]", "[已发送]", "[发送失败]", "[Draft]",
+                "我:", "我：", "Me:", "Me：",
+            )
             new_message_convs = []
-            for conv in filtered_convs:
+            for conv in changed_convs:
                 name = conv.get("name", "")
                 preview = conv.get("preview", "")
                 if not name or name in ("消息", "邮件", "文档", "日程"):
                     continue
                 if not preview:
+                    continue
+                if REQUIRE_UNREAD_TO_PROCESS and conv.get("unread", 0) <= 0:
                     continue
 
                 # 跳过草稿/己方回复文本
@@ -1496,6 +1838,9 @@ def run_wecom(
             # 如果没有未读消息，也处理当前打开的会话（OCR 右侧聊天区）
             processed_this_round: set[str] = set()  # 本轮已处理的联系人（防重复）
             if not target_convs:
+                if not PROCESS_CURRENT_CHAT_WITHOUT_UNREAD:
+                    time.sleep(2.0)
+                    continue
                 # 直接解析当前聊天区的内容
                 chat_msgs = layout.get("chat_messages", [])
                 if chat_msgs:
@@ -1505,6 +1850,7 @@ def run_wecom(
                         last_current_chat_name = current_name
                         logging.debug("Current chat: %s", current_name)
 
+                    latest_msg = None
                     if current_name:
                         # 检查当前会话是否应该处理（私聊或@我）
                         current_conv = find_conv_by_name(convs, current_name)
@@ -1516,6 +1862,30 @@ def run_wecom(
                                 continue
 
                         latest_msg = find_latest_customer_msg(chat_msgs, current_name)
+                        snapshot = _incoming_chat_snapshot(chat_msgs, current_name)
+                        baseline = current_chat_baselines.get(current_name)
+                        if baseline is None:
+                            current_chat_baselines[current_name] = snapshot
+                            current_chat_candidates.pop(current_name, None)
+                            logging.info("Current chat baseline initialized for %s", current_name)
+                            time.sleep(2.0)
+                            continue
+                        if not snapshot or snapshot == baseline:
+                            current_chat_candidates.pop(current_name, None)
+                            time.sleep(2.0)
+                            continue
+
+                        candidate, stable_rounds = current_chat_candidates.get(
+                            current_name, ((), 0)
+                        )
+                        stable_rounds = stable_rounds + 1 if candidate == snapshot else 1
+                        current_chat_candidates[current_name] = (snapshot, stable_rounds)
+                        if stable_rounds < 2:
+                            time.sleep(2.0)
+                            continue
+
+                        current_chat_baselines[current_name] = snapshot
+                        current_chat_candidates.pop(current_name, None)
                     if latest_msg:
                         # 去掉 @我/@名字 前缀再发送给 LLM
                         latest_msg = clean_at_prefix(latest_msg, my_name)
@@ -1648,8 +2018,12 @@ def _detect_current_conversation(convs: list[dict], layout: dict) -> str:
     则认为该会话是当前选中的。
     """
     chat_msgs = layout.get("chat_messages", [])
-    if not chat_msgs or not convs:
+    if not chat_msgs:
         return ""
+
+    header_name = str(layout.get("current_conversation") or "").strip()
+    if not convs:
+        return header_name
 
     # 取聊天区最后几条消息
     recent_chat_texts = [m["text"] for m in chat_msgs[-5:]]
@@ -1667,11 +2041,9 @@ def _detect_current_conversation(convs: list[dict], layout: dict) -> str:
             if clean_preview in chat_text or chat_text in clean_preview:
                 return conv.get("name", "")
 
-    # 没匹配到，返回第一个有预览的
-    for conv in convs:
-        if conv.get("preview"):
-            return conv.get("name", "")
-    return ""
+    # The header title is more reliable than guessing from a stale/off-screen
+    # conversation list entry.
+    return header_name
 
 
 def _handle_message(
@@ -1768,6 +2140,24 @@ def send_reply_foreground(handle: int, text: str) -> bool:
         restore_desktop_state(desktop_state)
 
 
+def _incoming_chat_snapshot(messages: list[dict], friend_name: str) -> tuple[str, ...]:
+    """生成当前聊天最近三条客户消息的稳定快照，用于检测无未读的新消息。"""
+    candidates = []
+    for msg in messages:
+        text = str(msg.get("text", "")).strip()
+        if msg.get("is_incoming") is not True:
+            continue
+        if not text or TIME_PATTERN.match(text) or text == friend_name:
+            continue
+        if text in ("外部", "星期五", "星期六", "星期日", "星期一", "星期二", "星期三", "星期四"):
+            continue
+        normalized = _normalize_msg_fp(friend_name, text)[1]
+        if normalized:
+            candidates.append((msg.get("y", 0), normalized))
+    candidates.sort(key=lambda item: item[0])
+    return tuple(text for _, text in candidates[-3:])
+
+
 def find_latest_customer_msg(messages: list[dict], friend_name: str) -> str | None:
     """从聊天区 OCR 结果中找出最新的客户消息"""
     if not messages:
@@ -1776,9 +2166,13 @@ def find_latest_customer_msg(messages: list[dict], friend_name: str) -> str | No
     candidates = []
     for msg in messages:
         text = msg["text"]
+        if msg.get("is_incoming") is not True:
+            continue
         if TIME_PATTERN.match(text):
             continue
-        if len(text) < 4:
+        # Common customer messages such as “你好”, “在吗”, “有货” are two
+        # Chinese characters and must not be discarded as OCR noise.
+        if len(text) < 2:
             continue
         if text == friend_name:
             continue

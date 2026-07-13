@@ -5,6 +5,11 @@
 # === 构建产物 / 安装包 ===
 _installer-stage/
 release/
+!ChatGPT-On-CS-main/ChatGPT-On-CS-main/release/
+ChatGPT-On-CS-main/ChatGPT-On-CS-main/release/*
+!ChatGPT-On-CS-main/ChatGPT-On-CS-main/release/app/
+ChatGPT-On-CS-main/ChatGPT-On-CS-main/release/app/*
+!ChatGPT-On-CS-main/ChatGPT-On-CS-main/release/app/package.json
 *.exe
 *.asar
 *.asar.bak.*

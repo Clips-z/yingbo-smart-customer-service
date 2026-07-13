@@ -5,6 +5,10 @@ import { Platform } from '../types';
 import { Config } from '../entities/config';
 
 const execFileAsync = promisify(execFile);
+const PROCESS_CACHE_MS = 3_000;
+let cachedProcessNames = new Set<string>();
+let processCacheAt = 0;
+let processQueryInFlight: Promise<Set<string>> | undefined;
 
 const PLATFORMS: Array<Platform & { processes: string[] }> = [
   {
@@ -19,7 +23,13 @@ const PLATFORMS: Array<Platform & { processes: string[] }> = [
     name: '京麦',
     type: 'E_COMMERCE',
     env: 'desktop',
-    processes: ['jingmai.exe', 'jingmaiworkbench.exe', 'jdworkstation.exe'],
+    processes: [
+      'jingmai.exe',
+      'jingmaiworkbench.exe',
+      'jdworkstation.exe',
+      'jmworkstation.exe',
+      'jdm_dd_workbench.exe',
+    ],
   },
   {
     id: 'win_wechat',
@@ -53,21 +63,36 @@ const PLATFORMS: Array<Platform & { processes: string[] }> = [
 
 async function getProcessNames(): Promise<Set<string>> {
   if (process.platform !== 'win32') return new Set();
-  try {
-    const { stdout } = await execFileAsync('tasklist.exe', ['/FO', 'CSV', '/NH'], {
+  if (Date.now() - processCacheAt < PROCESS_CACHE_MS) {
+    return cachedProcessNames;
+  }
+  if (processQueryInFlight) return processQueryInFlight;
+
+  processQueryInFlight = execFileAsync(
+    'tasklist.exe',
+    ['/FO', 'CSV', '/NH'],
+    {
       encoding: 'utf8',
       windowsHide: true,
       maxBuffer: 5 * 1024 * 1024,
+      timeout: 5_000,
+    },
+  )
+    .then(({ stdout }) => {
+      cachedProcessNames = new Set(
+        stdout
+          .split(/\r?\n/)
+          .map((line) => line.match(/^"([^"]+)"/)?.[1]?.toLowerCase())
+          .filter((name): name is string => Boolean(name)),
+      );
+      processCacheAt = Date.now();
+      return cachedProcessNames;
+    })
+    .catch(() => cachedProcessNames)
+    .finally(() => {
+      processQueryInFlight = undefined;
     });
-    return new Set(
-      stdout
-        .split(/\r?\n/)
-        .map((line) => line.match(/^"([^"]+)"/)?.[1]?.toLowerCase())
-        .filter((name): name is string => Boolean(name)),
-    );
-  } catch {
-    return new Set();
-  }
+  return processQueryInFlight;
 }
 
 export async function getActivePlatforms(): Promise<Platform[]> {

@@ -31,6 +31,8 @@ import {
 import { PddSidecarService } from './services/pddSidecarService';
 import { DouyinSidecarService } from './services/douyinSidecarService';
 import { RagService } from './services/ragService';
+import { ReplyModeDeniedError } from './services/replySafetyPolicy';
+import { KnowledgeService } from './services/knowledgeService';
 import { ReplySuggestion } from './entities/replySuggestion';
 import {
   CTX_APP_ID,
@@ -65,6 +67,8 @@ class BKServer {
   private loggerService: LoggerService;
 
   private appService: AppService;
+
+  private knowledgeService: KnowledgeService;
 
   private qianniuCompatService: QianniuCompatService;
 
@@ -143,6 +147,7 @@ class BKServer {
     );
 
     this.appService = new AppService(this.dispatchService, sequelize);
+    this.knowledgeService = new KnowledgeService(sequelize);
     this.qianniuCompatService = new QianniuCompatService(
       this.dispatchService,
       this.appService,
@@ -157,6 +162,9 @@ class BKServer {
     this.ragService = new RagService(
       this.loggerService,
       this.dispatchService,
+    );
+    this.knowledgeService.setIndexer((text, filename) =>
+      this.ragService.uploadText(text, filename),
     );
 
     this.wecomSidecarService = new WecomSidecarService(
@@ -925,6 +933,10 @@ class BKServer {
       });
     });
 
+    this.app.get('/api/v1/compat/qianniu/health', (_req, res) => {
+      res.json({ success: true, data: this.qianniuCompatService.getHealth() });
+    });
+
     this.app.post(
       '/api/v1/compat/qianniu/mode',
       asyncHandler(async (req, res) => {
@@ -935,10 +947,30 @@ class BKServer {
             .json({ success: false, message: 'Invalid reply mode' });
           return;
         }
-        await this.qianniuCompatService.setMode(
-          mode as 'hint' | 'assist' | 'unattended',
-        );
+        try {
+          await this.qianniuCompatService.setMode(
+            mode as 'hint' | 'assist' | 'unattended',
+          );
+        } catch (error) {
+          if (error instanceof ReplyModeDeniedError) {
+            res.status(error.statusCode).json({
+              success: false,
+              code: error.code,
+              message: error.message,
+            });
+            return;
+          }
+          throw error;
+        }
         res.json({ success: true, data: { mode } });
+      }),
+    );
+
+    this.app.post(
+      '/api/v1/compat/qianniu/emergency-stop',
+      asyncHandler(async (_req, res) => {
+        const cancelled = await this.qianniuCompatService.emergencyStop();
+        res.json({ success: true, data: { mode: 'assist', cancelled } });
       }),
     );
 
@@ -959,10 +991,30 @@ class BKServer {
             .json({ success: false, message: 'Invalid reply mode' });
           return;
         }
-        await this.wechatSidecarService.setMode(
-          mode as 'hint' | 'assist' | 'unattended',
-        );
+        try {
+          await this.wechatSidecarService.setMode(
+            mode as 'hint' | 'assist' | 'unattended',
+          );
+        } catch (error) {
+          if (error instanceof ReplyModeDeniedError) {
+            res.status(error.statusCode).json({
+              success: false,
+              code: error.code,
+              message: error.message,
+            });
+            return;
+          }
+          throw error;
+        }
         res.json({ success: true, data: { mode } });
+      }),
+    );
+
+    this.app.post(
+      '/api/v1/compat/wechat/emergency-stop',
+      asyncHandler(async (_req, res) => {
+        const cancelled = await this.wechatSidecarService.emergencyStop();
+        res.json({ success: true, data: { mode: 'assist', cancelled } });
       }),
     );
 
@@ -1636,6 +1688,89 @@ class BKServer {
 
     // Health check endpoint
     // TODO: 后续需要根据通过 WS 去检查后端服务是否健康
+    // 持久化知识库
+    this.app.get(
+      '/api/v1/knowledge/products',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.listProducts(req.query) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/products/create',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.createProduct(req.body) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/products/status',
+      asyncHandler(async (req, res) => {
+        const ids = Array.isArray(req.body.ids) ? req.body.ids.map(String).slice(0, 500) : [];
+        const updated = await this.knowledgeService.setProductsOnSale(ids, Boolean(req.body.onSale));
+        res.json({ success: true, data: { updated } });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/products/delete',
+      asyncHandler(async (req, res) => {
+        const ids = Array.isArray(req.body.ids) ? req.body.ids.map(String).slice(0, 500) : [];
+        const deleted = await this.knowledgeService.deleteProducts(ids);
+        res.json({ success: true, data: { deleted } });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/products/import',
+      asyncHandler(async (req, res) => {
+        const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+        const results = await this.knowledgeService.importProducts(rows);
+        res.json({ success: true, data: { results } });
+      }),
+    );
+    this.app.get(
+      '/api/v1/knowledge/store-qa',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.listStoreKnowledge(req.query) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/store-qa/create',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.createStoreKnowledge(req.body) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/store-qa/update',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.updateStoreKnowledge(String(req.body.id || ''), req.body) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/store-qa/delete',
+      asyncHandler(async (req, res) => {
+        const deleted = await this.knowledgeService.deleteStoreKnowledge(String(req.body.id || ''));
+        res.json({ success: true, data: { deleted } });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/store-qa/import',
+      asyncHandler(async (req, res) => {
+        const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+        const results = await this.knowledgeService.importStoreKnowledge(rows);
+        res.json({ success: true, data: { results } });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/sync/retry',
+      asyncHandler(async (req, res) => {
+        const kind = String(req.body.kind || '') as 'product' | 'store';
+        if (!['product', 'store'].includes(kind)) {
+          res.status(400).json({ success: false, message: '无效的知识类型' });
+          return;
+        }
+        const data = await this.knowledgeService.retrySync(kind, String(req.body.id || ''));
+        res.json({ success: true, data });
+      }),
+    );
+
     this.app.get('/api/v1/base/health', async (req, res) => {
       try {
         const resp = await this.dispatchService.checkHealth();

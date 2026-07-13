@@ -4,6 +4,15 @@ import { Instance } from '../entities/instance';
 import { Config } from '../entities/config';
 import { Plugin } from '../entities/plugin';
 
+const LOCAL_COMPAT_PLATFORM_IDS = new Set([
+  'win_qianniu',
+  'win_jinmai',
+  'win_wechat',
+  'win_wecom',
+  'win_pdd',
+  'win_douyin',
+]);
+
 export class AppService {
   private dispatchService: DispatchService;
 
@@ -53,13 +62,14 @@ export class AppService {
 
         const tasks = await Instance.findAll({ transaction: t });
         const result = await this.dispatchService.updateTasks(tasks);
-        if (!result) {
+        const isLocalCompat = LOCAL_COMPAT_PLATFORM_IDS.has(appId);
+        if (!result && !isLocalCompat) {
           throw new Error('Failed to create collector task');
         }
 
         if (Array.isArray(result)) {
           const failedTask = result.find((task) => task.error);
-          if (failedTask) {
+          if (failedTask && !isLocalCompat) {
             throw new Error(failedTask.error);
           }
 
@@ -72,6 +82,22 @@ export class AppService {
           instance.env_id = String(instance.id);
         }
         await instance.save({ transaction: t });
+
+        if (isLocalCompat) {
+          const [config] = await Config.findOrCreate({
+            where: { platform_id: appId, instance_id: '' },
+            defaults: {
+              platform_id: appId,
+              instance_id: '',
+              global: false,
+              active: true,
+            },
+            transaction: t,
+          });
+          if (!config.active) {
+            await config.update({ active: true }, { transaction: t });
+          }
+        }
         return instance;
       })
       .catch((error) => {

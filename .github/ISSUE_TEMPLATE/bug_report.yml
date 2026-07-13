@@ -1,0 +1,53 @@
+name: 问题报告
+description: 报告一个可复现的桌面应用问题。
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你的反馈。请勿提交 API Key、访问令牌、个人消息、客户数据，或包含敏感信息的截图。
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: 可在“设置 → 关于”中查看。
+      placeholder: 1.4.5
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 受影响的平台
+      options:
+        - 微信
+        - 千牛
+        - 企业微信
+        - 京麦
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为与脱敏日志
+      description: 提交前请移除全部密钥、令牌和客户信息。
+    validations:
+      required: true

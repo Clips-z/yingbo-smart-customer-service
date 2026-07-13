@@ -16,7 +16,10 @@ import {
   checkAndAddFields as checkSessionFields,
 } from './entities/session';
 import { initMessage } from './entities/message';
-import { initReplySuggestion } from './entities/replySuggestion';
+import {
+  initReplySuggestion,
+  checkAndAddFields as checkReplySuggestionFields,
+} from './entities/replySuggestion';
 import {
   Plugin,
   initPlugin,
@@ -30,6 +33,8 @@ import {
 } from './entities/keyword';
 import { TransferKeyword, initTransfer } from './entities/transfer';
 import { ReplaceKeyword, initReplace } from './entities/replace';
+import { initProductKnowledge } from './entities/productKnowledge';
+import { initStoreKnowledge } from './entities/storeKnowledge';
 
 // Get user's documents directory path
 // 支持通过环境变量重定向数据库目录（用于沙箱/CI 环境）
@@ -94,6 +99,8 @@ initPlugin(sequelize);
 initInstance(sequelize);
 initTransfer(sequelize);
 initReplace(sequelize);
+initProductKnowledge(sequelize);
+initStoreKnowledge(sequelize);
 
 // 异步初始化和数据填充函数
 async function initDb(): Promise<void> {
@@ -316,6 +323,7 @@ export const databaseReady = (async () => {
       checkSessionFields(sequelize),
       checkKeywordFields(sequelize),
       checkPluginFields(sequelize),
+      checkReplySuggestionFields(sequelize),
     ]);
     await initDb();
     // 解密之前被 safeStorage 加密的 API key（一次性迁移）

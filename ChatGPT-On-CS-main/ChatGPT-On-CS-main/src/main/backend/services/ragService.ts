@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import http from 'http';
 import { LoggerService } from './loggerService';
+import { getRuntimeRoot } from './runtimePaths';
 import { DispatchService } from './dispatchService';
 import { Config } from '../entities/config';
 
@@ -99,6 +100,16 @@ export class RagService {
     };
   }
 
+  public async uploadText(text: string, filename: string): Promise<void> {
+    if (!text.trim()) throw new Error('RAG 同步文本不能为空');
+    const axios = (await import('axios')).default;
+    await axios.post(
+      `http://127.0.0.1:${RAG_PORT}/api/text/upload`,
+      { text, filename },
+      { timeout: 60_000 },
+    );
+  }
+
   /**
    * 定时刷新：检查是否需要启停 RAG 子进程
    */
@@ -149,7 +160,7 @@ export class RagService {
    * 查找 Python 可执行文件和 RAG 脚本路径
    */
   private findPythonAndScript(): { python: string; script: string } | null {
-    const root = process.cwd();
+    const root = getRuntimeRoot();
 
     // 候选 Python 路径（优先级从高到低）
     const pythonCandidates = [
@@ -364,7 +375,16 @@ export class RagService {
     const lines = chunk.split(/\r?\n/).filter(Boolean);
     for (const line of lines) {
       // 过滤掉 ChromaDB 遥测相关的噪音日志
-      if (line.includes('telemetry') || line.includes('Telemetry') || line.includes('capture()')) {
+      if (
+        line.includes('telemetry') ||
+        line.includes('Telemetry') ||
+        line.includes('capture()') ||
+        line.includes('DeprecationWarning') ||
+        line.includes('on_event is deprecated') ||
+        line.includes('FastAPI docs for Lifespan Events') ||
+        line.includes('Read more about it in the') ||
+        line.includes('@app.on_event(')
+      ) {
         continue;
       }
       // 过滤掉 Uvicorn 启动信息（非错误）
