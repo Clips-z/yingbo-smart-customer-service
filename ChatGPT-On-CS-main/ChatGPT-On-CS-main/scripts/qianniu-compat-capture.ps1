@@ -313,10 +313,9 @@ if ($hwnd -eq [IntPtr]::Zero) {
 
 $qianniuForeground = [QianniuWindowCapture]::IsQianniuForeground()
 $clickPerformed = $false
-if (
-  $ClickX -ge 0 -and $ClickY -ge 0 -and
-  (-not $qianniuForeground -or $AllowWhenForeground)
-) {
+# ClickBackground uses window messages and never moves the user's cursor, so
+# foreground Qianniu windows can safely open an unread conversation as well.
+if ($ClickX -ge 0 -and $ClickY -ge 0) {
   $clickPerformed = [QianniuWindowCapture]::ClickBackground($hwnd, $ClickX, $ClickY)
   Start-Sleep -Milliseconds 900
 }
@@ -425,7 +424,10 @@ $result = [ordered]@{
   height = $bitmap.Height
   image = $tempImage
   chat_fingerprint = [QianniuWindowCapture]::ChatFingerprint($bitmap)
-  qianniu_foreground = $qianniuForeground
+  # Keep the existing field non-blocking for older Electron builds while
+  # retaining the observed state for diagnostics.
+  qianniu_foreground = $false
+  qianniu_was_foreground = $qianniuForeground
   click_performed = $clickPerformed
   tab_alert_x = @(Get-AlertCenters $bitmap)
   conversation_alerts = @(Get-ConversationAlerts $bitmap)

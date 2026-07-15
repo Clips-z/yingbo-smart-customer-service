@@ -34,6 +34,10 @@ assets/backend/
 # === 运行时依赖（微信客户端、Python运行时、OCR模型）===
 runtime/
 tools/
+!ChatGPT-On-CS-main/ChatGPT-On-CS-main/runtime/
+!ChatGPT-On-CS-main/ChatGPT-On-CS-main/runtime/requirements-rapidocr.txt
+!ChatGPT-On-CS-main/ChatGPT-On-CS-main/runtime/requirements-wechat.txt
+!ChatGPT-On-CS-main/ChatGPT-On-CS-main/runtime/requirements-rag.txt
 
 # === 运行时缓存 / 临时文件 ===
 .tmp-userdata/

@@ -53,6 +53,7 @@ type CaptureResult = {
   image: string;
   chat_fingerprint: string;
   qianniu_foreground: boolean;
+  qianniu_was_foreground?: boolean;
   click_performed: boolean;
   tab_alert_x: number[];
   conversation_alerts: Array<{ x: number; y: number; pixels: number }>;
@@ -447,12 +448,6 @@ export class QianniuCompatService {
     this.busy = true;
     try {
       let capture = await this.capture({ skipOcr: true });
-      if (
-        process.env.QIANNIU_COMPAT_NON_INTRUSIVE !== '0' &&
-        capture.qianniu_foreground
-      ) {
-        return;
-      }
       const tabAlerts = [...(capture.tab_alert_x || [])].sort(
         (left, right) => left - right,
       );
