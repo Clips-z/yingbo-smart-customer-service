@@ -6,7 +6,7 @@
 
 **Windows 多平台 AI 客服工作台｜消息采集、辅助回复、RAG 知识库与运营管理**
 
-![version](https://img.shields.io/badge/version-1.5.0-4A5BB3)
+![version](https://img.shields.io/badge/version-1.5.1-4A5BB3)
 ![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-2A83FF)
 ![stack](https://img.shields.io/badge/Electron-React%20%2B%20TypeScript-6B73D2)
 ![AI](https://img.shields.io/badge/AI-RAG%20%E5%A2%9E%E5%BC%BA-10B981)
@@ -157,7 +157,7 @@ pnpm build
 
 ### 本地 Sidecar 环境
 
-在 Electron 项目目录创建 `.venv-wechat`，安装 `scripts/requirements-wechat.txt` 中的依赖。RAG 环境位于仓库根目录 `rag-server/.venv`。这两个虚拟环境都被 `.gitignore` 排除，不要提交。
+运行 `pnpm run prepare:python` 会生成打包所需的 Python 3.11 可移植运行时，以及微信、千牛 OCR、RAG 三套隔离依赖。生成的 `tools` 目录被 Git 忽略，不要提交。
 
 ### 打包
 
@@ -166,12 +166,7 @@ cd ChatGPT-On-CS-main/ChatGPT-On-CS-main
 pnpm package
 ```
 
-打包前需要存在：
-
-- `ChatGPT-On-CS-main/ChatGPT-On-CS-main/.venv-wechat`
-- `rag-server/.venv`
-
-构建产物位于 `release/build`。运行时会把 `assets`、`scripts`、RAG 服务和两个 Python 环境放入 Electron `resources` 目录。
+打包命令会自动准备并检查 Python 运行时。构建产物位于 `release/build`；运行时会把 `assets`、`scripts`、RAG 服务和三套隔离依赖放入 Electron `resources` 目录。
 
 ## 项目结构
 

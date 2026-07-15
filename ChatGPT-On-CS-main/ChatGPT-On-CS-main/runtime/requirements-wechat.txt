@@ -1,0 +1,7 @@
+pyautogui==0.9.54
+pywechat127==1.9.8
+rapidocr-onnxruntime==1.4.4
+onnxruntime==1.20.1
+numpy==2.4.6
+opencv-python==5.0.0.93
+pillow==12.2.0

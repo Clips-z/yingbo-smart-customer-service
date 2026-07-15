@@ -38,8 +38,17 @@ extraResources:
     to: scripts
   - from: ../../rag-server
     to: rag-server
-  - from: .venv-wechat
-    to: .venv-wechat
-  - from: ../../rag-server/.venv
-    to: rag-server/.venv
+    filter:
+      - "**/*"
+      - "!.venv/**/*"
+      - "!data/**/*"
+      - "!config.json"
+  - from: tools/python311
+    to: tools/python311
+  - from: tools/rapidocr-py311
+    to: tools/rapidocr-py311
+  - from: tools/wechat-py311
+    to: tools/wechat-py311
+  - from: tools/rag-py311
+    to: tools/rag-py311
 afterPack: "./removeLocales.js"

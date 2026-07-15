@@ -4,16 +4,31 @@ RAG 知识库服务 - OpenAI 兼容 API
 增强功能：递归分块策略 + Reranking 重排序
 """
 import os
+import site
+import sys
+from pathlib import Path
+
+RAG_DIR = Path(__file__).resolve().parent
+RAG_PACKAGES = RAG_DIR.parent / "tools" / "rag-py311"
+site.addsitedir(str(RAG_PACKAGES))
+
 # 在导入 chromadb 之前禁用遥测，避免 posthog capture() 兼容性告警
 os.environ["CHROMA_TELEMETRY_DISABLED"] = "1"
 os.environ["ANONYMIZED_TELEMETRY"] = "False"
+
+try:
+    import posthog
+
+    posthog.disabled = True
+    posthog.capture = lambda *args, **kwargs: None
+except ImportError:
+    pass
 
 import re
 import json
 import uuid
 import time
 import httpx
-from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 
 import chromadb
