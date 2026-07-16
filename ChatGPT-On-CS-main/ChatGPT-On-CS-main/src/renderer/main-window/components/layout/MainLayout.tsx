@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Flex, Text, VStack } from '@chakra-ui/react';
+import { Box, Flex, IconButton, Text, Tooltip, VStack } from '@chakra-ui/react';
+import { FiSidebar } from 'react-icons/fi';
 import AppSidebar, { NavSection, KnowledgeSubKey } from './AppSidebar';
 import KnowledgeSubSidebar from './KnowledgeSubSidebar';
 import AppManager from '../AppManager';
@@ -17,14 +18,28 @@ import ContentSecurity from '../ContentSecurity';
 const DashboardContent = () => (
   <VStack spacing={4} align="stretch">
     {/* 区块标题 */}
-    <Box pt={1}>
-      <Text fontSize="18px" fontWeight={800} color="gray.800" letterSpacing="-0.01em">
-        平台管理
-      </Text>
-      <Text fontSize="12.5px" color="gray.400" mt={0.5}>
-        启停各平台客服，查看自动回复运行状态
-      </Text>
-    </Box>
+    <Flex pt={1} align="center" justify="space-between">
+      <Box>
+        <Text fontSize="18px" fontWeight={800} color="gray.800" letterSpacing="-0.01em">
+          平台管理
+        </Text>
+        <Text fontSize="12.5px" color="gray.400" mt={0.5}>
+          启停各平台客服，查看自动回复运行状态
+        </Text>
+      </Box>
+      <Tooltip label="打开千牛伴随面板" placement="left" hasArrow>
+        <IconButton
+          aria-label="打开千牛伴随面板"
+          icon={<FiSidebar size={18} />}
+          size="sm"
+          variant="outline"
+          colorScheme="green"
+          onClick={() =>
+            window.electron.ipcRenderer.sendMessage('open-companion-window')
+          }
+        />
+      </Tooltip>
+    </Flex>
 
     {/* 平台卡片 */}
     <AppManager />

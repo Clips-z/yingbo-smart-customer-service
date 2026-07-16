@@ -19,6 +19,7 @@ import {
   ReplySuggestionStatus,
   WechatCollectorHealth,
   QianniuCollectorHealth,
+  QianniuCompanionContext,
   WecomCollectorHealth,
 } from './platform';
 import { GET, POST } from '../common/api/request';
@@ -389,6 +390,19 @@ export async function getQianniuCollectorHealth() {
   return GET<{ data: QianniuCollectorHealth }>('/api/v1/compat/qianniu/health');
 }
 
+export async function refreshQianniuCompanion() {
+  return POST<{ data: { accepted: boolean } }>(
+    '/api/v1/compat/qianniu/refresh',
+    {},
+  );
+}
+
+export async function getQianniuCompanionContext() {
+  return GET<{ data?: QianniuCompanionContext }>(
+    '/api/v1/compat/qianniu/context',
+  );
+}
+
 export async function getWecomCollectorHealth() {
   return GET<{ data: WecomCollectorHealth }>('/api/v1/compat/wecom/health');
 }
@@ -411,6 +425,17 @@ export async function fillQianniuSuggestion(id: number, content: string) {
   return POST<{ data: ReplySuggestion }>(
     '/api/v1/compat/qianniu/suggestions/fill',
     { id, content },
+  );
+}
+
+export async function saveQianniuSuggestionDraft(
+  id: number,
+  content: string,
+  contextRevision?: number | null,
+) {
+  return POST<{ data: ReplySuggestion }>(
+    '/api/v1/compat/qianniu/suggestions/draft',
+    { id, content, contextRevision },
   );
 }
 

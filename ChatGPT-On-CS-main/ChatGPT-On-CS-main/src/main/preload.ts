@@ -26,7 +26,11 @@ export type Channels =
   | 'open-settings-window'
   | 'open-dataview-window'
   | 'update-settings-params'
-  | 'get-version';
+  | 'get-version'
+  | 'open-companion-window'
+  | 'companion-command'
+  | 'companion-state'
+  | 'get-companion-state';
 
 // 运行时白名单 — 防止渲染进程注入未知通道
 const validChannels = new Set<Channels>([
@@ -54,6 +58,10 @@ const validChannels = new Set<Channels>([
   'open-dataview-window',
   'update-settings-params',
   'get-version',
+  'open-companion-window',
+  'companion-command',
+  'companion-state',
+  'get-companion-state',
 ]);
 
 // 通道参数校验规则
@@ -65,6 +73,8 @@ const channelArgRules: Partial<Record<Channels, (args: unknown[]) => boolean>> =
   'get-env': (args) => args.length === 1 && typeof args[0] === 'string',
   'open-url': (args) => args.length === 1 && typeof args[0] === 'string',
   'notification': (args) => args.length >= 1 && typeof args[0] === 'string',
+  'companion-command': (args) =>
+    args.length === 1 && typeof args[0] === 'object' && args[0] !== null,
 };
 
 function validateChannel(channel: string): asserts channel is Channels {

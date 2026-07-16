@@ -19,6 +19,7 @@ import setupIpcHandlers from './ipcHandlers';
 import { setServerReadyState } from './ipcHandlers';
 import setupCron from './cron';
 import BackendServiceManager from './system/backend';
+import { createCompanionWindow } from './windows/companion-main';
 
 // ========== 启动性能优化 ==========
 // 必须在 import { app } 之后执行，避免 ts-node 转译下的 TDZ 错误
@@ -198,6 +199,7 @@ const createWindow = async () => {
       mainWindow.minimize();
     } else {
       mainWindow.show();
+      createCompanionWindow();
     }
   });
 

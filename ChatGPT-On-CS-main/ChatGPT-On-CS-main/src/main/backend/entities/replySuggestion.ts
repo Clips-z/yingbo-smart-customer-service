@@ -23,6 +23,34 @@ export class ReplySuggestion extends Model {
 
   declare reply_content: string;
 
+  declare original_reply_content: string | null;
+
+  declare draft_content: string | null;
+
+  declare conversation_key: string | null;
+
+  declare draft_key: string | null;
+
+  declare store_id: string | null;
+
+  declare account_id: string | null;
+
+  declare contact_id: string | null;
+
+  declare chat_fingerprint: string | null;
+
+  declare product_id: string | null;
+
+  declare product_title: string | null;
+
+  declare incoming_message_fingerprint: string | null;
+
+  declare context_revision: number | null;
+
+  declare draft_state: string | null;
+
+  declare draft_updated_at: Date | null;
+
   declare message_key: string | null;
 
   declare delivery_request_id: string | null;
@@ -64,6 +92,62 @@ export function initReplySuggestion(sequelize: Sequelize) {
       reply_content: {
         type: DataTypes.TEXT,
         allowNull: false,
+      },
+      original_reply_content: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      draft_content: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      conversation_key: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+      draft_key: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+      store_id: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+      },
+      account_id: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+      },
+      contact_id: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+      },
+      chat_fingerprint: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+      },
+      product_id: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+      },
+      product_title: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+      },
+      incoming_message_fingerprint: {
+        type: DataTypes.STRING(64),
+        allowNull: true,
+      },
+      context_revision: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+      },
+      draft_state: {
+        type: DataTypes.STRING(32),
+        allowNull: true,
+      },
+      draft_updated_at: {
+        type: DataTypes.DATE,
+        allowNull: true,
       },
       message_key: {
         type: DataTypes.STRING(64),
@@ -108,6 +192,33 @@ export function initReplySuggestion(sequelize: Sequelize) {
 
 export async function checkAndAddFields(sequelize: Sequelize) {
   const tableDescription = await ReplySuggestion.describe();
+  const nullableColumns: Record<string, object> = {
+    original_reply_content: { type: DataTypes.TEXT, allowNull: true },
+    draft_content: { type: DataTypes.TEXT, allowNull: true },
+    conversation_key: { type: DataTypes.STRING(64), allowNull: true },
+    draft_key: { type: DataTypes.STRING(64), allowNull: true },
+    store_id: { type: DataTypes.STRING(255), allowNull: true },
+    account_id: { type: DataTypes.STRING(255), allowNull: true },
+    contact_id: { type: DataTypes.STRING(255), allowNull: true },
+    chat_fingerprint: { type: DataTypes.STRING(255), allowNull: true },
+    product_id: { type: DataTypes.STRING(255), allowNull: true },
+    product_title: { type: DataTypes.STRING(500), allowNull: true },
+    incoming_message_fingerprint: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+    },
+    context_revision: { type: DataTypes.INTEGER, allowNull: true },
+    draft_state: { type: DataTypes.STRING(32), allowNull: true },
+    draft_updated_at: { type: DataTypes.DATE, allowNull: true },
+  };
+
+  for (const [name, definition] of Object.entries(nullableColumns)) {
+    if (!tableDescription[name]) {
+      await sequelize
+        .getQueryInterface()
+        .addColumn('n_reply_suggestions', name, definition);
+    }
+  }
   // @ts-ignore
   if (!tableDescription.message_key) {
     await sequelize
@@ -137,5 +248,11 @@ export async function checkAndAddFields(sequelize: Sequelize) {
   }
   await sequelize.query(
     'CREATE UNIQUE INDEX IF NOT EXISTS n_reply_suggestions_message_key_unique ON n_reply_suggestions (message_key) WHERE message_key IS NOT NULL',
+  );
+  await sequelize.query(
+    'CREATE INDEX IF NOT EXISTS n_reply_suggestions_conversation_created ON n_reply_suggestions (conversation_key, created_at)',
+  );
+  await sequelize.query(
+    'CREATE INDEX IF NOT EXISTS n_reply_suggestions_draft_key ON n_reply_suggestions (draft_key)',
   );
 }

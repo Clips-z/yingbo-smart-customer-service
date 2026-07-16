@@ -29,6 +29,7 @@ import {
   fillQianniuSuggestion,
   fillWechatSuggestion,
   fillWecomSuggestion,
+  saveQianniuSuggestionDraft,
   updateQianniuSuggestionStatus,
 } from '../../../common/services/platform/controller';
 import { QianniuReplyMode, ReplySuggestion } from '../../../common/services/platform/platform';
@@ -221,13 +222,66 @@ const ConversationDetail = React.memo(
     onChanged: () => void;
   }) => {
     const { toast } = useToast();
-    const [content, setContent] = useState(item.reply_content.slice(0, 300));
+    const initialContent = (item.draft_content || item.reply_content).slice(0, 300);
+    const [content, setContent] = useState(initialContent);
     const [isWorking, setIsWorking] = useState(false);
     const { onCopy, hasCopied } = useClipboard(content);
+    const activeItemRef = React.useRef(item);
+    const contentRef = React.useRef(initialContent);
+    const lastPersistedRef = React.useRef({ id: item.id, content: initialContent });
+
+    contentRef.current = content;
+
+    const persistDraft = useCallback(
+      async (target: ReplySuggestion, value: string) => {
+        const nextContent = value.trim();
+        if (
+          target.platform_id !== 'win_qianniu' ||
+          !nextContent ||
+          target.status === 'sent' ||
+          (lastPersistedRef.current.id === target.id &&
+            lastPersistedRef.current.content === nextContent)
+        ) {
+          return;
+        }
+        await saveQianniuSuggestionDraft(
+          target.id,
+          nextContent,
+          target.context_revision,
+        );
+        lastPersistedRef.current = { id: target.id, content: nextContent };
+      },
+      [],
+    );
 
     React.useEffect(() => {
-      setContent(item.reply_content.slice(0, 300));
-    }, [item.reply_content]);
+      const previous = activeItemRef.current;
+      if (previous.id === item.id) return;
+
+      void persistDraft(previous, contentRef.current).catch(() => undefined);
+      const restored = (item.draft_content || item.reply_content).slice(0, 300);
+      activeItemRef.current = item;
+      contentRef.current = restored;
+      lastPersistedRef.current = { id: item.id, content: restored };
+      setContent(restored);
+    }, [item, persistDraft]);
+
+    React.useEffect(() => {
+      if (item.platform_id !== 'win_qianniu' || item.status === 'sent') return undefined;
+      const timer = window.setTimeout(() => {
+        void persistDraft(item, content).catch(() => undefined);
+      }, 500);
+      return () => window.clearTimeout(timer);
+    }, [content, item, persistDraft]);
+
+    React.useEffect(
+      () => () => {
+        void persistDraft(activeItemRef.current, contentRef.current).catch(
+          () => undefined,
+        );
+      },
+      [persistDraft],
+    );
 
     const handleFill = useCallback(
       async (

@@ -2,7 +2,11 @@ import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import crypto from 'crypto';
 import path from 'path';
 import readline from 'readline';
-import { getRuntimeRoot, runtimePath } from './runtimePaths';
+import {
+  getRuntimeRoot,
+  rapidOcrPythonPath,
+  runtimePath,
+} from './runtimePaths';
 
 export type QianniuOcrCandidate = {
   sender: string;
@@ -27,6 +31,12 @@ export type QianniuOcrResult = {
     y: number;
     width: number;
     height: number;
+    active_tab?: boolean;
+  }>;
+  recent_messages?: Array<{
+    direction: 'incoming' | 'outgoing';
+    content: string;
+    y: number;
   }>;
   error?: string;
 };
@@ -44,6 +54,12 @@ export class QianniuOcrWorker {
 
   private stderrTail = '';
 
+  private warmed = false;
+
+  public isWarm(): boolean {
+    return this.warmed && Boolean(this.process && !this.process.killed);
+  }
+
   public async recognize(image: string): Promise<QianniuOcrResult> {
     const worker = this.ensureProcess();
     const id = crypto.randomUUID();
@@ -52,7 +68,10 @@ export class QianniuOcrWorker {
         this.pending.delete(id);
         reject(new Error('RapidOCR worker timed out'));
         this.resetProcess();
-      }, 30_000);
+      // The first request also loads the OCR model and can take just over
+      // 30 seconds on lower-power machines. Keep the worker alive so later
+      // customer switches reuse the warm model instead of restarting it.
+      }, 120_000);
       this.pending.set(id, { resolve, reject, timer });
       worker.stdin.write(`${JSON.stringify({ id, image })}\n`, 'utf8');
     });
@@ -65,7 +84,7 @@ export class QianniuOcrWorker {
   private ensureProcess(): ChildProcessWithoutNullStreams {
     if (this.process && !this.process.killed) return this.process;
 
-    const python = runtimePath('tools', 'python311', 'python.exe');
+    const python = rapidOcrPythonPath();
     const script = runtimePath('scripts', 'qianniu-rapidocr-worker.py');
     const worker = spawn(python, ['-X', 'utf8', script], {
       cwd: getRuntimeRoot(),
@@ -111,6 +130,7 @@ export class QianniuOcrWorker {
     clearTimeout(request.timer);
     this.pending.delete(response.id);
     if (response.ok) {
+      this.warmed = true;
       request.resolve(response);
     } else {
       request.reject(new Error(response.error || 'RapidOCR worker failed'));
@@ -120,6 +140,7 @@ export class QianniuOcrWorker {
   private resetProcess(error?: Error): void {
     const worker = this.process;
     this.process = undefined;
+    this.warmed = false;
     if (worker && !worker.killed) worker.kill();
     if (!error) return;
     for (const request of this.pending.values()) {

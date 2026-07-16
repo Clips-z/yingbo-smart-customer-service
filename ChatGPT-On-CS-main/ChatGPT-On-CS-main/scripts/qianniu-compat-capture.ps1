@@ -123,7 +123,9 @@ public static class QianniuWindowCapture
     public static string ChatFingerprint(Bitmap bitmap)
     {
         int maxX = Math.Min(bitmap.Width - 1, 838);
-        int maxY = Math.Min(bitmap.Height - 1, 705);
+        // Stop above the composer toolbar so its blinking caret and status
+        // icons do not trigger a full OCR pass while the chat is unchanged.
+        int maxY = Math.Min(bitmap.Height - 1, 650);
         var bytes = new List<byte>();
         for (int y = 130; y <= maxY; y += 4)
         {
@@ -334,6 +336,9 @@ $stream = $null
 if (-not $SkipOcr) {
   $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
   $python = Join-Path $projectRoot 'tools\python311\python.exe'
+  if (-not (Test-Path -LiteralPath $python)) {
+    $python = Join-Path $projectRoot '.venv-wechat\Scripts\python.exe'
+  }
   $rapidScript = Join-Path $PSScriptRoot 'qianniu-rapidocr.py'
   if ((Test-Path -LiteralPath $python) -and (Test-Path -LiteralPath $rapidScript)) {
     $previousErrorAction = $ErrorActionPreference

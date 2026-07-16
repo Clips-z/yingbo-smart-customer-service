@@ -132,12 +132,39 @@ export type ReplySuggestionStatus =
 
 export interface QianniuCollectorHealth {
   state: 'stopped' | 'running' | 'degraded';
+  phase: 'idle' | 'warming' | 'scanning' | 'ready' | 'retrying';
   processRunning: boolean;
   lastSuccessAt?: string;
   lastError?: string;
   reasonCode?: string;
   recoveryAction?: string;
   nextRetryAt?: string;
+  scanStartedAt?: string;
+  lastScanDurationMs?: number;
+}
+
+export interface QianniuCompanionContext {
+  platformId: string;
+  storeId: string;
+  accountId: string;
+  contactId: string;
+  chatFingerprint: string;
+  productId?: string | null;
+  productTitle?: string | null;
+  storeName?: string | null;
+  accountName?: string | null;
+  recentMessages?: Array<{
+    direction: 'incoming' | 'outgoing';
+    content: string;
+  }>;
+  recentMessagesReused?: boolean;
+  incomingMessageFingerprint?: string | null;
+  contextRevision: number;
+  capturedAt: string;
+  confidence: number;
+  state: 'switching' | 'stable' | 'degraded' | 'disconnected';
+  conversationKey?: string;
+  draftKey?: string;
 }
 
 export interface WechatCollectorHealth {
@@ -171,6 +198,20 @@ export interface ReplySuggestion {
   sender: string;
   incoming_content: string;
   reply_content: string;
+  original_reply_content?: string | null;
+  draft_content?: string | null;
+  conversation_key?: string | null;
+  draft_key?: string | null;
+  store_id?: string | null;
+  account_id?: string | null;
+  contact_id?: string | null;
+  chat_fingerprint?: string | null;
+  product_id?: string | null;
+  product_title?: string | null;
+  incoming_message_fingerprint?: string | null;
+  context_revision?: number | null;
+  draft_state?: string | null;
+  draft_updated_at?: string | null;
   status: ReplySuggestionStatus;
   delivery_error?: string | null;
   delivery_request_id?: string | null;

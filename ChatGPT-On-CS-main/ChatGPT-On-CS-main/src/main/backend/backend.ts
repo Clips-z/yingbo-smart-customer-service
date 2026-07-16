@@ -937,6 +937,13 @@ class BKServer {
       res.json({ success: true, data: this.qianniuCompatService.getHealth() });
     });
 
+    this.app.post('/api/v1/compat/qianniu/refresh', (_req, res) => {
+      res.json({
+        success: true,
+        data: this.qianniuCompatService.requestRefresh(),
+      });
+    });
+
     this.app.post(
       '/api/v1/compat/qianniu/mode',
       asyncHandler(async (req, res) => {
@@ -1165,6 +1172,44 @@ class BKServer {
           platformId,
         );
         res.json({ success: true, data });
+      }),
+    );
+
+    this.app.get('/api/v1/compat/qianniu/context', (req, res) => {
+      res.json({ success: true, data: this.qianniuCompatService.getContext() });
+    });
+
+    this.app.post(
+      '/api/v1/compat/qianniu/suggestions/draft',
+      asyncHandler(async (req, res) => {
+        const id = Number(req.body.id);
+        if (!Number.isInteger(id) || id <= 0) {
+          res.status(400).json({ success: false, message: 'Invalid suggestion id' });
+          return;
+        }
+        const suggestion = await ReplySuggestion.findByPk(id);
+        if (!suggestion || suggestion.platform_id !== 'win_qianniu') {
+          res.status(404).json({ success: false, message: '千牛回复记录不存在' });
+          return;
+        }
+        try {
+          const { saveConversationDraft } = await import(
+            './services/conversationDraftService'
+          );
+          await saveConversationDraft({
+            suggestion,
+            content: req.body.content,
+            contextRevision: req.body.contextRevision,
+          });
+          this.dispatchService.receiveBroadcast({
+            event: 'qianniu_suggestion_updated',
+            data: suggestion.toJSON(),
+          });
+          res.json({ success: true, data: suggestion });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          res.status(409).json({ success: false, message });
+        }
       }),
     );
 

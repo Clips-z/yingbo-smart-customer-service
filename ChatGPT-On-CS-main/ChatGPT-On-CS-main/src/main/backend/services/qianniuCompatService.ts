@@ -24,19 +24,26 @@ import {
   finishSuggestionDelivery,
   reserveSuggestionDelivery,
 } from './deliveryGuard';
-import { runtimePath } from './runtimePaths';
+import { rapidOcrPythonPath, runtimePath } from './runtimePaths';
 import {
   assertReplyModeAllowed,
   evaluateReplyModeChange,
   getDefaultReplyMode,
   normalizeReplyMode,
 } from './replySafetyPolicy';
-import { evaluateQianniuCapture } from './qianniuCapturePolicy';
+import {
+  evaluateQianniuCapture,
+  normalizeQianniuContact,
+} from './qianniuCapturePolicy';
 import { QianniuHealthTracker } from './qianniuHealth';
 import {
   assertQianniuFillResult,
   parseQianniuFillResult,
 } from './qianniuFillResult';
+import { QianniuContextTracker } from './qianniuContextTracker';
+import { assertDeliveryContext } from './deliveryContextGuard';
+import { extractQianniuContextEvidence } from './qianniuContextEvidence';
+import { sanitizeQianniuRecentMessages } from './qianniuRecentMessages';
 
 const execFileAsync = promisify(execFile);
 
@@ -47,6 +54,7 @@ const MIN_OCR_CONFIDENCE = Number(
 );
 
 const CONFIRM_OCR_BELOW = Number(process.env.QIANNIU_OCR_CONFIRM_BELOW || 0.92);
+const ACTIVE_CONTEXT_POLL_MS = 4_000;
 
 type CaptureResult = {
   hwnd: number;
@@ -60,6 +68,10 @@ type CaptureResult = {
   candidate: QianniuOcrCandidate;
   ocr_engine: 'rapidocr' | 'windows' | 'none';
   lines: QianniuOcrResult['lines'];
+  recent_messages?: QianniuOcrResult['recent_messages'];
+  store_id?: string;
+  account_id?: string;
+  product_id?: string;
 };
 
 export class QianniuCompatService {
@@ -68,12 +80,6 @@ export class QianniuCompatService {
   private busy = false;
 
   private lastMessageKey = '';
-
-  private recentSenders = new Map<string, number>();
-
-  private lastTabAlertX = -1;
-
-  private lastConversationAlertY = -1;
 
   private lastActivePollAt = 0;
 
@@ -87,11 +93,17 @@ export class QianniuCompatService {
 
   private lastRecognizedFingerprint = '';
 
+  private currentScanStartedAt = 0;
+
   private replyMode: QianniuReplyMode = 'assist';
 
   private clientRunning = false;
 
   private health = new QianniuHealthTracker();
+
+  // The compatibility collector currently emits one validated OCR snapshot.
+  // A multi-sample tracker can be enabled when the lightweight context probe is added.
+  private contextTracker = new QianniuContextTracker(1);
 
   constructor(
     private dispatchService: DispatchService,
@@ -105,6 +117,19 @@ export class QianniuCompatService {
 
   public getHealth() {
     return this.health.getHealth();
+  }
+
+  public getContext() {
+    const snapshot = this.contextTracker.getSnapshot();
+    if (!snapshot) return undefined;
+    return { ...snapshot, ...this.contextTracker.keys(snapshot) };
+  }
+
+  public requestRefresh() {
+    this.lastRecognizedFingerprint = '';
+    this.lastActivePollAt = 0;
+    this.nextScanAt = 0;
+    return { accepted: true };
   }
 
   public async setMode(mode: QianniuReplyMode): Promise<void> {
@@ -156,6 +181,24 @@ export class QianniuCompatService {
     }
     const suggestion = await ReplySuggestion.findByPk(id);
     if (!suggestion) throw new Error('待回复记录不存在');
+    if (suggestion.conversation_key) {
+      assertDeliveryContext({
+        draft: {
+          conversationKey: suggestion.conversation_key,
+          draftKey: suggestion.draft_key || '',
+          platformId: suggestion.platform_id,
+          storeId: suggestion.store_id || '',
+          accountId: suggestion.account_id || '',
+          contactId: suggestion.contact_id || suggestion.sender,
+          chatFingerprint: suggestion.chat_fingerprint || '',
+          productId: suggestion.product_id,
+          incomingMessageFingerprint: suggestion.incoming_message_fingerprint,
+          contextRevision: suggestion.context_revision || 0,
+          state: suggestion.status === 'sent' ? 'sent' : suggestion.status === 'cancelled' ? 'cancelled' : suggestion.draft_state === 'expired' ? 'expired' : suggestion.status === 'failed' ? 'failed' : 'draft',
+        },
+        live: this.contextTracker.getSnapshot(),
+      });
+    }
     const replyContent = editedContent?.trim() || suggestion.reply_content;
     const requestId = await reserveSuggestionDelivery(id, 'prepare');
     try {
@@ -166,7 +209,12 @@ export class QianniuCompatService {
         status: 'prepared',
       });
       if (!completed) throw new Error('填入结果已过期，未更新回复状态');
-      await suggestion.update({ reply_content: replyContent });
+      await suggestion.update({
+        reply_content: replyContent,
+        draft_content: replyContent,
+        draft_state: 'prepared',
+        draft_updated_at: new Date(),
+      });
     } catch (error) {
       await finishSuggestionDelivery({
         id,
@@ -305,6 +353,8 @@ export class QianniuCompatService {
           if (this.clientRunning) {
             this.clientRunning = false;
             this.ocrWorker.stop();
+            this.contextTracker.markDegraded();
+            this.broadcastCurrentContext();
             this.log.info(active ? '千牛已关闭，千牛采集已停止' : '千牛平台未激活，千牛采集已停止');
           }
           return;
@@ -375,6 +425,7 @@ export class QianniuCompatService {
         candidate: result.candidate,
         ocr_engine: result.engine,
         lines: result.lines,
+        recent_messages: result.recent_messages,
       };
     } catch (error) {
       this.log.warn(
@@ -388,12 +439,14 @@ export class QianniuCompatService {
         candidate: result.candidate,
         ocr_engine: result.engine,
         lines: result.lines,
+        recent_messages: result.recent_messages,
       };
     }
   }
 
   private handleScanError(error: unknown): void {
     this.busy = false;
+    this.currentScanStartedAt = 0;
     const message = error instanceof Error ? error.message : String(error);
     const qianniuMissing = message.includes(
       'Qianniu reception window was not found',
@@ -401,6 +454,8 @@ export class QianniuCompatService {
     const now = Date.now();
     this.nextScanAt = now + (qianniuMissing ? 30_000 : 10_000);
     this.health.markFailure(message, this.nextScanAt);
+    this.contextTracker.markDegraded();
+    this.broadcastCurrentContext();
     const key = qianniuMissing
       ? 'qianniu-window-missing'
       : message.slice(0, 200);
@@ -415,9 +470,23 @@ export class QianniuCompatService {
     }
   }
 
+  private broadcastCurrentContext(): void {
+    const snapshot = this.contextTracker.getSnapshot();
+    if (!snapshot) return;
+    this.dispatchService.receiveBroadcast({
+      event: 'qianniu_context_changed',
+      data: snapshot,
+    });
+  }
+
   private markScanHealthy(): void {
     this.nextScanAt = 0;
-    this.health.markRunning();
+    this.health.markRunning(
+      this.currentScanStartedAt
+        ? Date.now() - this.currentScanStartedAt
+        : undefined,
+    );
+    this.currentScanStartedAt = 0;
     if (this.lastFailureKey) {
       this.log.info('千牛兼容采集已恢复');
       this.lastFailureKey = '';
@@ -425,7 +494,7 @@ export class QianniuCompatService {
   }
 
   private async recognizeOnce(image: string): Promise<QianniuOcrResult> {
-    const python = runtimePath('tools', 'python311', 'python.exe');
+    const python = rapidOcrPythonPath();
     const script = runtimePath('scripts', 'qianniu-rapidocr.py');
     const { stdout } = await execFileAsync(
       python,
@@ -448,47 +517,20 @@ export class QianniuCompatService {
     this.busy = true;
     try {
       let capture = await this.capture({ skipOcr: true });
-      const tabAlerts = [...(capture.tab_alert_x || [])].sort(
-        (left, right) => left - right,
-      );
-      const tabAlert =
-        tabAlerts.find((x) => x > this.lastTabAlertX + 20) ?? tabAlerts[0];
-      if (typeof tabAlert === 'number') {
-        this.lastTabAlertX = tabAlert;
-        capture = await this.capture({
-          click: { x: tabAlert, y: 28 },
-          skipOcr: true,
-        });
-        if (!capture.click_performed) return;
+      const now = Date.now();
+      if (now - this.lastActivePollAt < ACTIVE_CONTEXT_POLL_MS) return;
+      this.lastActivePollAt = now;
+      if (
+        capture.chat_fingerprint === this.lastRecognizedFingerprint &&
+        this.contextTracker.getSnapshot()?.state === 'stable'
+      ) {
+        return;
       }
-
-      const conversationAlerts = [...(capture.conversation_alerts || [])].sort(
-        (left, right) => left.y - right.y,
-      );
-      const conversationAlert =
-        conversationAlerts.find(
-          (item) => item.y > this.lastConversationAlertY + 22,
-        ) ?? conversationAlerts[0];
-      if (conversationAlert) {
-        this.lastConversationAlertY = conversationAlert.y;
-        capture = await this.capture({
-          click: { x: 180, y: conversationAlert.y },
-          skipOcr: true,
-        });
-        if (!capture.click_performed) return;
-        if (capture.chat_fingerprint === this.lastRecognizedFingerprint) return;
-        const fingerprint = capture.chat_fingerprint;
-        capture = await this.recognizeCapture(capture);
-        this.lastRecognizedFingerprint = fingerprint;
-      } else {
-        const now = Date.now();
-        if (now - this.lastActivePollAt < 10_000) return;
-        this.lastActivePollAt = now;
-        if (capture.chat_fingerprint === this.lastRecognizedFingerprint) return;
-        const fingerprint = capture.chat_fingerprint;
-        capture = await this.recognizeCapture(capture);
-        this.lastRecognizedFingerprint = fingerprint;
-      }
+      const fingerprint = capture.chat_fingerprint;
+      this.currentScanStartedAt = Date.now();
+      this.health.markScanning(!this.ocrWorker.isWarm());
+      capture = await this.recognizeCapture(capture);
+      this.lastRecognizedFingerprint = fingerprint;
 
       const decision = evaluateQianniuCapture(
         {
@@ -501,6 +543,63 @@ export class QianniuCompatService {
         },
         MIN_OCR_CONFIDENCE,
       );
+      const confidence = capture.candidate?.confidence || 0;
+      const contextEvidence = extractQianniuContextEvidence(capture.lines || []);
+      const recentMessages = sanitizeQianniuRecentMessages(
+        capture.recent_messages,
+      );
+      const task = (await this.appService.getTasks()).find(
+        (item) => item.app_id === 'win_qianniu',
+      );
+      if (!task) return;
+
+      const contactId = decision.accepted
+        ? decision.sender
+        : normalizeQianniuContact(capture.candidate?.sender);
+      const messageKey = decision.accepted
+        ? createIncomingMessageFingerprint({
+            platformId: 'win_qianniu',
+            chatFingerprint: capture.chat_fingerprint,
+            sender: decision.sender,
+            content: decision.content,
+          })
+        : null;
+
+      let contextUpdate;
+      let contextKeys;
+      if (capture.ocr_engine === 'rapidocr' && contactId) {
+        contextUpdate = this.contextTracker.observe({
+          platformId: 'win_qianniu',
+          storeId:
+            contextEvidence.storeId ||
+            capture.store_id?.trim() ||
+            task.env_id ||
+            'qianniu-default',
+          storeName: contextEvidence.storeName || null,
+          accountId:
+            contextEvidence.accountId ||
+            capture.account_id?.trim() ||
+            task.task_id,
+          accountName: contextEvidence.accountName || null,
+          recentMessages,
+          contactId,
+          chatFingerprint: capture.chat_fingerprint,
+          productId:
+            contextEvidence.productId || capture.product_id?.trim() || null,
+          productTitle: contextEvidence.productTitle || null,
+          incomingMessageFingerprint: messageKey,
+          capturedAt: new Date().toISOString(),
+          confidence,
+        });
+        contextKeys = this.contextTracker.keys(contextUpdate.snapshot);
+        if (contextUpdate.changed) {
+          this.dispatchService.receiveBroadcast({
+            event: 'qianniu_context_changed',
+            data: contextUpdate.snapshot,
+          });
+        }
+      }
+
       if (!decision.accepted) {
         if (
           decision.reasonCode === 'ocr_unavailable' ||
@@ -511,7 +610,6 @@ export class QianniuCompatService {
         return;
       }
       const { sender, content } = decision;
-      const confidence = capture.candidate?.confidence || 0;
       if (confidence < CONFIRM_OCR_BELOW) {
         const confirmation = await this.capture();
         const confirmedContent = confirmation.candidate?.content?.trim();
@@ -529,16 +627,7 @@ export class QianniuCompatService {
           return;
         }
       }
-      const now = Date.now();
-      const lastSeen = this.recentSenders.get(sender) || 0;
-      if (now - lastSeen < 45_000) return;
-
-      const key = createIncomingMessageFingerprint({
-        platformId: 'win_qianniu',
-        chatFingerprint: capture.chat_fingerprint,
-        sender,
-        content,
-      });
+      const key = messageKey as string;
       if (key === this.lastMessageKey) return;
       this.lastMessageKey = key;
 
@@ -550,11 +639,6 @@ export class QianniuCompatService {
         return;
       }
 
-      const task = (await this.appService.getTasks()).find(
-        (item) => item.app_id === 'win_qianniu',
-      );
-      if (!task) return;
-
       const reply = await this.dispatchService.createReply({
         ctx: {
           CTX_APP_NAME: '千牛',
@@ -564,6 +648,15 @@ export class QianniuCompatService {
           CTX_PLATFORM: 'qianniu-9.96-compat',
         },
         msgs: [
+          ...recentMessages
+            .filter((item) => item.content !== content)
+            .slice(-3)
+            .map((item) => ({
+              sender: item.direction === 'incoming' ? sender : task.task_id,
+              content: item.content,
+              role: item.direction === 'incoming' ? ('OTHER' as const) : ('SELF' as const),
+              type: 'TEXT' as const,
+            })),
           {
             sender,
             content,
@@ -575,16 +668,33 @@ export class QianniuCompatService {
 
       if (reply.type !== 'TEXT' || !reply.content.trim()) return;
 
-      this.recentSenders.set(sender, now);
-
       const [suggestion, created] = await ReplySuggestion.findOrCreate({
         where: { message_key: key },
         defaults: {
           platform_id: 'win_qianniu',
-          store: 'qianniu-9.96-compat',
+          store:
+            contextUpdate?.snapshot.storeName ||
+            contextUpdate?.snapshot.storeId ||
+            task.env_id,
           sender,
           incoming_content: content,
           reply_content: reply.content.trim().slice(0, 300),
+          original_reply_content: reply.content.trim().slice(0, 300),
+          draft_content: reply.content.trim().slice(0, 300),
+          conversation_key: contextKeys?.conversationKey || null,
+          draft_key: contextKeys?.draftKey || null,
+          store_id: contextUpdate?.snapshot.storeId || task.env_id,
+          account_id: contextUpdate?.snapshot.accountId || task.task_id,
+          contact_id: contextUpdate?.snapshot.contactId || sender,
+          chat_fingerprint:
+            contextUpdate?.snapshot.chatFingerprint || capture.chat_fingerprint,
+          product_id: contextUpdate?.snapshot.productId || null,
+          product_title: contextUpdate?.snapshot.productTitle || null,
+          incoming_message_fingerprint:
+            contextUpdate?.snapshot.incomingMessageFingerprint || null,
+          context_revision: contextUpdate?.snapshot.contextRevision || null,
+          draft_state: 'draft',
+          draft_updated_at: new Date(),
           message_key: key,
           status: 'pending',
           created_at: new Date(),

@@ -66,6 +66,11 @@ const configuration: webpack.Configuration = {
       'webpack/hot/only-dev-server',
       path.join(webpackPaths.srcDataviewRendererPath, 'index.tsx'),
     ],
+    companion: [
+      `webpack-dev-server/client?http://localhost:${port}/dist`,
+      'webpack/hot/only-dev-server',
+      path.join(webpackPaths.srcPath, 'renderer/companion-window/index.tsx'),
+    ],
   },
 
   output: {
@@ -209,6 +214,24 @@ const configuration: webpack.Configuration = {
       isDevelopment: process.env.NODE_ENV !== 'production',
       nodeModules: webpackPaths.appNodeModulesPath,
       chunks: ['dataview'],
+    }),
+
+    new HtmlWebpackPlugin({
+      filename: path.join('companion.html'),
+      template: path.join(
+        webpackPaths.srcPath,
+        'renderer/companion-window/index.ejs',
+      ),
+      minify: {
+        collapseWhitespace: true,
+        removeAttributeQuotes: true,
+        removeComments: true,
+      },
+      isBrowser: false,
+      env: process.env.NODE_ENV,
+      isDevelopment: process.env.NODE_ENV !== 'production',
+      nodeModules: webpackPaths.appNodeModulesPath,
+      chunks: ['companion'],
     }),
   ],
 

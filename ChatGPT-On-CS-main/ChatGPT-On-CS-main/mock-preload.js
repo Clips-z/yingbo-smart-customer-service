@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electron', {
       if (channel === 'get-version') return '1.5.0';
       if (channel === 'get-browser-version') return '26.6.10';
       if (channel === 'get-health-status') return true; // ⭐ 让 UI 立即显示
+      if (channel === 'get-companion-state') return { attached: true, side: 'right', collapsed: false, targetFound: true };
       return null;
     },
 

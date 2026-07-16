@@ -1,7 +1,7 @@
 {
   "name": "yingbo-smart-customer-service",
   "description": "迎波智能客服：支持微信、千牛等平台的智能回复工作台",
-  "version": "1.5.1",
+  "version": "2.0.0",
   "keywords": [
     "electron",
     "boilerplate",

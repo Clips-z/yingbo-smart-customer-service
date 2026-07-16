@@ -6,7 +6,7 @@
 
 **Windows 多平台 AI 客服工作台｜消息采集、辅助回复、RAG 知识库与运营管理**
 
-![version](https://img.shields.io/badge/version-1.5.1-4A5BB3)
+![version](https://img.shields.io/badge/version-2.0.0-4A5BB3)
 ![platform](https://img.shields.io/badge/platform-Windows%2010%2F11-2A83FF)
 ![stack](https://img.shields.io/badge/Electron-React%20%2B%20TypeScript-6B73D2)
 ![AI](https://img.shields.io/badge/AI-RAG%20%E5%A2%9E%E5%BC%BA-10B981)
