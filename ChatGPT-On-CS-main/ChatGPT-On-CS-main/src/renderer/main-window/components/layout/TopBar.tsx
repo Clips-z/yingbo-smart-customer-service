@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Flex, Text, HStack, IconButton, Tooltip } from '@chakra-ui/react';
-import { FiBarChart2, FiGrid, FiHeadphones } from 'react-icons/fi';
+import { FiBarChart2, FiGrid, FiHeadphones, FiSidebar } from 'react-icons/fi';
 import { SettingsIcon } from '@chakra-ui/icons';
 
 export type ViewKey = 'dashboard' | 'service';
@@ -53,6 +53,20 @@ const TopBar = ({ view, onChange }: { view: ViewKey; onChange: (v: ViewKey) => v
         </HStack>
 
         <HStack spacing={1}>
+          <Tooltip label="打开千牛伴随面板" placement="bottom" hasArrow>
+            <IconButton
+              aria-label="打开千牛伴随面板"
+              icon={<FiSidebar size={17} />}
+              variant="ghost"
+              size="sm"
+              color="gray.500"
+              borderRadius="lg"
+              _hover={{ bg: 'green.50', color: 'green.600' }}
+              onClick={() =>
+                window.electron.ipcRenderer.sendMessage('open-companion-window')
+              }
+            />
+          </Tooltip>
           <Tooltip label="数据统计" placement="bottom" hasArrow>
             <IconButton
               aria-label="数据统计"

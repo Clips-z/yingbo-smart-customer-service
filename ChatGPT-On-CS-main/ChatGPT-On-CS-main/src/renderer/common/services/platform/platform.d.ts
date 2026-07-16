@@ -152,6 +152,8 @@ export interface QianniuCompanionContext {
   capturedAt: string;
   confidence: number;
   state: 'switching' | 'stable' | 'degraded' | 'disconnected';
+  conversationKey?: string;
+  draftKey?: string;
 }
 
 export interface WechatCollectorHealth {

@@ -29,6 +29,10 @@ const configuration: webpack.Configuration = {
     main: path.join(webpackPaths.srcRendererPath, 'index.tsx'),
     settings: path.join(webpackPaths.srcSettingsRendererPath, 'index.tsx'),
     dataview: path.join(webpackPaths.srcDataviewRendererPath, 'index.tsx'),
+    companion: path.join(
+      webpackPaths.srcPath,
+      'renderer/companion-window/index.tsx',
+    ),
   },
 
   output: {
@@ -165,6 +169,22 @@ const configuration: webpack.Configuration = {
       isBrowser: false,
       isDevelopment: process.env.NODE_ENV !== 'production',
       chunks: ['dataview'],
+    }),
+
+    new HtmlWebpackPlugin({
+      filename: 'companion.html',
+      template: path.join(
+        webpackPaths.srcPath,
+        'renderer/companion-window/index.ejs',
+      ),
+      minify: {
+        collapseWhitespace: true,
+        removeAttributeQuotes: true,
+        removeComments: true,
+      },
+      isBrowser: false,
+      isDevelopment: false,
+      chunks: ['companion'],
     }),
 
     new webpack.DefinePlugin({

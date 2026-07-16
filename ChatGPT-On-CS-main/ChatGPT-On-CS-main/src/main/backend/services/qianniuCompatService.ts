@@ -38,6 +38,7 @@ import {
   parseQianniuFillResult,
 } from './qianniuFillResult';
 import { QianniuContextTracker } from './qianniuContextTracker';
+import { assertDeliveryContext } from './deliveryContextGuard';
 
 const execFileAsync = promisify(execFile);
 
@@ -115,7 +116,9 @@ export class QianniuCompatService {
   }
 
   public getContext() {
-    return this.contextTracker.getSnapshot();
+    const snapshot = this.contextTracker.getSnapshot();
+    if (!snapshot) return undefined;
+    return { ...snapshot, ...this.contextTracker.keys(snapshot) };
   }
 
   public async setMode(mode: QianniuReplyMode): Promise<void> {
@@ -167,6 +170,24 @@ export class QianniuCompatService {
     }
     const suggestion = await ReplySuggestion.findByPk(id);
     if (!suggestion) throw new Error('待回复记录不存在');
+    if (suggestion.conversation_key) {
+      assertDeliveryContext({
+        draft: {
+          conversationKey: suggestion.conversation_key,
+          draftKey: suggestion.draft_key || '',
+          platformId: suggestion.platform_id,
+          storeId: suggestion.store_id || '',
+          accountId: suggestion.account_id || '',
+          contactId: suggestion.contact_id || suggestion.sender,
+          chatFingerprint: suggestion.chat_fingerprint || '',
+          productId: suggestion.product_id,
+          incomingMessageFingerprint: suggestion.incoming_message_fingerprint,
+          contextRevision: suggestion.context_revision || 0,
+          state: suggestion.status === 'sent' ? 'sent' : suggestion.status === 'cancelled' ? 'cancelled' : suggestion.draft_state === 'expired' ? 'expired' : suggestion.status === 'failed' ? 'failed' : 'draft',
+        },
+        live: this.contextTracker.getSnapshot(),
+      });
+    }
     const replyContent = editedContent?.trim() || suggestion.reply_content;
     const requestId = await reserveSuggestionDelivery(id, 'prepare');
     try {

@@ -13,6 +13,7 @@ import type BackendServiceManager from './system/backend';
 import { getBrowserVersionFromOS } from './system/chrome';
 import { createWindow as createSettingsWindow } from './windows/settings-main';
 import { createWindow as createDataviewWindow } from './windows/dataview-main';
+import { setupCompanionIpc } from './windows/companion-main';
 
 const store = new Store();
 
@@ -29,6 +30,7 @@ const setupIpcHandlers = (
   mainWindow: BrowserWindow,
   bsm: BackendServiceManager,
 ) => {
+  setupCompanionIpc();
   ipcMain.on('get-env', async (event, key) => {
     event.returnValue = process.env[key];
   });
