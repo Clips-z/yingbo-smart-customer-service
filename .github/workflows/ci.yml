@@ -52,6 +52,11 @@ jobs:
       - name: Install JavaScript dependencies
         run: npm ci --ignore-scripts
 
+      # knowledgeService tests use sqlite3 directly under Node.js. Rebuild only
+      # this required native binding after the lifecycle-script-free install.
+      - name: Build SQLite test binding
+        run: npm rebuild sqlite3 --foreground-scripts
+
       - name: Verify installed dependency tree
         run: npm ls --omit=optional --depth=0
 
