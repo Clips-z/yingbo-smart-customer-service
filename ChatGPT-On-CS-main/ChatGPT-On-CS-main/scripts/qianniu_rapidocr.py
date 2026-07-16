@@ -18,7 +18,10 @@ os.environ.setdefault("PYTHONIOECODING", "utf-8")
 
 import numpy as np
 from PIL import Image
-from rapidocr import RapidOCR
+try:
+    from rapidocr import RapidOCR
+except ImportError:
+    from rapidocr_onnxruntime import RapidOCR
 
 
 def emit(payload: dict) -> None:
@@ -34,10 +37,14 @@ class LayoutConfig:
     """千牛工作台布局比例配置（相对于完整窗口截图）"""
 
     # 截图裁剪区域（识别区域）
-    CROP_LEFT = 0.225
-    CROP_TOP = 0.115
-    CROP_RIGHT = 0.645
-    CROP_BOTTOM = 0.790
+    # Keep store/account tabs and the right-side product panel in the OCR
+    # evidence. Candidate selection below still limits messages to the chat
+    # column, so scanning the full window does not turn panel text into replies.
+    CROP_LEFT = 0.0
+    CROP_TOP = 0.0
+    CROP_RIGHT = 1.0
+    CROP_BOTTOM = 1.0
+    OCR_SCALE = 0.75
 
     # 气泡蓝色偏移检测区域
     BUBBLE_X_START = 0.223     # 原 305
@@ -56,8 +63,8 @@ class LayoutConfig:
     # 发送者名称区域
     SENDER_X_MIN = 0.234       # 原 320
     SENDER_X_MAX = 0.454       # 原 620
-    SENDER_Y_MIN = 0.176       # 原 135
-    SENDER_Y_MAX = 0.241       # 原 185
+    SENDER_Y_MIN = 0.130
+    SENDER_Y_MAX = 0.195
 
     # 候选消息气泡区域
     CANDIDATE_X_MIN = 0.249    # 原 340
@@ -151,24 +158,30 @@ def extract_candidate(
             for line in lines
             if sender_x_min <= line["x"] <= sender_x_max
             and sender_y_min <= line["y"] <= sender_y_max
-            and re.search(r"[A-Za-z0-9_]{5,}", line["text"])
+            and re.search(r"(?:[A-Za-z0-9_]{5,}|[\u4e00-\u9fff]{2,})", line["text"])
         ),
         None,
     )
 
-    cand_x_min = int(width * cfg.CANDIDATE_X_MIN)
+    cand_x_min = int(width * 0.240)
     cand_x_max = int(width * cfg.CANDIDATE_X_MAX)
     cand_right_max = int(width * cfg.CANDIDATE_RIGHT_MAX)
     cand_y_min = int(height * cfg.CANDIDATE_Y_MIN)
-    cand_y_max = int(height * cfg.CANDIDATE_Y_MAX)
+    cand_y_max = int(height * min(cfg.CANDIDATE_Y_MAX, 0.78))
 
     candidates = []
+    card_y = [
+        line["y"]
+        for line in lines
+        if re.search(r"[¥￥]\s*\d|https?://|月销\s*\d|商品详情页", line["text"])
+    ]
     for line in lines:
         text = line["text"]
         right = line["x"] + line["width"]
         bias = bubble_blue_bias(image, line, cfg)
         if not (
             cand_x_min <= line["x"] <= cand_x_max
+            and line["x"] <= int(width * 0.31)
             and right <= cand_right_max
             and cand_y_min <= line["y"] <= cand_y_max
             and bias < cfg.BUBBLE_BLUE_THRESHOLD
@@ -176,9 +189,28 @@ def extract_candidate(
             continue
         if re.match(r"^\s*[O0]\s*$", text):
             continue
+        if not re.search(r"[A-Za-z0-9\u4e00-\u9fff]{2,}", text):
+            continue
+        if any(
+            abs(line["y"] - peer["y"]) <= 8
+            and re.search(r"20\d\d[-/.]", peer["text"])
+            for peer in lines
+            if peer is not line
+        ):
+            continue
         if re.match(r"^\s*20\d\d", text) or re.search(r"https?://", text):
             continue
         if re.match(r"^\s*tb\d+\s+20\d\d", text, re.IGNORECASE):
+            continue
+        if re.match(r"^\s*(已读|未读)\s*$", text):
+            continue
+        if "买家30天内" in text or "才能给买家发消息" in text:
+            continue
+        if "转交给" in text or "商品详情页" in text or re.search(r"[¥￥]\s*\d", text):
+            continue
+        if re.match(r"^\s*(月销|销量|库存)\s*\d", text):
+            continue
+        if any(abs(line["y"] - y) <= 85 for y in card_y):
             continue
         candidates.append((line, bias))
 
@@ -187,7 +219,19 @@ def extract_candidate(
         key=lambda item: item[0]["y"],
         default=(None, 0.0),
     )
-    outgoing_y = lowest_outgoing_y(image, cfg)
+    structured_outgoing_y = max(
+        (
+            line["y"]
+            for line in lines
+            if line["x"] > int(width * 0.31)
+            and line["x"] + line["width"] <= cand_right_max
+            and cand_y_min <= line["y"] <= cand_y_max
+            and re.search(r"[A-Za-z0-9\u4e00-\u9fff]{2,}", line["text"])
+            and not re.search(r"20\d\d[-/.]", line["text"])
+        ),
+        default=0,
+    )
+    outgoing_y = max(lowest_outgoing_y(image, cfg), structured_outgoing_y)
     if candidate_line is None:
         latest_direction = "unknown"
         content = ""
@@ -231,21 +275,39 @@ class QianniuRapidOcr:
         right = min(width, int(width * self.cfg.CROP_RIGHT))
         bottom = min(height, int(height * self.cfg.CROP_BOTTOM))
         crop = image_array[top:bottom, left:right]
+        ocr_scale = self.cfg.OCR_SCALE
+        if ocr_scale < 1.0:
+            crop = np.asarray(
+                Image.fromarray(crop).resize(
+                    (
+                        max(1, round(crop.shape[1] * ocr_scale)),
+                        max(1, round(crop.shape[0] * ocr_scale)),
+                    ),
+                    Image.Resampling.LANCZOS,
+                )
+            )
 
         with redirect_stdout(sys.stderr):
             try:
                 output = self.engine(crop)
             except Exception as e:
                 return {"ok": False, "error": f"OCR 引擎错误: {e}", "lines": []}
-        texts = list(output.txts) if output.txts is not None else []
-        scores = list(output.scores) if output.scores is not None else []
-        boxes = list(output.boxes) if output.boxes is not None else []
+        if hasattr(output, "txts"):
+            texts = list(output.txts) if output.txts is not None else []
+            scores = list(output.scores) if output.scores is not None else []
+            boxes = list(output.boxes) if output.boxes is not None else []
+        else:
+            legacy = output[0] if isinstance(output, tuple) else output
+            legacy = legacy or []
+            boxes = [item[0] for item in legacy]
+            texts = [item[1] for item in legacy]
+            scores = [item[2] for item in legacy]
         lines = []
         for text, score, box in zip(texts, scores, boxes):
             xs = [float(point[0]) for point in box]
             ys = [float(point[1]) for point in box]
-            x1, x2 = min(xs) + left, max(xs) + left
-            y1, y2 = min(ys) + top, max(ys) + top
+            x1, x2 = min(xs) / ocr_scale + left, max(xs) / ocr_scale + left
+            y1, y2 = min(ys) / ocr_scale + top, max(ys) / ocr_scale + top
             lines.append(
                 {
                     "text": str(text),
@@ -257,12 +319,109 @@ class QianniuRapidOcr:
                 }
             )
 
+        for line in lines:
+            if line["y"] > 70:
+                continue
+            x1 = max(0, int(line["x"]) - 18)
+            y1 = max(0, int(line["y"]) - 10)
+            x2 = min(width, int(line["x"] + line["width"]) + 18)
+            y2 = min(height, int(line["y"] + line["height"]) + 10)
+            pixels = image_array[y1:y2, x1:x2].astype(np.int16)
+            if pixels.size:
+                blue = (
+                    (pixels[:, :, 2] - pixels[:, :, 0] > 55)
+                    & (pixels[:, :, 2] - pixels[:, :, 1] > 35)
+                )
+                if float(blue.mean()) >= 0.2:
+                    line["active_tab"] = True
+
+        card_y = [
+            line["y"]
+            for line in lines
+            if re.search(r"[¥￥]\s*\d|https?://|月销\s*\d|商品详情页", line["text"])
+        ]
+        speaker_headers = []
+        for time_line in lines:
+            if not re.search(r"20\d\d[-/.]", time_line["text"]):
+                continue
+            row_text = "".join(
+                peer["text"]
+                for peer in lines
+                if abs(peer["y"] - time_line["y"]) <= 8
+            )
+            speaker_text = re.sub(
+                r"20\d\d[-/.]\d{1,2}[-/.]\d{1,2}\s*\d{1,2}:\d{2}:\d{2}",
+                "",
+                row_text,
+            )
+            speaker_headers.append(
+                {
+                    "y": time_line["y"],
+                    "direction": "outgoing"
+                    if ":" in speaker_text or "：" in speaker_text
+                    else "incoming",
+                }
+            )
+
+        recent_messages = []
+        for line in lines:
+            text = re.sub(r"\s+", "", line["text"].strip())
+            right = line["x"] + line["width"]
+            if not (
+                int(width * 0.24) <= line["x"]
+                and right <= int(width * 0.64)
+                and int(height * 0.30) <= line["y"] <= int(height * 0.90)
+            ):
+                continue
+            if (
+                len(text) < 2
+                or not re.search(r"[A-Za-z0-9\u4e00-\u9fff]{2,}", text)
+                or re.match(r"^\d{1,2}:\d{2}", text)
+                or re.search(r"20\d\d[-/.]", text)
+                or any(
+                    abs(line["y"] - peer["y"]) <= 8
+                    and re.search(r"20\d\d[-/.]", peer["text"])
+                    for peer in lines
+                    if peer is not line
+                )
+                or re.match(r"^(已读|未读|月销|销量|库存)", text)
+                or re.search(r"https?://|买家30天内|才能给买家发消息|转交给|商品详情页|[¥￥]\s*\d", text)
+                or any(abs(line["y"] - y) <= 85 for y in card_y)
+            ):
+                continue
+            prior_header = max(
+                (header for header in speaker_headers if header["y"] < line["y"]),
+                key=lambda header: header["y"],
+                default=None,
+            )
+            bias = bubble_blue_bias(image_array, line, self.cfg)
+            if prior_header and line["y"] - prior_header["y"] <= 85:
+                direction = prior_header["direction"]
+            elif bias >= self.cfg.BUBBLE_BLUE_THRESHOLD:
+                direction = "outgoing"
+            elif bias < self.cfg.BUBBLE_BLUE_THRESHOLD and line["x"] <= int(width * 0.305):
+                direction = "incoming"
+            else:
+                continue
+            if recent_messages:
+                previous = recent_messages[-1]
+                if previous["content"] == text:
+                    continue
+                if previous["direction"] == direction and line["y"] - previous["y"] <= 36:
+                    previous["content"] += text
+                    previous["y"] = line["y"]
+                    continue
+            recent_messages.append(
+                {"direction": direction, "content": text, "y": line["y"]}
+            )
+
         return {
             "ok": True,
             "engine": "rapidocr",
             "image_size": {"width": width, "height": height},
             "candidate": extract_candidate(image_array, lines, self.cfg),
             "lines": lines,
+            "recent_messages": recent_messages[-3:],
         }
 
 
@@ -276,3 +435,7 @@ def recognize_once() -> int:
     except Exception as error:
         emit({"ok": False, "error": str(error), "lines": []})
         return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(recognize_once())

@@ -13,13 +13,47 @@ export function selectCompanionSuggestion(
     ? suggestions.find((item) => item.draft_key === context.draftKey)
     : undefined;
   if (exact) return exact;
-  if (!context.conversationKey) return undefined;
+  const matchesIdentity = (item: ReplySuggestion) =>
+    item.platform_id === context.platformId &&
+    item.store_id === context.storeId &&
+    item.account_id === context.accountId &&
+    item.contact_id === context.contactId;
   return suggestions
     .filter((item) => item.conversation_key === context.conversationKey)
+    .concat(
+      suggestions.filter(
+        (item) =>
+          item.conversation_key !== context.conversationKey &&
+          matchesIdentity(item),
+      ),
+    )
     .sort(
       (left, right) =>
         new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
     )[0];
+}
+
+export function selectCompanionHistory(
+  context: QianniuCompanionContext | undefined,
+  suggestions: ReplySuggestion[],
+  activeId?: number,
+): ReplySuggestion[] {
+  if (!context || context.state !== 'stable') return [];
+  return suggestions
+    .filter(
+      (item) =>
+        item.id !== activeId &&
+        (item.conversation_key === context.conversationKey ||
+          (item.platform_id === context.platformId &&
+            item.store_id === context.storeId &&
+            item.account_id === context.accountId &&
+            item.contact_id === context.contactId)),
+    )
+    .sort(
+      (left, right) =>
+        new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+    )
+    .slice(0, 3);
 }
 
 export function selectCompanionProduct(

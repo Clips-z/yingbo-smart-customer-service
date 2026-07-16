@@ -16,6 +16,19 @@ describe('extractQianniuContextEvidence', () => {
     });
   });
 
+  test('uses the blue active tab and accepts an OCR semicolon separator', () => {
+    expect(
+      extractQianniuContextEvidence([
+        line('轮越旗舰店:jamie', 60, 18),
+        { ...line('passionpaul;jamie', 245, 18), active_tab: true },
+        line('wheeltec旗舰店:jamie', 420, 18),
+      ]),
+    ).toMatchObject({
+      storeId: 'passionpaul',
+      accountId: 'jamie',
+    });
+  });
+
   test('extracts product id and nearby title from the right product panel', () => {
     expect(
       extractQianniuContextEvidence([
@@ -38,4 +51,3 @@ describe('extractQianniuContextEvidence', () => {
     expect(result.productTitle).toBeUndefined();
   });
 });
-

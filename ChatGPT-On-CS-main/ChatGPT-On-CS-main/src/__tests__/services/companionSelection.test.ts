@@ -1,4 +1,8 @@
-import { selectCompanionProduct, selectCompanionSuggestion } from '../../renderer/companion-window/companionSelection';
+import {
+  selectCompanionHistory,
+  selectCompanionProduct,
+  selectCompanionSuggestion,
+} from '../../renderer/companion-window/companionSelection';
 import {
   QianniuCompanionContext,
   ReplySuggestion,
@@ -62,6 +66,32 @@ describe('selectCompanionSuggestion', () => {
         suggestion({ conversation_key: 'conversation-b' }),
       ]),
     ).toBeUndefined();
+  });
+
+  test('restores a legacy draft by stable identity after screenshot changes', () => {
+    expect(
+      selectCompanionSuggestion(context, [
+        suggestion({
+          conversation_key: 'legacy-conversation',
+          store_id: 'store-a',
+          account_id: 'jamie',
+          contact_id: 'buyer-a',
+        }),
+      ])?.id,
+    ).toBe(1);
+  });
+
+  test('keeps the latest three previous drafts for context', () => {
+    const items = [1, 2, 3, 4].map((id) =>
+      suggestion({
+        id,
+        conversation_key: 'conversation-a',
+        created_at: `2026-07-16T0${id}:00:00.000Z`,
+      }),
+    );
+    expect(selectCompanionHistory(context, items, 4).map((item) => item.id)).toEqual([
+      3, 2, 1,
+    ]);
   });
 });
 

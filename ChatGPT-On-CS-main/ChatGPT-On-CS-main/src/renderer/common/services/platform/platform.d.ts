@@ -150,6 +150,10 @@ export interface QianniuCompanionContext {
   productTitle?: string | null;
   storeName?: string | null;
   accountName?: string | null;
+  recentMessages?: Array<{
+    direction: 'incoming' | 'outgoing';
+    content: string;
+  }>;
   incomingMessageFingerprint?: string | null;
   contextRevision: number;
   capturedAt: string;

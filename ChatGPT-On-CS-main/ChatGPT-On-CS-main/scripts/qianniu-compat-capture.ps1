@@ -335,6 +335,9 @@ $stream = $null
 if (-not $SkipOcr) {
   $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
   $python = Join-Path $projectRoot 'tools\python311\python.exe'
+  if (-not (Test-Path -LiteralPath $python)) {
+    $python = Join-Path $projectRoot '.venv-wechat\Scripts\python.exe'
+  }
   $rapidScript = Join-Path $PSScriptRoot 'qianniu-rapidocr.py'
   if ((Test-Path -LiteralPath $python) -and (Test-Path -LiteralPath $rapidScript)) {
     $previousErrorAction = $ErrorActionPreference

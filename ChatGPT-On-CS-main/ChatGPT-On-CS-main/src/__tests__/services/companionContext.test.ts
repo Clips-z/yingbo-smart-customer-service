@@ -46,7 +46,7 @@ function draft(
 }
 
 describe('companion context keys', () => {
-  test('uses store, account, contact and chat to isolate same-name buyers', () => {
+  test('uses store, account and contact to isolate same-name buyers', () => {
     const first = context();
     const otherStore = context({ storeId: 'store-b' });
 
@@ -66,6 +66,12 @@ describe('companion context keys', () => {
       buildConversationKey(nextMessage),
     );
     expect(buildDraftKey(first)).not.toBe(buildDraftKey(nextMessage));
+  });
+
+  test('keeps one conversation key when the mutable chat screenshot changes', () => {
+    expect(buildConversationKey(context())).toBe(
+      buildConversationKey(context({ chatFingerprint: 'chat-b' })),
+    );
   });
 
   test('rejects incomplete identities', () => {
@@ -135,4 +141,3 @@ describe('draft restoration', () => {
     ).toEqual({ action: 'hold', reason: 'context-not-stable' });
   });
 });
-

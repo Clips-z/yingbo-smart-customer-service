@@ -47,6 +47,7 @@ import {
 import theme from '../common/styles/theme';
 import '../common/App.css';
 import {
+  selectCompanionHistory,
   selectCompanionProduct,
   selectCompanionSuggestion,
 } from './companionSelection';
@@ -117,15 +118,8 @@ function CompanionSurface() {
     [context, suggestions],
   );
   const conversationHistory = useMemo(
-    () =>
-      context?.conversationKey
-        ? suggestions.filter(
-            (item) =>
-              item.conversation_key === context.conversationKey &&
-              item.id !== suggestion?.id,
-          )
-        : [],
-    [context?.conversationKey, suggestion?.id, suggestions],
+    () => selectCompanionHistory(context, suggestions, suggestion?.id),
+    [context, suggestion?.id, suggestions],
   );
   const mode = modeQuery.data?.data.mode || 'assist';
   const matchedProduct = useMemo(
@@ -400,6 +394,39 @@ function CompanionSurface() {
                 )}
               </Box>
 
+              {Boolean(context.recentMessages?.length) && (
+                <Box bg="white" borderRadius="16px" p={3} border="1px solid #dbe7e5">
+                  <Flex justify="space-between" align="center" mb={2}>
+                    <Text fontSize="11px" fontWeight="900">最近真实对话</Text>
+                    <Badge colorScheme="teal" fontSize="9px">
+                      {context.recentMessages?.length} 段
+                    </Badge>
+                  </Flex>
+                  <Stack spacing={1.5}>
+                    {context.recentMessages?.slice(-3).map((message, index) => (
+                      <Flex
+                        // OCR snapshots do not expose durable message ids.
+                        key={`${message.direction}-${index}-${message.content}`}
+                        justify={message.direction === 'outgoing' ? 'flex-end' : 'flex-start'}
+                      >
+                        <Box
+                          maxW="88%"
+                          px={2.5}
+                          py={1.5}
+                          borderRadius="10px"
+                          bg={message.direction === 'outgoing' ? '#e4f2ff' : '#f1f5f4'}
+                          color="#294348"
+                          fontSize="10px"
+                          lineHeight="1.5"
+                        >
+                          {message.content}
+                        </Box>
+                      </Flex>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+
               <Box bg="#17383d" color="white" borderRadius="16px" p={3} boxShadow="0 10px 28px rgba(16,45,49,.16)">
                 <HStack spacing={1.5} mb={2}><FiMessageCircle color="#5ce1b6" /><Text fontSize="10px" fontWeight="800" color="whiteAlpha.700">买家最新问题</Text></HStack>
                 <Text fontSize="13px" lineHeight="1.65">
@@ -434,6 +461,23 @@ function CompanionSurface() {
                   <Text fontSize="9px" color="#849598">{content.length}/300</Text>
                 </Flex>
                 {notice && <Text mt={2} fontSize="10px" color={notice.startsWith('已填入') ? '#08785d' : '#b45d29'}>{notice}</Text>}
+                {conversationHistory.length > 0 && (
+                  <Box mt={3} pt={2.5} borderTop="1px solid #e1ebe9">
+                    <Text fontSize="10px" fontWeight="900" mb={1.5}>此前 AI 草稿</Text>
+                    <Stack spacing={1.5}>
+                      {conversationHistory.map((item) => (
+                        <Box key={item.id} bg="#f3f7f6" borderRadius="10px" p={2}>
+                          <Text fontSize="9px" color="#6f8588" noOfLines={1}>
+                            买家：{item.incoming_content}
+                          </Text>
+                          <Text mt={1} fontSize="10px" color="#294348" noOfLines={2}>
+                            回复：{item.draft_content || item.reply_content}
+                          </Text>
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Box>
+                )}
               </Box>
             </>
           )}

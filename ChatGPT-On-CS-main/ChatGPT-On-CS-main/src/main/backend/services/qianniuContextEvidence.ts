@@ -15,6 +15,15 @@ function clean(value: string): string {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+function parseStoreAccount(text: string) {
+  const normalized = clean(text);
+  const match = normalized.match(/^(.{2,60})[:：;；]+([A-Za-z][\w.-]{1,40})$/);
+  if (!match) return undefined;
+  const store = clean(match[1]).replace(/[:：;；]+$/, '');
+  const account = clean(match[2]);
+  return store && account ? { store, account } : undefined;
+}
+
 function groupedRows(lines: OcrLine[]): Array<{ text: string; x: number; y: number }> {
   const rows: OcrLine[][] = [];
   for (const line of [...lines].sort((a, b) => a.y - b.y || a.x - b.x)) {
@@ -44,22 +53,27 @@ export function extractQianniuContextEvidence(
   const rows = groupedRows(lines);
   const evidence: QianniuContextEvidence = {};
 
-  const accountRow = rows
-    .filter((row) => row.y <= 120)
-    .find((row) => /^.{2,60}[:：][A-Za-z][\w.-]{1,40}$/.test(row.text));
-  if (accountRow) {
-    const separator = Math.max(
-      accountRow.text.lastIndexOf(':'),
-      accountRow.text.lastIndexOf('：'),
-    );
-    const store = clean(accountRow.text.slice(0, separator));
-    const account = clean(accountRow.text.slice(separator + 1));
-    if (store && account) {
-      evidence.storeId = store;
-      evidence.storeName = store;
-      evidence.accountId = account;
-      evidence.accountName = account;
-    }
+  const topLines = lines.filter((line) => line.y <= 90);
+  const activeLines = topLines.filter((line) => line.active_tab);
+  const parsedTopLines = topLines
+    .map((line) => parseStoreAccount(line.text))
+    .filter((item): item is { store: string; account: string } => Boolean(item));
+  const accountEvidence =
+    activeLines.map((line) => parseStoreAccount(line.text)).find(Boolean) ||
+    (activeLines.length === 0 && parsedTopLines.length === 1
+      ? parsedTopLines[0]
+      : undefined) ||
+    (parsedTopLines.length === 0
+      ? rows
+          .filter((row) => row.y <= 90)
+          .map((row) => parseStoreAccount(row.text))
+          .find(Boolean)
+      : undefined);
+  if (accountEvidence) {
+    evidence.storeId = accountEvidence.store;
+    evidence.storeName = accountEvidence.store;
+    evidence.accountId = accountEvidence.account;
+    evidence.accountName = accountEvidence.account;
   }
 
   const productLine = lines
@@ -92,4 +106,3 @@ export function extractQianniuContextEvidence(
 
   return evidence;
 }
-

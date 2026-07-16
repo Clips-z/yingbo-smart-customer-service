@@ -16,6 +16,10 @@ export interface CompanionContextSnapshot {
   productTitle?: string | null;
   storeName?: string | null;
   accountName?: string | null;
+  recentMessages?: Array<{
+    direction: 'incoming' | 'outgoing';
+    content: string;
+  }>;
   incomingMessageFingerprint?: string | null;
   contextRevision: number;
   capturedAt: string;
@@ -76,7 +80,6 @@ const REQUIRED_IDENTITY_FIELDS: Array<keyof CompanionContextSnapshot> = [
   'storeId',
   'accountId',
   'contactId',
-  'chatFingerprint',
 ];
 
 function normalized(value: string | null | undefined): string {
@@ -90,7 +93,7 @@ function digest(parts: string[]): string {
 export function buildConversationKey(
   context: Pick<
     CompanionContextSnapshot,
-    'platformId' | 'storeId' | 'accountId' | 'contactId' | 'chatFingerprint'
+    'platformId' | 'storeId' | 'accountId' | 'contactId'
   >,
 ): string {
   for (const field of REQUIRED_IDENTITY_FIELDS) {
@@ -104,7 +107,6 @@ export function buildConversationKey(
     normalized(context.storeId),
     normalized(context.accountId),
     normalized(context.contactId),
-    normalized(context.chatFingerprint),
   ]);
 }
 
