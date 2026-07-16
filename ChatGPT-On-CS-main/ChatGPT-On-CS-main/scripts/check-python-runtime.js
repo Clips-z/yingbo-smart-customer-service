@@ -40,7 +40,7 @@ const imports = [
     'wechat-py311',
     'import pyautogui, pywinauto, win32api, onnxruntime; from rapidocr_onnxruntime import RapidOCR',
   ],
-  ['rag-py311', 'import chromadb, fastapi, onnxruntime'],
+  ['rag-py311', 'import chromadb, fastapi, uvicorn, httpx, openai, onnxruntime'],
 ];
 for (const [directory, statement] of imports) {
   const target = path.join(root, 'tools', directory);

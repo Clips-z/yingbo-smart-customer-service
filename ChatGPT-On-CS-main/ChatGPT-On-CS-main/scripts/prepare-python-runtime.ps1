@@ -159,5 +159,5 @@ Install-Target 'rag-py311' (Join-Path $runtimeRoot 'requirements-rag.txt')
 
 Test-Import 'rapidocr-py311' 'import rapidocr, onnxruntime, numpy, PIL'
 Test-Import 'wechat-py311' 'import pyautogui, pywinauto, win32api, onnxruntime; from rapidocr_onnxruntime import RapidOCR'
-Test-Import 'rag-py311' 'import chromadb, fastapi, uvicorn, onnxruntime'
+Test-Import 'rag-py311' 'import chromadb, fastapi, uvicorn, httpx, openai, onnxruntime'
 Write-Host 'Bundled Python runtime is ready.'
