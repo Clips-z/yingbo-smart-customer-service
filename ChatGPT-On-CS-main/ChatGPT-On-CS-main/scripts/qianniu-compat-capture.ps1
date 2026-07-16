@@ -123,7 +123,9 @@ public static class QianniuWindowCapture
     public static string ChatFingerprint(Bitmap bitmap)
     {
         int maxX = Math.Min(bitmap.Width - 1, 838);
-        int maxY = Math.Min(bitmap.Height - 1, 705);
+        // Stop above the composer toolbar so its blinking caret and status
+        // icons do not trigger a full OCR pass while the chat is unchanged.
+        int maxY = Math.Min(bitmap.Height - 1, 650);
         var bytes = new List<byte>();
         for (int y = 130; y <= maxY; y += 4)
         {

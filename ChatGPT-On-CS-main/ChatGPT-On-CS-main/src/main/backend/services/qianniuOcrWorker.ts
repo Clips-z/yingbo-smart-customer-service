@@ -54,6 +54,12 @@ export class QianniuOcrWorker {
 
   private stderrTail = '';
 
+  private warmed = false;
+
+  public isWarm(): boolean {
+    return this.warmed && Boolean(this.process && !this.process.killed);
+  }
+
   public async recognize(image: string): Promise<QianniuOcrResult> {
     const worker = this.ensureProcess();
     const id = crypto.randomUUID();
@@ -124,6 +130,7 @@ export class QianniuOcrWorker {
     clearTimeout(request.timer);
     this.pending.delete(response.id);
     if (response.ok) {
+      this.warmed = true;
       request.resolve(response);
     } else {
       request.reject(new Error(response.error || 'RapidOCR worker failed'));
@@ -133,6 +140,7 @@ export class QianniuOcrWorker {
   private resetProcess(error?: Error): void {
     const worker = this.process;
     this.process = undefined;
+    this.warmed = false;
     if (worker && !worker.killed) worker.kill();
     if (!error) return;
     for (const request of this.pending.values()) {

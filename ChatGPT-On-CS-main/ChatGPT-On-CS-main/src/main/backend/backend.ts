@@ -937,6 +937,13 @@ class BKServer {
       res.json({ success: true, data: this.qianniuCompatService.getHealth() });
     });
 
+    this.app.post('/api/v1/compat/qianniu/refresh', (_req, res) => {
+      res.json({
+        success: true,
+        data: this.qianniuCompatService.requestRefresh(),
+      });
+    });
+
     this.app.post(
       '/api/v1/compat/qianniu/mode',
       asyncHandler(async (req, res) => {

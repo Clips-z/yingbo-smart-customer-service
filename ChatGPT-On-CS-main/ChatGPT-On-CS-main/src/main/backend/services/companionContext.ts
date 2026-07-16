@@ -20,6 +20,7 @@ export interface CompanionContextSnapshot {
     direction: 'incoming' | 'outgoing';
     content: string;
   }>;
+  recentMessagesReused?: boolean;
   incomingMessageFingerprint?: string | null;
   contextRevision: number;
   capturedAt: string;

@@ -43,6 +43,7 @@ import {
 import { QianniuContextTracker } from './qianniuContextTracker';
 import { assertDeliveryContext } from './deliveryContextGuard';
 import { extractQianniuContextEvidence } from './qianniuContextEvidence';
+import { sanitizeQianniuRecentMessages } from './qianniuRecentMessages';
 
 const execFileAsync = promisify(execFile);
 
@@ -91,6 +92,8 @@ export class QianniuCompatService {
 
   private lastRecognizedFingerprint = '';
 
+  private currentScanStartedAt = 0;
+
   private replyMode: QianniuReplyMode = 'assist';
 
   private clientRunning = false;
@@ -119,6 +122,13 @@ export class QianniuCompatService {
     const snapshot = this.contextTracker.getSnapshot();
     if (!snapshot) return undefined;
     return { ...snapshot, ...this.contextTracker.keys(snapshot) };
+  }
+
+  public requestRefresh() {
+    this.lastRecognizedFingerprint = '';
+    this.lastActivePollAt = 0;
+    this.nextScanAt = 0;
+    return { accepted: true };
   }
 
   public async setMode(mode: QianniuReplyMode): Promise<void> {
@@ -342,6 +352,8 @@ export class QianniuCompatService {
           if (this.clientRunning) {
             this.clientRunning = false;
             this.ocrWorker.stop();
+            this.contextTracker.markDegraded();
+            this.broadcastCurrentContext();
             this.log.info(active ? '千牛已关闭，千牛采集已停止' : '千牛平台未激活，千牛采集已停止');
           }
           return;
@@ -433,6 +445,7 @@ export class QianniuCompatService {
 
   private handleScanError(error: unknown): void {
     this.busy = false;
+    this.currentScanStartedAt = 0;
     const message = error instanceof Error ? error.message : String(error);
     const qianniuMissing = message.includes(
       'Qianniu reception window was not found',
@@ -440,6 +453,8 @@ export class QianniuCompatService {
     const now = Date.now();
     this.nextScanAt = now + (qianniuMissing ? 30_000 : 10_000);
     this.health.markFailure(message, this.nextScanAt);
+    this.contextTracker.markDegraded();
+    this.broadcastCurrentContext();
     const key = qianniuMissing
       ? 'qianniu-window-missing'
       : message.slice(0, 200);
@@ -454,9 +469,23 @@ export class QianniuCompatService {
     }
   }
 
+  private broadcastCurrentContext(): void {
+    const snapshot = this.contextTracker.getSnapshot();
+    if (!snapshot) return;
+    this.dispatchService.receiveBroadcast({
+      event: 'qianniu_context_changed',
+      data: snapshot,
+    });
+  }
+
   private markScanHealthy(): void {
     this.nextScanAt = 0;
-    this.health.markRunning();
+    this.health.markRunning(
+      this.currentScanStartedAt
+        ? Date.now() - this.currentScanStartedAt
+        : undefined,
+    );
+    this.currentScanStartedAt = 0;
     if (this.lastFailureKey) {
       this.log.info('千牛兼容采集已恢复');
       this.lastFailureKey = '';
@@ -497,6 +526,8 @@ export class QianniuCompatService {
         return;
       }
       const fingerprint = capture.chat_fingerprint;
+      this.currentScanStartedAt = Date.now();
+      this.health.markScanning(!this.ocrWorker.isWarm());
       capture = await this.recognizeCapture(capture);
       this.lastRecognizedFingerprint = fingerprint;
 
@@ -513,6 +544,9 @@ export class QianniuCompatService {
       );
       const confidence = capture.candidate?.confidence || 0;
       const contextEvidence = extractQianniuContextEvidence(capture.lines || []);
+      const recentMessages = sanitizeQianniuRecentMessages(
+        capture.recent_messages,
+      );
       const task = (await this.appService.getTasks()).find(
         (item) => item.app_id === 'win_qianniu',
       );
@@ -546,9 +580,7 @@ export class QianniuCompatService {
             capture.account_id?.trim() ||
             task.task_id,
           accountName: contextEvidence.accountName || null,
-          recentMessages: (capture.recent_messages || []).map(
-            ({ direction, content }) => ({ direction, content }),
-          ),
+          recentMessages,
           contactId,
           chatFingerprint: capture.chat_fingerprint,
           productId:
@@ -615,7 +647,7 @@ export class QianniuCompatService {
           CTX_PLATFORM: 'qianniu-9.96-compat',
         },
         msgs: [
-          ...(capture.recent_messages || [])
+          ...recentMessages
             .filter((item) => item.content !== content)
             .slice(-3)
             .map((item) => ({

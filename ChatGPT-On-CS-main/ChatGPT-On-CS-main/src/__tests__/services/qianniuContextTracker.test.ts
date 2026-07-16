@@ -87,5 +87,62 @@ describe('QianniuContextTracker', () => {
     expect(late.snapshot.contactId).toBe('buyer-a');
     expect(late.changed).toBe(false);
   });
-});
 
+  test('reuses non-empty recent messages after a transient empty OCR result', () => {
+    const tracker = new QianniuContextTracker(1);
+    tracker.observe(
+      observation({
+        recentMessages: [
+          { direction: 'incoming', content: '多久发货' },
+          { direction: 'outgoing', content: '今天发出' },
+        ],
+      }),
+    );
+    const next = tracker.observe(
+      observation({
+        chatFingerprint: 'chat-b',
+        incomingMessageFingerprint: null,
+        recentMessages: [],
+        capturedAt: '2026-07-16T10:00:01.000Z',
+      }),
+    ).snapshot;
+    expect(next.recentMessages).toHaveLength(2);
+    expect(next.recentMessagesReused).toBe(true);
+  });
+
+  test('never reuses recent messages for a different customer', () => {
+    const tracker = new QianniuContextTracker(1);
+    tracker.observe(
+      observation({
+        recentMessages: [{ direction: 'incoming', content: 'A 的问题' }],
+      }),
+    );
+    const next = tracker.observe(
+      observation({
+        contactId: 'buyer-b',
+        chatFingerprint: 'chat-b',
+        incomingMessageFingerprint: null,
+        recentMessages: [],
+        capturedAt: '2026-07-16T10:00:01.000Z',
+      }),
+    ).snapshot;
+    expect(next.recentMessages).toEqual([]);
+    expect(next.recentMessagesReused).toBe(false);
+  });
+
+  test('degraded context keeps readable history but exposes no delivery keys', () => {
+    const tracker = new QianniuContextTracker(1);
+    tracker.observe(
+      observation({
+        recentMessages: [{ direction: 'incoming', content: '还在吗' }],
+      }),
+    );
+    tracker.markDegraded('2026-07-16T10:00:02.000Z');
+    const degraded = tracker.getSnapshot();
+    expect(degraded).toMatchObject({
+      state: 'degraded',
+      recentMessages: [{ direction: 'incoming', content: '还在吗' }],
+    });
+    expect(tracker.keys()).toBeUndefined();
+  });
+});

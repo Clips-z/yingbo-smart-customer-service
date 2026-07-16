@@ -390,6 +390,13 @@ export async function getQianniuCollectorHealth() {
   return GET<{ data: QianniuCollectorHealth }>('/api/v1/compat/qianniu/health');
 }
 
+export async function refreshQianniuCompanion() {
+  return POST<{ data: { accepted: boolean } }>(
+    '/api/v1/compat/qianniu/refresh',
+    {},
+  );
+}
+
 export async function getQianniuCompanionContext() {
   return GET<{ data?: QianniuCompanionContext }>(
     '/api/v1/compat/qianniu/context',

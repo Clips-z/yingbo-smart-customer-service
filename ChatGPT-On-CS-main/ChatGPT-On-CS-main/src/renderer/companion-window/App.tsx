@@ -24,15 +24,18 @@ import {
   FiLink2,
   FiMessageCircle,
   FiPackage,
+  FiRefreshCw,
   FiSend,
   FiUser,
   FiX,
 } from 'react-icons/fi';
 import {
   fillQianniuSuggestion,
+  getQianniuCollectorHealth,
   getQianniuCompanionContext,
   getQianniuSuggestions,
   getReplyMode,
+  refreshQianniuCompanion,
   saveQianniuSuggestionDraft,
   setReplyMode,
 } from '../common/services/platform/controller';
@@ -82,12 +85,18 @@ function CompanionSurface() {
   });
   const [content, setContent] = useState('');
   const [working, setWorking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [notice, setNotice] = useState('');
 
   const contextQuery = useQuery(
     ['qianniu-companion-context'],
     getQianniuCompanionContext,
     { refetchInterval: 1200 },
+  );
+  const healthQuery = useQuery(
+    ['qianniu-companion-health'],
+    getQianniuCollectorHealth,
+    { refetchInterval: 2000 },
   );
   const suggestionsQuery = useQuery(
     ['qianniu-companion-suggestions'],
@@ -112,6 +121,7 @@ function CompanionSurface() {
   );
 
   const context = contextQuery.data?.data;
+  const health = healthQuery.data?.data;
   const suggestions = suggestionsQuery.data?.data || [];
   const suggestion = useMemo(
     () => selectCompanionSuggestion(context, suggestions),
@@ -202,7 +212,13 @@ function CompanionSurface() {
   };
 
   const fill = async () => {
-    if (!suggestion || !content.trim() || mode !== 'assist') return;
+    if (
+      !suggestion ||
+      !content.trim() ||
+      mode !== 'assist' ||
+      context?.state !== 'stable' ||
+      health?.phase !== 'ready'
+    ) return;
     setWorking(true);
     setNotice('');
     try {
@@ -214,6 +230,20 @@ function CompanionSurface() {
       setNotice(error instanceof Error ? error.message : String(error));
     } finally {
       setWorking(false);
+    }
+  };
+
+  const refresh = async () => {
+    setRefreshing(true);
+    setNotice('');
+    try {
+      await refreshQianniuCompanion();
+      await Promise.all([contextQuery.refetch(), healthQuery.refetch()]);
+      setNotice('已请求重新识别当前千牛会话');
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : String(error));
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -263,6 +293,17 @@ function CompanionSurface() {
 
   const stable = context?.state === 'stable';
   const waiting = contextQuery.isLoading || context?.state === 'switching';
+  const collectorReady = health?.state === 'running' && health.phase === 'ready';
+  const healthLabel =
+    health?.phase === 'warming'
+      ? '首次加载 OCR，后续会更快'
+      : health?.phase === 'scanning'
+        ? '正在识别当前会话'
+        : health?.phase === 'ready'
+          ? `识别已就绪${health.lastScanDurationMs ? ` · ${(health.lastScanDurationMs / 1000).toFixed(1)}s` : ''}`
+          : health?.state === 'degraded'
+            ? '识别暂时异常，将自动重试'
+            : '等待千牛接待台';
 
   return (
     <Flex h="100vh" direction="column" bg="#edf3f2" color="#173238" overflow="hidden">
@@ -321,6 +362,38 @@ function CompanionSurface() {
 
       <Box flex="1" overflowY="auto" p={3}>
         <Stack spacing={3}>
+          <Flex
+            bg={collectorReady ? '#e5f7f1' : '#fff7e8'}
+            border="1px solid"
+            borderColor={collectorReady ? '#bde7da' : '#f4ddb5'}
+            borderRadius="12px"
+            px={3}
+            py={2}
+            align="center"
+            gap={2}
+          >
+            <Box
+              w="7px"
+              h="7px"
+              borderRadius="full"
+              bg={collectorReady ? '#20a982' : health?.state === 'degraded' ? '#e67e22' : '#d9a441'}
+            />
+            <Text flex="1" fontSize="10px" color="#49666a" noOfLines={1}>
+              {healthLabel}
+            </Text>
+            <Tooltip label="立即重新识别">
+              <IconButton
+                aria-label="立即重新识别"
+                icon={<FiRefreshCw />}
+                size="xs"
+                variant="ghost"
+                color="#267b68"
+                isLoading={refreshing}
+                onClick={() => void refresh()}
+              />
+            </Tooltip>
+          </Flex>
+
           <Box bg="white" borderRadius="16px" p={3} boxShadow="0 8px 24px rgba(25,55,58,.06)" border="1px solid #dbe7e5">
             <Flex align="center" gap={2.5}>
               <Flex w="38px" h="38px" borderRadius="13px" bg={stable ? '#d8f8ee' : '#fff1dc'} color={stable ? '#08785d' : '#9c5b09'} align="center" justify="center">
@@ -401,6 +474,9 @@ function CompanionSurface() {
                     <Badge colorScheme="teal" fontSize="9px">
                       {context.recentMessages?.length} 段
                     </Badge>
+                    {context.recentMessagesReused && (
+                      <Badge colorScheme="orange" fontSize="9px">上次识别</Badge>
+                    )}
                   </Flex>
                   <Stack spacing={1.5}>
                     {context.recentMessages?.slice(-3).map((message, index) => (
@@ -515,7 +591,7 @@ function CompanionSurface() {
           borderRadius="12px"
           size="sm"
           isLoading={working}
-          isDisabled={!stable || !suggestion || !content.trim() || mode !== 'assist'}
+          isDisabled={!stable || !collectorReady || !suggestion || !content.trim() || mode !== 'assist'}
           onClick={() => void fill()}
         >
           填入当前客户的千牛输入框

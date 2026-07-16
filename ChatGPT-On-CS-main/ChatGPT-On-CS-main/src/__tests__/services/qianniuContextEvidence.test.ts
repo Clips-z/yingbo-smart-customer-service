@@ -29,6 +29,20 @@ describe('extractQianniuContextEvidence', () => {
     });
   });
 
+  test('recovers a missing tab separator from the visible agent account', () => {
+    expect(
+      extractQianniuContextEvidence([
+        { ...line('wheeltec品牌店jamie', 592, 15), active_tab: true },
+        line('jamie', 87, 84),
+      ]),
+    ).toMatchObject({
+      storeId: 'wheeltec品牌店',
+      storeName: 'wheeltec品牌店',
+      accountId: 'jamie',
+      accountName: 'jamie',
+    });
+  });
+
   test('extracts product id and nearby title from the right product panel', () => {
     expect(
       extractQianniuContextEvidence([

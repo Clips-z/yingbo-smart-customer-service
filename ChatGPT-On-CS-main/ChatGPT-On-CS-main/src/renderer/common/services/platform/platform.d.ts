@@ -132,12 +132,15 @@ export type ReplySuggestionStatus =
 
 export interface QianniuCollectorHealth {
   state: 'stopped' | 'running' | 'degraded';
+  phase: 'idle' | 'warming' | 'scanning' | 'ready' | 'retrying';
   processRunning: boolean;
   lastSuccessAt?: string;
   lastError?: string;
   reasonCode?: string;
   recoveryAction?: string;
   nextRetryAt?: string;
+  scanStartedAt?: string;
+  lastScanDurationMs?: number;
 }
 
 export interface QianniuCompanionContext {
@@ -154,6 +157,7 @@ export interface QianniuCompanionContext {
     direction: 'incoming' | 'outgoing';
     content: string;
   }>;
+  recentMessagesReused?: boolean;
   incomingMessageFingerprint?: string | null;
   contextRevision: number;
   capturedAt: string;
