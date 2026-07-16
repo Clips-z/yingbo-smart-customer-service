@@ -414,6 +414,17 @@ export async function fillQianniuSuggestion(id: number, content: string) {
   );
 }
 
+export async function saveQianniuSuggestionDraft(
+  id: number,
+  content: string,
+  contextRevision?: number | null,
+) {
+  return POST<{ data: ReplySuggestion }>(
+    '/api/v1/compat/qianniu/suggestions/draft',
+    { id, content, contextRevision },
+  );
+}
+
 export async function fillWechatSuggestion(id: number, content: string) {
   return POST<{ data: ReplySuggestion }>(
     '/api/v1/compat/wechat/suggestions/fill',

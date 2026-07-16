@@ -165,7 +165,12 @@ export class QianniuCompatService {
         status: 'prepared',
       });
       if (!completed) throw new Error('填入结果已过期，未更新回复状态');
-      await suggestion.update({ reply_content: replyContent });
+      await suggestion.update({
+        reply_content: replyContent,
+        draft_content: replyContent,
+        draft_state: 'prepared',
+        draft_updated_at: new Date(),
+      });
     } catch (error) {
       await finishSuggestionDelivery({
         id,
@@ -590,6 +595,10 @@ export class QianniuCompatService {
           sender,
           incoming_content: content,
           reply_content: reply.content.trim().slice(0, 300),
+          original_reply_content: reply.content.trim().slice(0, 300),
+          draft_content: reply.content.trim().slice(0, 300),
+          draft_state: 'draft',
+          draft_updated_at: new Date(),
           message_key: key,
           status: 'pending',
           created_at: new Date(),

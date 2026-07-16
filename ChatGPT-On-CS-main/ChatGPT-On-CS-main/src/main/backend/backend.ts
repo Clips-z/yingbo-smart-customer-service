@@ -1169,6 +1169,40 @@ class BKServer {
     );
 
     this.app.post(
+      '/api/v1/compat/qianniu/suggestions/draft',
+      asyncHandler(async (req, res) => {
+        const id = Number(req.body.id);
+        if (!Number.isInteger(id) || id <= 0) {
+          res.status(400).json({ success: false, message: 'Invalid suggestion id' });
+          return;
+        }
+        const suggestion = await ReplySuggestion.findByPk(id);
+        if (!suggestion || suggestion.platform_id !== 'win_qianniu') {
+          res.status(404).json({ success: false, message: '千牛回复记录不存在' });
+          return;
+        }
+        try {
+          const { saveConversationDraft } = await import(
+            './services/conversationDraftService'
+          );
+          await saveConversationDraft({
+            suggestion,
+            content: req.body.content,
+            contextRevision: req.body.contextRevision,
+          });
+          this.dispatchService.receiveBroadcast({
+            event: 'qianniu_suggestion_updated',
+            data: suggestion.toJSON(),
+          });
+          res.json({ success: true, data: suggestion });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          res.status(409).json({ success: false, message });
+        }
+      }),
+    );
+
+    this.app.post(
       '/api/v1/compat/qianniu/suggestions/fill',
       asyncHandler(async (req, res) => {
         const id = Number(req.body.id);
