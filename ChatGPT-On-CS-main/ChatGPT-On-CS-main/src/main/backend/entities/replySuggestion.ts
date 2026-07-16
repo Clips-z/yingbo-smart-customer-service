@@ -41,6 +41,8 @@ export class ReplySuggestion extends Model {
 
   declare product_id: string | null;
 
+  declare product_title: string | null;
+
   declare incoming_message_fingerprint: string | null;
 
   declare context_revision: number | null;
@@ -127,6 +129,10 @@ export function initReplySuggestion(sequelize: Sequelize) {
         type: DataTypes.STRING(255),
         allowNull: true,
       },
+      product_title: {
+        type: DataTypes.STRING(500),
+        allowNull: true,
+      },
       incoming_message_fingerprint: {
         type: DataTypes.STRING(64),
         allowNull: true,
@@ -196,6 +202,7 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     contact_id: { type: DataTypes.STRING(255), allowNull: true },
     chat_fingerprint: { type: DataTypes.STRING(255), allowNull: true },
     product_id: { type: DataTypes.STRING(255), allowNull: true },
+    product_title: { type: DataTypes.STRING(500), allowNull: true },
     incoming_message_fingerprint: {
       type: DataTypes.STRING(64),
       allowNull: true,

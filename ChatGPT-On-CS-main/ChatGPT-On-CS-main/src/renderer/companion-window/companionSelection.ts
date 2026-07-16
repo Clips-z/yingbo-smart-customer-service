@@ -2,6 +2,7 @@ import {
   QianniuCompanionContext,
   ReplySuggestion,
 } from '../common/services/platform/platform';
+import { ProductQA } from '../common/services/knowledge/productQA';
 
 export function selectCompanionSuggestion(
   context: QianniuCompanionContext | undefined,
@@ -19,4 +20,22 @@ export function selectCompanionSuggestion(
       (left, right) =>
         new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
     )[0];
+}
+
+export function selectCompanionProduct(
+  context: QianniuCompanionContext | undefined,
+  products: ProductQA[],
+): ProductQA | undefined {
+  if (!context?.productId) return undefined;
+  const candidates = products.filter(
+    (product) => product.platformProductId === context.productId,
+  );
+  return (
+    candidates.find(
+      (product) =>
+        product.shopId === context.storeId ||
+        product.shopName === context.storeName ||
+        product.shopName === context.storeId,
+    ) || candidates[0]
+  );
 }

@@ -9,6 +9,7 @@ import {
   Flex,
   HStack,
   IconButton,
+  Image,
   Spinner,
   Stack,
   Text,
@@ -39,9 +40,16 @@ import {
   QianniuReplyMode,
   ReplySuggestion,
 } from '../common/services/platform/platform';
+import {
+  fetchProductQAList,
+  productPlaceholderImage,
+} from '../common/services/knowledge/productQA';
 import theme from '../common/styles/theme';
 import '../common/App.css';
-import { selectCompanionSuggestion } from './companionSelection';
+import {
+  selectCompanionProduct,
+  selectCompanionSuggestion,
+} from './companionSelection';
 
 type DockState = {
   attached?: boolean;
@@ -90,6 +98,17 @@ function CompanionSurface() {
     () => getReplyMode('win_qianniu'),
     { refetchInterval: 5000 },
   );
+  const productQuery = useQuery(
+    ['qianniu-companion-product', contextQuery.data?.data?.productId],
+    () =>
+      fetchProductQAList({
+        keyword: contextQuery.data?.data?.productId || '',
+        status: 'on',
+        page: 1,
+        pageSize: 10,
+      }),
+    { enabled: Boolean(contextQuery.data?.data?.productId), staleTime: 30_000 },
+  );
 
   const context = contextQuery.data?.data;
   const suggestions = suggestionsQuery.data?.data || [];
@@ -109,6 +128,10 @@ function CompanionSurface() {
     [context?.conversationKey, suggestion?.id, suggestions],
   );
   const mode = modeQuery.data?.data.mode || 'assist';
+  const matchedProduct = useMemo(
+    () => selectCompanionProduct(context, productQuery.data?.list || []),
+    [context, productQuery.data?.list],
+  );
 
   const activeSuggestionRef = useRef<ReplySuggestion | undefined>(suggestion);
   const contentRef = useRef(content);
@@ -342,9 +365,39 @@ function CompanionSurface() {
                     {context.productId ? '已识别' : '待识别'}
                   </Badge>
                 </Flex>
-                <Text fontSize="12px" color={context.productId ? '#23484d' : '#86989a'}>
-                  {context.productId || '当前版本尚未取得商品ID，回复只使用店铺知识和聊天上下文。'}
-                </Text>
+                {context.productId ? (
+                  <Flex gap={2.5} align="center">
+                    <Image
+                      src={productPlaceholderImage(
+                        matchedProduct?.name || context.productTitle || '商品',
+                        matchedProduct?.hue || 168,
+                      )}
+                      boxSize="52px"
+                      borderRadius="12px"
+                      objectFit="cover"
+                    />
+                    <Box minW={0} flex="1">
+                      <Text fontSize="12px" fontWeight="800" noOfLines={2}>
+                        {matchedProduct?.name || context.productTitle || `商品 ${context.productId}`}
+                      </Text>
+                      <Text fontSize="9px" color="#789092" mt={1}>ID {context.productId}</Text>
+                      <HStack spacing={1} mt={1}>
+                        <Badge colorScheme={matchedProduct ? 'green' : 'orange'} fontSize="8px">
+                          {matchedProduct ? `知识 ${matchedProduct.qaCount} 条` : '知识待绑定'}
+                        </Badge>
+                        {matchedProduct?.syncStatus && (
+                          <Badge colorScheme={matchedProduct.syncStatus === 'synced' ? 'teal' : 'gray'} fontSize="8px">
+                            {matchedProduct.syncStatus === 'synced' ? 'RAG已同步' : '待同步'}
+                          </Badge>
+                        )}
+                      </HStack>
+                    </Box>
+                  </Flex>
+                ) : (
+                  <Text fontSize="12px" color="#86989a">
+                    尚未识别商品，回复只使用店铺知识和聊天上下文。
+                  </Text>
+                )}
               </Box>
 
               <Box bg="#17383d" color="white" borderRadius="16px" p={3} boxShadow="0 10px 28px rgba(16,45,49,.16)">
@@ -440,4 +493,3 @@ export default function CompanionApp() {
     </QueryClientProvider>
   );
 }
-

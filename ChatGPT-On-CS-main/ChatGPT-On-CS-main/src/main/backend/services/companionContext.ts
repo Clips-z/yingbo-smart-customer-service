@@ -13,6 +13,9 @@ export interface CompanionContextSnapshot {
   contactId: string;
   chatFingerprint: string;
   productId?: string | null;
+  productTitle?: string | null;
+  storeName?: string | null;
+  accountName?: string | null;
   incomingMessageFingerprint?: string | null;
   contextRevision: number;
   capturedAt: string;
@@ -184,4 +187,3 @@ export function decideDraftRestoration(
 
   return { action: 'restore-editable', reason: 'unchanged' };
 }
-

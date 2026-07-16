@@ -147,6 +147,9 @@ export interface QianniuCompanionContext {
   contactId: string;
   chatFingerprint: string;
   productId?: string | null;
+  productTitle?: string | null;
+  storeName?: string | null;
+  accountName?: string | null;
   incomingMessageFingerprint?: string | null;
   contextRevision: number;
   capturedAt: string;
@@ -196,6 +199,7 @@ export interface ReplySuggestion {
   contact_id?: string | null;
   chat_fingerprint?: string | null;
   product_id?: string | null;
+  product_title?: string | null;
   incoming_message_fingerprint?: string | null;
   context_revision?: number | null;
   draft_state?: string | null;

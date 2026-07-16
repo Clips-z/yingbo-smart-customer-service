@@ -39,6 +39,7 @@ import {
 } from './qianniuFillResult';
 import { QianniuContextTracker } from './qianniuContextTracker';
 import { assertDeliveryContext } from './deliveryContextGuard';
+import { extractQianniuContextEvidence } from './qianniuContextEvidence';
 
 const execFileAsync = promisify(execFile);
 
@@ -72,8 +73,6 @@ export class QianniuCompatService {
   private busy = false;
 
   private lastMessageKey = '';
-
-  private recentSenders = new Map<string, number>();
 
   private lastTabAlertX = -1;
 
@@ -555,6 +554,7 @@ export class QianniuCompatService {
       }
       const { sender, content } = decision;
       const confidence = capture.candidate?.confidence || 0;
+      const contextEvidence = extractQianniuContextEvidence(capture.lines || []);
       if (confidence < CONFIRM_OCR_BELOW) {
         const confirmation = await this.capture();
         const confirmedContent = confirmation.candidate?.content?.trim();
@@ -572,10 +572,6 @@ export class QianniuCompatService {
           return;
         }
       }
-      const now = Date.now();
-      const lastSeen = this.recentSenders.get(sender) || 0;
-      if (now - lastSeen < 45_000) return;
-
       const task = (await this.appService.getTasks()).find(
         (item) => item.app_id === 'win_qianniu',
       );
@@ -589,11 +585,20 @@ export class QianniuCompatService {
       });
       const contextUpdate = this.contextTracker.observe({
         platformId: 'win_qianniu',
-        storeId: capture.store_id?.trim() || task.env_id || 'qianniu-default',
-        accountId: capture.account_id?.trim() || task.task_id,
+        storeId:
+          contextEvidence.storeId ||
+          capture.store_id?.trim() ||
+          task.env_id ||
+          'qianniu-default',
+        storeName: contextEvidence.storeName || null,
+        accountId:
+          contextEvidence.accountId || capture.account_id?.trim() || task.task_id,
+        accountName: contextEvidence.accountName || null,
         contactId: sender,
         chatFingerprint: capture.chat_fingerprint,
-        productId: capture.product_id?.trim() || null,
+        productId:
+          contextEvidence.productId || capture.product_id?.trim() || null,
+        productTitle: contextEvidence.productTitle || null,
         incomingMessageFingerprint: key,
         capturedAt: new Date().toISOString(),
         confidence,
@@ -636,13 +641,12 @@ export class QianniuCompatService {
 
       if (reply.type !== 'TEXT' || !reply.content.trim()) return;
 
-      this.recentSenders.set(sender, now);
-
       const [suggestion, created] = await ReplySuggestion.findOrCreate({
         where: { message_key: key },
         defaults: {
           platform_id: 'win_qianniu',
-          store: 'qianniu-9.96-compat',
+          store:
+            contextUpdate.snapshot.storeName || contextUpdate.snapshot.storeId,
           sender,
           incoming_content: content,
           reply_content: reply.content.trim().slice(0, 300),
@@ -655,6 +659,7 @@ export class QianniuCompatService {
           contact_id: contextUpdate.snapshot.contactId,
           chat_fingerprint: contextUpdate.snapshot.chatFingerprint,
           product_id: contextUpdate.snapshot.productId || null,
+          product_title: contextUpdate.snapshot.productTitle || null,
           incoming_message_fingerprint:
             contextUpdate.snapshot.incomingMessageFingerprint || null,
           context_revision: contextUpdate.snapshot.contextRevision,

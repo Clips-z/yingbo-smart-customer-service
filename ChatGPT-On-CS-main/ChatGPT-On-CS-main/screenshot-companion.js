@@ -10,6 +10,7 @@ const mockPreload = path.join(__dirname, 'mock-preload.js');
 const context = {
   platformId: 'win_qianniu', storeId: '轮越旗舰店', accountId: 'jamie',
   contactId: 'tb296401895884', chatFingerprint: 'chat-a', productId: '560120308139',
+  productTitle: '二自由度二维舵机360度电动云台', storeName: '轮越旗舰店', accountName: 'jamie',
   incomingMessageFingerprint: 'message-a', contextRevision: 3,
   capturedAt: new Date().toISOString(), confidence: 0.98, state: 'stable',
   conversationKey: 'conversation-a', draftKey: 'draft-a',
@@ -40,6 +41,7 @@ const api = http.createServer((request, response) => {
   if (request.url.startsWith('/api/v1/compat/qianniu/context')) return json(response, { success: true, data: context });
   if (request.url.startsWith('/api/v1/compat/qianniu/suggestions')) return json(response, { success: true, data: [suggestion] });
   if (request.url.startsWith('/api/v1/compat/qianniu/mode')) return json(response, { success: true, data: { mode: 'assist' } });
+  if (request.url.startsWith('/api/v1/knowledge/products')) return json(response, { success: true, data: { list: [{ id: 'p1', name: '二自由度二维舵机360度电动云台', platformProductId: '560120308139', shopId: '轮越旗舰店', shopName: '轮越旗舰店', onSale: true, qaCount: 8, hue: 168, syncStatus: 'synced' }], total: 1, page: 1, pageSize: 10 } });
   return json(response, { success: true });
 });
 
@@ -63,6 +65,7 @@ app.whenReady().then(async () => {
   await win.loadURL('http://127.0.0.1:33848/companion.html');
   await new Promise((resolve) => setTimeout(resolve, 3500));
   const image = await win.capturePage();
+  if (image.isEmpty()) throw new Error('companion screenshot is empty');
   const output = path.join(__dirname, 'companion-preview.png');
   fs.writeFileSync(output, image.toPNG());
   console.log(output);

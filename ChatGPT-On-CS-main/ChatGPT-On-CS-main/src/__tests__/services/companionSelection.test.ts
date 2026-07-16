@@ -1,4 +1,4 @@
-import { selectCompanionSuggestion } from '../../renderer/companion-window/companionSelection';
+import { selectCompanionProduct, selectCompanionSuggestion } from '../../renderer/companion-window/companionSelection';
 import {
   QianniuCompanionContext,
   ReplySuggestion,
@@ -65,3 +65,22 @@ describe('selectCompanionSuggestion', () => {
   });
 });
 
+describe('selectCompanionProduct', () => {
+  const product = (shopId: string, shopName: string) => ({
+    id: `${shopId}-id`, name: '二维电动云台', platformProductId: 'product-a',
+    shopId, shopName, onSale: true, qaCount: 6, hue: 170,
+  });
+
+  test('prefers the current store when product ids are shared', () => {
+    const current = { ...context, productId: 'product-a', storeId: 'store-a' };
+    expect(
+      selectCompanionProduct(current, [
+        product('store-b', '店铺B'), product('store-a', '店铺A'),
+      ])?.shopId,
+    ).toBe('store-a');
+  });
+
+  test('never matches a different product id', () => {
+    expect(selectCompanionProduct(context, [product('store-a', '店铺A')])).toBeUndefined();
+  });
+});
