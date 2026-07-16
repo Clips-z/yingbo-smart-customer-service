@@ -48,15 +48,30 @@ describe('QianniuContextTracker', () => {
     ).toBe('switching');
 
     expect(
-      tracker.observe(
-        observation({ capturedAt: '2026-07-16T10:00:03.000Z' }),
-      ).snapshot.state,
+      tracker.observe(observation({ capturedAt: '2026-07-16T10:00:03.000Z' }))
+        .snapshot.state,
     ).toBe('switching');
     const restored = tracker.observe(
       observation({ capturedAt: '2026-07-16T10:00:04.000Z' }),
     );
     expect(restored.snapshot.contactId).toBe('buyer-a');
     expect(restored.snapshot.contextRevision).toBe(1);
+  });
+
+  test('restores the same revision after a stable A to B to A switch', () => {
+    const tracker = new QianniuContextTracker(1);
+    const firstA = tracker.observe(observation()).snapshot;
+    tracker.observe(
+      observation({
+        contactId: 'buyer-b',
+        chatFingerprint: 'chat-b',
+        capturedAt: '2026-07-16T10:00:01.000Z',
+      }),
+    );
+    const restoredA = tracker.observe(
+      observation({ capturedAt: '2026-07-16T10:00:02.000Z' }),
+    ).snapshot;
+    expect(restoredA.contextRevision).toBe(firstA.contextRevision);
   });
 
   test('increments revision for a new buyer message in the same chat', () => {
@@ -72,7 +87,9 @@ describe('QianniuContextTracker', () => {
     expect(tracker.keys(next)?.conversationKey).toBe(
       tracker.keys(first)?.conversationKey,
     );
-    expect(tracker.keys(next)?.draftKey).not.toBe(tracker.keys(first)?.draftKey);
+    expect(tracker.keys(next)?.draftKey).not.toBe(
+      tracker.keys(first)?.draftKey,
+    );
   });
 
   test('ignores a late observation from an older capture', () => {

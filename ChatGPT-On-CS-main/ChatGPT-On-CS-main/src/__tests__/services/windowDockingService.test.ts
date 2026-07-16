@@ -1,4 +1,10 @@
-import { calculateDockedBounds } from '../../main/services/windowDockingService';
+import {
+  calculateDockedBounds,
+  chooseCompanionTarget,
+  CompanionTargetWindow,
+  normalizeCompanionDockState,
+  resolveDockSide,
+} from '../../main/services/windowDockingService';
 
 const workArea = { x: 0, y: 0, width: 1920, height: 1040 };
 
@@ -48,3 +54,90 @@ describe('calculateDockedBounds', () => {
   });
 });
 
+const target = (
+  platformId: CompanionTargetWindow['platformId'],
+  foreground = false,
+): CompanionTargetWindow => ({
+  platformId,
+  hwnd: platformId === 'win_qianniu' ? 1 : platformId === 'win_wechat' ? 2 : 3,
+  x: 100,
+  y: 100,
+  width: 900,
+  height: 700,
+  minimized: false,
+  foreground,
+});
+
+describe('chooseCompanionTarget', () => {
+  test('follows the foreground supported platform', () => {
+    expect(
+      chooseCompanionTarget(
+        [target('win_qianniu'), target('win_wechat', true)],
+        'follow',
+        'win_qianniu',
+      )?.platformId,
+    ).toBe('win_wechat');
+  });
+
+  test('honors a locked platform even when another platform is foreground', () => {
+    expect(
+      chooseCompanionTarget(
+        [target('win_wechat', true), target('win_wecom')],
+        'win_wecom',
+        'win_wechat',
+      )?.platformId,
+    ).toBe('win_wecom');
+  });
+
+  test('keeps the previous platform while a non-platform window is foreground', () => {
+    expect(
+      chooseCompanionTarget(
+        [target('win_qianniu'), target('win_wechat')],
+        'follow',
+        'win_wechat',
+      )?.platformId,
+    ).toBe('win_wechat');
+  });
+
+  test('uses a deterministic fallback when no previous platform is available', () => {
+    expect(
+      chooseCompanionTarget(
+        [target('win_wecom'), target('win_qianniu')],
+        'follow',
+      )?.platformId,
+    ).toBe('win_qianniu');
+  });
+});
+
+describe('companion docking preferences', () => {
+  test('migrates a legacy Qianniu side without changing other platform defaults', () => {
+    const state = normalizeCompanionDockState({ attached: true, side: 'left' });
+    expect(state.targetMode).toBe('follow');
+    expect(state.sideByPlatform).toEqual({ win_qianniu: 'left' });
+    expect(resolveDockSide(state, 'win_qianniu')).toBe('left');
+    expect(resolveDockSide(state, 'win_wechat')).toBe('right');
+  });
+
+  test('keeps independent sides for each platform', () => {
+    const state = normalizeCompanionDockState({
+      side: 'right',
+      sideByPlatform: {
+        win_qianniu: 'left',
+        win_wechat: 'right',
+        win_wecom: 'left',
+      },
+    });
+    expect(resolveDockSide(state, 'win_qianniu')).toBe('left');
+    expect(resolveDockSide(state, 'win_wechat')).toBe('right');
+    expect(resolveDockSide(state, 'win_wecom')).toBe('left');
+  });
+
+  test('rejects invalid persisted platform modes', () => {
+    const state = normalizeCompanionDockState({
+      targetMode: 'unknown' as never,
+      activePlatformId: 'invalid' as never,
+    });
+    expect(state.targetMode).toBe('follow');
+    expect(state.activePlatformId).toBeUndefined();
+  });
+});

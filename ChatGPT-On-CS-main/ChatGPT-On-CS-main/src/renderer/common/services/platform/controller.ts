@@ -403,6 +403,19 @@ export async function getQianniuCompanionContext() {
   );
 }
 
+export async function getCompanionContext(platformId: string) {
+  return GET<{ data?: QianniuCompanionContext }>(
+    '/api/v1/compat/companion/context',
+    { platformId },
+  );
+}
+
+export async function getCompanionCollectorHealth(platformId: string) {
+  if (platformId === 'win_wechat') return getWechatCollectorHealth();
+  if (platformId === 'win_wecom') return getWecomCollectorHealth();
+  return getQianniuCollectorHealth();
+}
+
 export async function getWecomCollectorHealth() {
   return GET<{ data: WecomCollectorHealth }>('/api/v1/compat/wecom/health');
 }
@@ -451,6 +464,16 @@ export async function fillWecomSuggestion(id: number, content: string) {
     '/api/v1/compat/wecom/suggestions/fill',
     { id, content },
   );
+}
+
+export async function fillCompanionSuggestion(
+  platformId: string,
+  id: number,
+  content: string,
+) {
+  if (platformId === 'win_wechat') return fillWechatSuggestion(id, content);
+  if (platformId === 'win_wecom') return fillWecomSuggestion(id, content);
+  return fillQianniuSuggestion(id, content);
 }
 
 export async function updateQianniuSuggestionStatus(

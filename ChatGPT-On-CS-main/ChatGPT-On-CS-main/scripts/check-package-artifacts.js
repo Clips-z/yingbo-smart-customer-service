@@ -16,15 +16,24 @@ const files = [
 ];
 
 const invalid = files.filter(
-  (file) => !fs.existsSync(file) || !fs.statSync(file).isFile() || fs.statSync(file).size === 0,
+  (file) =>
+    !fs.existsSync(file) ||
+    !fs.statSync(file).isFile() ||
+    fs.statSync(file).size === 0,
 );
 if (invalid.length) {
-  invalid.forEach((file) => console.error(`Missing or empty artifact: ${path.relative(root, file)}`));
+  invalid.forEach((file) =>
+    console.error(`Missing or empty artifact: ${path.relative(root, file)}`),
+  );
   process.exit(1);
 }
 
-const check = spawnSync(process.execPath, [path.join(__dirname, 'check-python-runtime.js'), '--unpacked'], {
-  stdio: 'inherit',
-});
+const check = spawnSync(
+  process.execPath,
+  [path.join(__dirname, 'check-python-runtime.js'), '--unpacked'],
+  {
+    stdio: 'inherit',
+  },
+);
 if (check.status !== 0) process.exit(check.status || 1);
-console.log('v1.5.1 package artifacts are complete.');
+console.log(`v${packageJson.version} package artifacts are complete.`);

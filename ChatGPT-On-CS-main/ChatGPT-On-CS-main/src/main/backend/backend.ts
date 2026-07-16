@@ -34,6 +34,7 @@ import { RagService } from './services/ragService';
 import { ReplyModeDeniedError } from './services/replySafetyPolicy';
 import { KnowledgeService } from './services/knowledgeService';
 import { ReplySuggestion } from './entities/replySuggestion';
+import { CompanionContextRegistry } from './services/companionContextRegistry';
 import {
   CTX_APP_ID,
   CTX_APP_NAME,
@@ -83,6 +84,8 @@ class BKServer {
   private pddSidecarService: PddSidecarService;
 
   private douyinSidecarService: DouyinSidecarService;
+
+  private companionContextRegistry = new CompanionContextRegistry(1);
 
   constructor(port: number, mainWindow: BrowserWindow) {
     this.app = express();
@@ -319,7 +322,25 @@ class BKServer {
           msgs: normalizedMessages,
         });
 
+        const binding = this.companionContextRegistry.bindingFor(
+          String(platformId),
+          String(sender),
+        );
         const suggestion = await ReplySuggestion.create({
+          ...(binding
+            ? {
+                conversation_key: binding.conversationKey,
+                draft_key: binding.draftKey,
+                store_id: binding.snapshot.storeId,
+                account_id: binding.snapshot.accountId,
+                contact_id: binding.snapshot.contactId,
+                chat_fingerprint: binding.snapshot.chatFingerprint,
+                incoming_message_fingerprint:
+                  binding.snapshot.incomingMessageFingerprint || null,
+                context_revision: binding.snapshot.contextRevision,
+                draft_state: 'draft',
+              }
+            : {}),
           platform_id: String(platformId),
           store: String(ctx.CTX_PLATFORM || platformName),
           sender: String(sender),
@@ -1029,6 +1050,81 @@ class BKServer {
       res.json({ success: true, data: this.wechatSidecarService.getHealth() });
     });
 
+    this.app.get('/api/v1/compat/companion/context', (req, res) => {
+      const platformId = String(req.query.platformId || 'win_qianniu');
+      if (platformId === 'win_qianniu') {
+        res.json({ success: true, data: this.qianniuCompatService.getContext() });
+        return;
+      }
+      const snapshot = this.companionContextRegistry.get(platformId);
+      const binding = snapshot
+        ? this.companionContextRegistry.bindingFor(
+            platformId,
+            snapshot.contactId,
+          )
+        : undefined;
+      res.json({
+        success: true,
+        data: binding
+          ? {
+              ...binding.snapshot,
+              conversationKey: binding.conversationKey,
+              draftKey: binding.draftKey,
+            }
+          : snapshot,
+      });
+    });
+
+    this.app.post('/api/v1/compat/:platform/context', (req, res) => {
+      const platformId =
+        req.params.platform === 'wechat'
+          ? 'win_wechat'
+          : req.params.platform === 'wecom'
+            ? 'win_wecom'
+            : '';
+      if (!platformId) {
+        res.status(404).json({ success: false, message: 'Unsupported platform' });
+        return;
+      }
+      try {
+        const body = req.body || {};
+        const update = this.companionContextRegistry.observe({
+          platformId,
+          storeId: String(body.storeId || platformId),
+          accountId: String(body.accountId || `${platformId}-default`),
+          contactId: String(body.contactId || '').trim(),
+          chatFingerprint: String(body.chatFingerprint || '').trim(),
+          recentMessages: Array.isArray(body.recentMessages)
+            ? body.recentMessages
+                .slice(-3)
+                .map((message: any) => ({
+                  direction:
+                    message?.direction === 'outgoing'
+                      ? ('outgoing' as const)
+                      : ('incoming' as const),
+                  content: String(message?.content || '')
+                    .trim()
+                    .slice(0, 500),
+                }))
+                .filter((message: { content: string }) => message.content)
+            : [],
+          incomingMessageFingerprint: body.incomingMessageFingerprint
+            ? String(body.incomingMessageFingerprint)
+            : null,
+          capturedAt: String(body.capturedAt || new Date().toISOString()),
+          confidence: Math.max(0, Math.min(1, Number(body.confidence) || 0)),
+          storeName: body.storeName ? String(body.storeName) : undefined,
+          accountName: body.accountName ? String(body.accountName) : undefined,
+        });
+        res.json({ success: true, data: update.snapshot });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
     this.app.post('/api/v1/compat/wechat/health', (req, res) => {
       const state = String(req.body.state || 'running');
       if (!['starting', 'running', 'degraded', 'stopped'].includes(state)) {
@@ -1188,7 +1284,12 @@ class BKServer {
           return;
         }
         const suggestion = await ReplySuggestion.findByPk(id);
-        if (!suggestion || suggestion.platform_id !== 'win_qianniu') {
+        if (
+          !suggestion ||
+          !['win_qianniu', 'win_wechat', 'win_wecom'].includes(
+            suggestion.platform_id,
+          )
+        ) {
           res.status(404).json({ success: false, message: '千牛回复记录不存在' });
           return;
         }
@@ -1249,6 +1350,20 @@ class BKServer {
             res
               .status(404)
               .json({ success: false, message: '微信回复记录不存在' });
+            return;
+          }
+          if (
+            !this.companionContextRegistry.matchesLiveConversation({
+              platformId: 'win_wechat',
+              contactId: suggestion.contact_id || suggestion.sender,
+              conversationKey: suggestion.conversation_key,
+              contextRevision: suggestion.context_revision,
+            })
+          ) {
+            res.status(409).json({
+              success: false,
+              message: '微信当前联系人已切换，请确认会话后重试',
+            });
             return;
           }
           await this.wechatSidecarService.focusAndFill(
@@ -1359,6 +1474,20 @@ class BKServer {
             res
               .status(404)
               .json({ success: false, message: '企微回复记录不存在' });
+            return;
+          }
+          if (
+            !this.companionContextRegistry.matchesLiveConversation({
+              platformId: 'win_wecom',
+              contactId: suggestion.contact_id || suggestion.sender,
+              conversationKey: suggestion.conversation_key,
+              contextRevision: suggestion.context_revision,
+            })
+          ) {
+            res.status(409).json({
+              success: false,
+              message: '企业微信当前联系人已切换，请确认会话后重试',
+            });
             return;
           }
           await this.wecomSidecarService.focusAndFill(
