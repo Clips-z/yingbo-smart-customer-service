@@ -13,12 +13,20 @@ describe('runtimePaths', () => {
     expect(fs.existsSync(runtimePath('scripts', 'wechat-sidecar.py'))).toBe(
       true,
     );
+    expect(fs.existsSync(runtimePath('scripts', 'wecom-sidecar.py'))).toBe(
+      true,
+    );
+    expect(
+      fs.existsSync(runtimePath('scripts', 'companion-target-window.ps1')),
+    ).toBe(true);
   });
 
   it('prefers packaged resources over a working directory that also has scripts', () => {
-    const originalResourcesPath = (process as NodeJS.Process & {
-      resourcesPath?: string;
-    }).resourcesPath;
+    const originalResourcesPath = (
+      process as NodeJS.Process & {
+        resourcesPath?: string;
+      }
+    ).resourcesPath;
     const originalCwd = process.cwd;
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-paths-'));
     const packagedResources = path.join(tempRoot, 'resources');
@@ -45,9 +53,11 @@ describe('runtimePaths', () => {
   });
 
   it('falls back to the bundled wechat Python when dedicated OCR Python is absent', () => {
-    const originalResourcesPath = (process as NodeJS.Process & {
-      resourcesPath?: string;
-    }).resourcesPath;
+    const originalResourcesPath = (
+      process as NodeJS.Process & {
+        resourcesPath?: string;
+      }
+    ).resourcesPath;
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'runtime-python-'));
     const packagedResources = path.join(tempRoot, 'resources');
     const fallback = path.join(

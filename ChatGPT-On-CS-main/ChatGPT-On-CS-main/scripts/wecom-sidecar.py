@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import re
+import site
 import sys
 import time
 import unicodedata
@@ -30,6 +31,13 @@ from pathlib import Path
 from ctypes import windll
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPT_DIR.parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+site.addsitedir(str(ROOT / "tools" / "wechat-py311"))
+site.addsitedir(str(ROOT / "tools" / "rapidocr-py311"))
 
 import numpy as np
 import win32api
@@ -56,7 +64,6 @@ except ImportError:
 # ============================================================
 # 路径常量
 # ============================================================
-ROOT = Path(__file__).resolve().parents[1]
 STARTUP_LOG = ROOT / ".tmp-userdata" / "logs" / "electron-startup.log"
 SIDECAR_LOG = ROOT / ".tmp-userdata" / "logs" / "wecom-sidecar.log"
 COMMAND_FILE = ROOT / ".tmp-userdata" / "wecom-sidecar-command.json"
@@ -1217,6 +1224,8 @@ class WeComLayoutParser:
             text = line["text"].strip()
             if not text or len(text) < 2:
                 continue
+            if TIME_PATTERN.match(text):
+                continue
             # Toolbar/icon fragments occasionally become long gibberish at a
             # very low confidence and would otherwise look like the newest
             # incoming message.
@@ -1283,6 +1292,7 @@ class ReplyBridge:
         self.url = f"http://127.0.0.1:{api_port}/api/v1/message/simulate"
         self.delivery_url = f"http://127.0.0.1:{api_port}/api/v1/compat/{COMPAT_KEY}/suggestions/delivery"
         self.health_url = f"http://127.0.0.1:{api_port}/api/v1/compat/{COMPAT_KEY}/health"
+        self.context_url = f"http://127.0.0.1:{api_port}/api/v1/compat/{COMPAT_KEY}/context"
         self.instance_id = instance_id
         self.dry_run = dry_run
 
@@ -1341,6 +1351,42 @@ class ReplyBridge:
             )
         except Exception:
             pass
+
+    def report_context(self, contact: str, messages: list[dict], account_name: str = "") -> None:
+        contact = str(contact or "").strip()
+        if not contact:
+            return
+        recent = [
+            {
+                "direction": "incoming" if item.get("is_incoming") else "outgoing",
+                "content": str(item.get("text") or "").strip()[:500],
+            }
+            for item in messages[-3:]
+            if str(item.get("text") or "").strip()
+        ]
+        newest_incoming = next(
+            (item["content"] for item in reversed(recent) if item["direction"] == "incoming"),
+            "",
+        )
+        try:
+            post_json(
+                self.context_url,
+                {
+                    "storeId": PLATFORM_ID,
+                    "accountId": self.instance_id,
+                    "contactId": contact,
+                    "chatFingerprint": f"{PLATFORM_ID}:{self.instance_id}:{contact}",
+                    "recentMessages": recent,
+                    "incomingMessageFingerprint": newest_incoming or None,
+                    "capturedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "confidence": 0.9 if recent else 0.75,
+                    "storeName": PLATFORM_NAME,
+                    "accountName": account_name or self.instance_id,
+                },
+                timeout=3,
+            )
+        except Exception as error:
+            logging.debug("Context heartbeat failed: %s", error)
 
 
 # ============================================================
@@ -1739,6 +1785,14 @@ def run_wecom(
                 logging.debug("No conversations found by OCR")
                 time.sleep(3.0)
                 continue
+
+            current_contact = _detect_current_conversation(convs, layout)
+            if current_contact:
+                bridge.report_context(
+                    current_contact,
+                    layout.get("chat_messages", []),
+                    my_name,
+                )
 
             # ---- 消息过滤：只处理私聊或@我的会话 ----
             filtered_convs = []

@@ -155,6 +155,7 @@ class ReplyBridge:
             f"http://127.0.0.1:{api_port}/api/v1/compat/wechat/suggestions/delivery"
         )
         self.health_url = f"http://127.0.0.1:{api_port}/api/v1/compat/wechat/health"
+        self.context_url = f"http://127.0.0.1:{api_port}/api/v1/compat/wechat/context"
         self.instance_id = instance_id
         self.dry_run = dry_run
 
@@ -223,6 +224,35 @@ class ReplyBridge:
             )
         except (HTTPError, URLError, TimeoutError, ValueError) as health_error:
             logging.warning("Health heartbeat failed: %s", health_error)
+
+    def report_context(self, contact: str, messages: list[dict]) -> None:
+        contact = str(contact or "").strip()
+        if not contact:
+            return
+        recent = [item for item in messages[-3:] if str(item.get("content") or "").strip()]
+        newest_incoming = next(
+            (item["content"] for item in reversed(recent) if item.get("direction") == "incoming"),
+            "",
+        )
+        try:
+            post_json(
+                self.context_url,
+                {
+                    "storeId": "win_wechat",
+                    "accountId": self.instance_id,
+                    "contactId": contact,
+                    "chatFingerprint": f"win_wechat:{self.instance_id}:{contact}",
+                    "recentMessages": recent,
+                    "incomingMessageFingerprint": newest_incoming or None,
+                    "capturedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "confidence": 0.9,
+                    "storeName": "微信",
+                    "accountName": self.instance_id,
+                },
+                timeout=3,
+            )
+        except (HTTPError, URLError, TimeoutError, ValueError) as error:
+            logging.debug("Context heartbeat failed: %s", error)
 
 
 def run_weixin4(
@@ -624,6 +654,7 @@ def run_wechat39(
     bridge = ReplyBridge(port, instance_id, dry_run=dry_run)
     deadline = time.time() + parse_duration(duration)
     seen: dict[tuple[str, str], float] = {}
+    contact_history: dict[str, list[dict]] = {}
     last_health_at = 0.0
     system_conversation_keywords = (
         "腾讯新闻",
@@ -657,6 +688,22 @@ def run_wechat39(
             }
             refresh_controls()
             process_command()
+            if current_chat.exists():
+                selected = current_chat.window_text().strip()
+                if selected and not any(keyword in selected for keyword in system_conversation_keywords):
+                    latest, sender = Tools.pull_latest_message(chat_list)
+                    if latest:
+                        direction = (
+                            "incoming"
+                            if not sender or normalize_contact_name(sender) == normalize_contact_name(selected)
+                            else "outgoing"
+                        )
+                        item = {"direction": direction, "content": latest}
+                        history = contact_history.setdefault(selected, [])
+                        if not history or history[-1] != item:
+                            history.append(item)
+                            del history[:-3]
+                    bridge.report_context(selected, contact_history.get(selected, []))
             unread_items = [
                 item
                 for item in conversation_list.children()
@@ -684,6 +731,12 @@ def run_wechat39(
                         if sender and normalize_contact_name(sender) != normalize_contact_name(friend):
                             logging.info("Ignored non-customer message in %s", friend)
                             continue
+                        item = {"direction": "incoming", "content": content}
+                        history = contact_history.setdefault(friend, [])
+                        if not history or history[-1] != item:
+                            history.append(item)
+                            del history[:-3]
+                        bridge.report_context(friend, history)
                         seen[fingerprint] = now
                         decision = bridge(friend, content)
                         if not decision:

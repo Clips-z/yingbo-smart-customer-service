@@ -4,7 +4,9 @@ import path from 'path';
 import { resolveHtmlPath } from '../../util';
 import {
   CompanionDockState,
+  CompanionTargetMode,
   DockSide,
+  normalizeCompanionDockState,
   WindowDockingService,
 } from '../../services/windowDockingService';
 
@@ -13,21 +15,27 @@ type CompanionCommand =
   | { action: 'attach'; side?: DockSide }
   | { action: 'detach' }
   | { action: 'side'; side: DockSide }
-  | { action: 'collapse'; collapsed: boolean };
+  | { action: 'collapse'; collapsed: boolean }
+  | { action: 'target-mode'; targetMode: CompanionTargetMode };
 
 const store = new Store();
-const STATE_KEY = 'qianniu-companion-state';
+const STATE_KEY = 'unified-companion-state';
+const LEGACY_STATE_KEY = 'qianniu-companion-state';
 const BOUNDS_KEY = 'qianniu-companion-bounds';
 
 let companionWindow: BrowserWindow | null = null;
 let dockingService: WindowDockingService | null = null;
 let ipcRegistered = false;
 
-function savedState(): Partial<CompanionDockState> {
-  const value = store.get(STATE_KEY);
-  return value && typeof value === 'object'
-    ? (value as Partial<CompanionDockState>)
-    : {};
+function savedState(): CompanionDockState {
+  const value = store.get(STATE_KEY) ?? store.get(LEGACY_STATE_KEY);
+  const state = normalizeCompanionDockState(
+    value && typeof value === 'object'
+      ? (value as Partial<CompanionDockState>)
+      : {},
+  );
+  if (!store.has(STATE_KEY)) store.set(STATE_KEY, state);
+  return state;
 }
 
 function saveState(): void {
@@ -75,7 +83,16 @@ export function createCompanionWindow(): BrowserWindow {
   });
 
   companionWindow.loadURL(resolveHtmlPath('companion.html'));
-  dockingService = new WindowDockingService(companionWindow, state);
+  dockingService = new WindowDockingService(
+    companionWindow,
+    state,
+    undefined,
+    undefined,
+    (nextState) => {
+      store.set(STATE_KEY, nextState);
+      companionWindow?.webContents.send('companion-state', nextState);
+    },
+  );
   dockingService.start();
 
   companionWindow.once('ready-to-show', () => {
@@ -123,6 +140,15 @@ export function handleCompanionCommand(command: CompanionCommand): void {
   }
   if (command.action === 'collapse' && typeof command.collapsed === 'boolean') {
     dockingService?.setCollapsed(command.collapsed);
+  }
+  if (command.action === 'target-mode') {
+    if (
+      ['follow', 'win_qianniu', 'win_wechat', 'win_wecom'].includes(
+        command.targetMode,
+      )
+    ) {
+      dockingService?.setTargetMode(command.targetMode);
+    }
   }
   saveState();
   window.webContents.send('companion-state', dockingService?.getState());

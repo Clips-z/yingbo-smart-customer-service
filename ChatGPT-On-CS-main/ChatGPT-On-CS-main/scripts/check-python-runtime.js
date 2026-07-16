@@ -16,12 +16,17 @@ const required = [
   'tools/wechat-py311/pyautogui',
   'tools/rag-py311/chromadb',
   'scripts/wechat-sidecar.py',
+  'scripts/wecom-sidecar.py',
+  'scripts/companion-target-window.ps1',
+  'scripts/qianniu-window-bounds.ps1',
   'scripts/_retry_utils.py',
   'scripts/qianniu_rapidocr.py',
 ];
 required.push(unpacked ? 'rag-server/server.py' : '../../rag-server/server.py');
 
-const missing = required.filter((item) => !fs.existsSync(path.join(root, item)));
+const missing = required.filter(
+  (item) => !fs.existsSync(path.join(root, item)),
+);
 if (missing.length) {
   console.error('Python runtime is incomplete:');
   missing.forEach((item) => console.error(`  - ${item}`));
@@ -31,7 +36,10 @@ if (missing.length) {
 const python = path.join(root, 'tools', 'python311', 'python.exe');
 const imports = [
   ['rapidocr-py311', 'import rapidocr, onnxruntime'],
-  ['wechat-py311', 'import pyautogui, pywinauto, win32api, onnxruntime; from rapidocr_onnxruntime import RapidOCR'],
+  [
+    'wechat-py311',
+    'import pyautogui, pywinauto, win32api, onnxruntime; from rapidocr_onnxruntime import RapidOCR',
+  ],
   ['rag-py311', 'import chromadb, fastapi, onnxruntime'],
 ];
 for (const [directory, statement] of imports) {
@@ -48,4 +56,6 @@ for (const [directory, statement] of imports) {
   }
 }
 
-console.log(`Python runtime check passed (${unpacked ? 'packaged' : 'source'}).`);
+console.log(
+  `Python runtime check passed (${unpacked ? 'packaged' : 'source'}).`,
+);

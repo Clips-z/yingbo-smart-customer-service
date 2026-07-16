@@ -6,17 +6,105 @@ import { runtimePath } from '../backend/services/runtimePaths';
 const execFileAsync = promisify(execFile);
 
 export type DockSide = 'left' | 'right';
+export type CompanionPlatformId = 'win_qianniu' | 'win_wechat' | 'win_wecom';
+export type CompanionTargetMode = 'follow' | CompanionPlatformId;
 
-export interface QianniuWindowBounds extends Rectangle {
+export interface CompanionTargetWindow extends Rectangle {
+  platformId: CompanionPlatformId;
   hwnd: number;
   minimized: boolean;
+  foreground: boolean;
 }
 
 export interface CompanionDockState {
   attached: boolean;
   side: DockSide;
+  sideByPlatform: Partial<Record<CompanionPlatformId, DockSide>>;
   collapsed: boolean;
   targetFound: boolean;
+  targetMode: CompanionTargetMode;
+  activePlatformId?: CompanionPlatformId;
+}
+
+const PLATFORM_PRIORITY: CompanionPlatformId[] = [
+  'win_qianniu',
+  'win_wechat',
+  'win_wecom',
+];
+
+function isDockSide(value: unknown): value is DockSide {
+  return value === 'left' || value === 'right';
+}
+
+function isTargetMode(value: unknown): value is CompanionTargetMode {
+  return value === 'follow' || isPlatformId(value);
+}
+
+export function normalizeCompanionDockState(
+  initial?: Partial<CompanionDockState>,
+): CompanionDockState {
+  const legacySide = isDockSide(initial?.side) ? initial.side : 'right';
+  const persistedSides = initial?.sideByPlatform;
+  const sideByPlatform: Partial<Record<CompanionPlatformId, DockSide>> = {};
+  if (persistedSides && typeof persistedSides === 'object') {
+    PLATFORM_PRIORITY.forEach((platformId) => {
+      const side = persistedSides[platformId];
+      if (isDockSide(side)) sideByPlatform[platformId] = side;
+    });
+  } else if (initial?.side !== undefined) {
+    // The legacy preference only ever represented the Qianniu companion.
+    sideByPlatform.win_qianniu = legacySide;
+  }
+  return {
+    attached: typeof initial?.attached === 'boolean' ? initial.attached : true,
+    side: legacySide,
+    sideByPlatform,
+    collapsed:
+      typeof initial?.collapsed === 'boolean' ? initial.collapsed : false,
+    targetFound: false,
+    targetMode: isTargetMode(initial?.targetMode)
+      ? initial.targetMode
+      : 'follow',
+    activePlatformId: isPlatformId(initial?.activePlatformId)
+      ? initial.activePlatformId
+      : undefined,
+  };
+}
+
+export function resolveDockSide(
+  state: Pick<CompanionDockState, 'side' | 'sideByPlatform'>,
+  platformId?: CompanionPlatformId,
+): DockSide {
+  if (platformId && isDockSide(state.sideByPlatform[platformId])) {
+    return state.sideByPlatform[platformId] as DockSide;
+  }
+  return platformId === 'win_qianniu' && isDockSide(state.side)
+    ? state.side
+    : 'right';
+}
+
+export function chooseCompanionTarget(
+  targets: CompanionTargetWindow[],
+  mode: CompanionTargetMode,
+  previousPlatformId?: CompanionPlatformId,
+): CompanionTargetWindow | undefined {
+  const usable = targets.filter(
+    (target) => target.width > 0 && target.height > 0,
+  );
+  if (mode !== 'follow') {
+    return usable.find((target) => target.platformId === mode);
+  }
+  const foreground = usable.find((target) => target.foreground);
+  if (foreground) return foreground;
+  if (previousPlatformId) {
+    const previous = usable.find(
+      (target) => target.platformId === previousPlatformId,
+    );
+    if (previous) return previous;
+  }
+  return PLATFORM_PRIORITY.map((platformId) =>
+    usable.find((target) => target.platformId === platformId),
+  ).find((target): target is CompanionTargetWindow => Boolean(target));
 }
 
 export function calculateDockedBounds(args: {
@@ -43,10 +131,39 @@ export function calculateDockedBounds(args: {
   };
 }
 
-export async function locateQianniuWindow(): Promise<
-  QianniuWindowBounds | undefined
+function isPlatformId(value: unknown): value is CompanionPlatformId {
+  return PLATFORM_PRIORITY.includes(value as CompanionPlatformId);
+}
+
+function parseTarget(value: unknown): CompanionTargetWindow | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const candidate = value as Partial<CompanionTargetWindow>;
+  if (
+    !isPlatformId(candidate.platformId) ||
+    !Number.isFinite(candidate.hwnd) ||
+    !Number.isFinite(candidate.x) ||
+    !Number.isFinite(candidate.y) ||
+    !Number.isFinite(candidate.width) ||
+    !Number.isFinite(candidate.height)
+  ) {
+    return undefined;
+  }
+  return {
+    platformId: candidate.platformId,
+    hwnd: Number(candidate.hwnd),
+    x: Number(candidate.x),
+    y: Number(candidate.y),
+    width: Number(candidate.width),
+    height: Number(candidate.height),
+    minimized: Boolean(candidate.minimized),
+    foreground: Boolean(candidate.foreground),
+  };
+}
+
+export async function locateCompanionWindows(): Promise<
+  CompanionTargetWindow[]
 > {
-  const script = runtimePath('scripts', 'qianniu-window-bounds.ps1');
+  const script = runtimePath('scripts', 'companion-target-window.ps1');
   try {
     const { stdout } = await execFileAsync(
       'powershell.exe',
@@ -54,31 +171,24 @@ export async function locateQianniuWindow(): Promise<
       { windowsHide: true, timeout: 4000, encoding: 'utf8' },
     );
     const line = stdout.trim().split(/\r?\n/).pop();
-    if (!line) return undefined;
-    const value = JSON.parse(line) as Partial<QianniuWindowBounds> & {
-      found?: boolean;
-    };
-    if (
-      value.found === false ||
-      !Number.isFinite(value.hwnd) ||
-      !Number.isFinite(value.x) ||
-      !Number.isFinite(value.y) ||
-      !Number.isFinite(value.width) ||
-      !Number.isFinite(value.height)
-    ) {
-      return undefined;
-    }
-    return {
-      hwnd: Number(value.hwnd),
-      x: Number(value.x),
-      y: Number(value.y),
-      width: Number(value.width),
-      height: Number(value.height),
-      minimized: Boolean(value.minimized),
-    };
+    if (!line) return [];
+    const payload = JSON.parse(line) as { targets?: unknown[] } | unknown[];
+    const targets = Array.isArray(payload) ? payload : payload.targets;
+    return (targets || [])
+      .map(parseTarget)
+      .filter((target): target is CompanionTargetWindow => Boolean(target));
   } catch {
-    return undefined;
+    return [];
   }
+}
+
+/** Backward-compatible helper used by older callers and diagnostics. */
+export async function locateQianniuWindow(): Promise<
+  CompanionTargetWindow | undefined
+> {
+  return (await locateCompanionWindows()).find(
+    (target) => target.platformId === 'win_qianniu',
+  );
 }
 
 export class WindowDockingService {
@@ -86,19 +196,27 @@ export class WindowDockingService {
 
   private autoHidden = false;
 
+  private candidatePlatformId?: CompanionPlatformId;
+
+  private candidateSince = 0;
+
   private state: CompanionDockState = {
     attached: true,
     side: 'right',
+    sideByPlatform: {},
     collapsed: false,
     targetFound: false,
+    targetMode: 'follow',
   };
 
   constructor(
     private panel: BrowserWindow,
     initial?: Partial<CompanionDockState>,
-    private locateTarget = locateQianniuWindow,
+    private locateTargets = locateCompanionWindows,
+    private switchDelayMs = 800,
+    private onStateChange?: (state: CompanionDockState) => void,
   ) {
-    this.state = { ...this.state, ...initial };
+    this.state = normalizeCompanionDockState(initial);
   }
 
   public getState(): CompanionDockState {
@@ -108,7 +226,7 @@ export class WindowDockingService {
   public start(): void {
     if (this.timer) return;
     void this.sync();
-    this.timer = setInterval(() => void this.sync(), 1500);
+    this.timer = setInterval(() => void this.sync(), 1000);
   }
 
   public stop(): void {
@@ -118,24 +236,79 @@ export class WindowDockingService {
 
   public setAttached(attached: boolean): void {
     this.state.attached = attached;
+    this.publishState();
     if (attached) void this.sync();
   }
 
   public setSide(side: DockSide): void {
     this.state.side = side;
+    if (this.state.activePlatformId) {
+      this.state.sideByPlatform[this.state.activePlatformId] = side;
+    }
+    this.publishState();
+    if (this.state.attached) void this.sync();
+  }
+
+  public setTargetMode(targetMode: CompanionTargetMode): void {
+    this.state.targetMode = targetMode;
+    this.candidatePlatformId = undefined;
+    this.candidateSince = 0;
+    this.publishState();
     if (this.state.attached) void this.sync();
   }
 
   public setCollapsed(collapsed: boolean): void {
     this.state.collapsed = collapsed;
+    this.publishState();
     if (this.state.attached) void this.sync();
     else this.panel.setSize(collapsed ? 56 : 372, this.panel.getSize()[1]);
   }
 
+  private commitStableTarget(
+    target: CompanionTargetWindow,
+  ): CompanionTargetWindow | undefined {
+    if (
+      this.state.targetMode !== 'follow' ||
+      !this.state.activePlatformId ||
+      this.state.activePlatformId === target.platformId
+    ) {
+      const platformChanged = this.state.activePlatformId !== target.platformId;
+      this.state.activePlatformId = target.platformId;
+      this.candidatePlatformId = undefined;
+      if (platformChanged) this.publishState();
+      return target;
+    }
+    if (this.candidatePlatformId !== target.platformId) {
+      this.candidatePlatformId = target.platformId;
+      this.candidateSince = Date.now();
+      return undefined;
+    }
+    if (Date.now() - this.candidateSince < this.switchDelayMs) return undefined;
+    this.state.activePlatformId = target.platformId;
+    this.candidatePlatformId = undefined;
+    this.publishState();
+    return target;
+  }
+
+  private publishState(): void {
+    this.onStateChange?.(this.getState());
+  }
+
   private async sync(): Promise<void> {
     if (!this.state.attached || this.panel.isDestroyed()) return;
-    const target = await this.locateTarget();
-    this.state.targetFound = Boolean(target);
+    const targets = await this.locateTargets();
+    const selected = chooseCompanionTarget(
+      targets,
+      this.state.targetMode,
+      this.state.activePlatformId,
+    );
+    const targetFound = Boolean(selected);
+    if (this.state.targetFound !== targetFound) {
+      this.state.targetFound = targetFound;
+      this.publishState();
+    }
+    if (!selected) return;
+    const target = this.commitStableTarget(selected);
     if (!target || target.minimized) {
       if (target?.minimized && this.panel.isVisible()) {
         this.autoHidden = true;
@@ -148,7 +321,7 @@ export class WindowDockingService {
     const bounds = calculateDockedBounds({
       target,
       panelWidth: this.state.collapsed ? 56 : 372,
-      side: this.state.side,
+      side: resolveDockSide(this.state, target.platformId),
       workArea: display.workArea,
     });
     this.panel.setBounds(bounds, false);
