@@ -63,15 +63,19 @@ class LayoutConfig:
     # 发送者名称区域
     SENDER_X_MIN = 0.234       # 原 320
     SENDER_X_MAX = 0.454       # 原 620
+    # Buyer names stay near the header while the window height changes with
+    # DPI and client chrome. The old lower bound excluded valid names.
     SENDER_Y_MIN = 0.130
-    SENDER_Y_MAX = 0.195
+    SENDER_Y_MAX = 0.241       # 原 185
 
     # 候选消息气泡区域
     CANDIDATE_X_MIN = 0.249    # 原 340
     CANDIDATE_X_MAX = 0.381    # 原 520
     CANDIDATE_RIGHT_MAX = 0.556  # 原 760
     CANDIDATE_Y_MIN = 0.391    # 原 300
-    CANDIDATE_Y_MAX = 0.977    # 原 750
+    # Stop above the composer toolbar; OCR may otherwise treat an icon such
+    # as the letter "C" as the newest message.
+    CANDIDATE_Y_MAX = 0.690
 
     # 蓝色气泡阈值
     BUBBLE_BLUE_THRESHOLD = 8.0
@@ -159,6 +163,8 @@ def extract_candidate(
             if sender_x_min <= line["x"] <= sender_x_max
             and sender_y_min <= line["y"] <= sender_y_max
             and re.search(r"(?:[A-Za-z0-9_]{5,}|[\u4e00-\u9fff]{2,})", line["text"])
+            and len(re.sub(r"\s+", "", line["text"])) >= 2
+            and not re.match(r"^20\d\d", line["text"])
         ),
         None,
     )

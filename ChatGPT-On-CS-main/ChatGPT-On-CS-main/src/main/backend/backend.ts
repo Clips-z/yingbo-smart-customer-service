@@ -1935,6 +1935,7 @@ class BKServer {
         .listen(this.port, '127.0.0.1', async () => {
           try {
             await databaseReady;
+            await this.appService.ensureLocalCompatTask('win_qianniu');
             console.log(`Server is running on http://localhost:${this.port}`);
             this.qianniuCompatService.start();
             this.wechatSidecarService.start();

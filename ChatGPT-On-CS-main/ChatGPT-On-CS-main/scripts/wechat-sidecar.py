@@ -2,8 +2,8 @@ import argparse
 import json
 import logging
 import os
-import pyautogui
 import re
+import site
 import sys
 import time
 import unicodedata
@@ -13,7 +13,15 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-ROOT = Path(__file__).resolve().parents[1]
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPT_DIR.parent
+WECHAT_PACKAGES = ROOT / "tools" / "wechat-py311"
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+site.addsitedir(str(WECHAT_PACKAGES))
+
+import pyautogui
+
 STARTUP_LOG = ROOT / ".tmp-userdata" / "logs" / "electron-startup.log"
 SIDECAR_LOG = ROOT / ".tmp-userdata" / "logs" / "wechat-sidecar.log"
 COMMAND_FILE = ROOT / ".tmp-userdata" / "wechat-sidecar-command.json"

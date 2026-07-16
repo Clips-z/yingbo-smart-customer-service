@@ -162,16 +162,10 @@ export class RagService {
   private findPythonAndScript(): { python: string; script: string } | null {
     const root = getRuntimeRoot();
 
-    // 候选 Python 路径（优先级从高到低）
+    // Packaged builds always use the relocatable interpreter shipped in tools.
     const pythonCandidates = [
-      // 1. _installer-stage/rag-server/.venv（自包含部署，如果存在）
-      path.join(root, 'rag-server', '.venv', 'Scripts', 'pythonw.exe'),
-      // 2. 上三级目录的 rag-server/.venv（打包版：_installer-stage → ChatGPT-On-CS-main → ChatGPT-On-CS-main → 懒人客服 → rag-server）
-      path.join(root, '..', '..', '..', 'rag-server', '.venv', 'Scripts', 'pythonw.exe'),
-      // 3. 上两级目录（开发环境）
-      path.join(root, '..', '..', 'rag-server', '.venv', 'Scripts', 'pythonw.exe'),
-      // 4. .venv-wechat（备用，可能没有 RAG 依赖）
-      path.join(root, '.venv-wechat', 'Scripts', 'pythonw.exe'),
+      path.join(root, 'tools', 'python311', 'pythonw.exe'),
+      path.join(root, 'tools', 'python311', 'python.exe'),
     ];
 
     // 候选脚本路径
@@ -221,6 +215,7 @@ export class RagService {
           ...process.env,
           // 确保 RAG 服务能找到自己的 config.json 和 data 目录
           PYTHONUNBUFFERED: '1',
+          PYTHONUTF8: '1',
           // 禁用 ChromaDB 遥测（避免 capture() 参数错误警告）
           CHROMA_TELEMETRY_IMPL: 'none',
           ANONYMIZED_TELEMETRY: 'False',

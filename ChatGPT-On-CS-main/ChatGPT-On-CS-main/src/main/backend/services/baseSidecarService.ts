@@ -261,10 +261,10 @@ export abstract class BaseSidecarService {
 
   /**
    * 获取 Python 解释器路径
-   * 默认使用 .venv-wechat，子类可覆盖
+   * 使用随安装包发布的可移植 Python，避免 Windows venv 记录构建机绝对路径。
    */
   protected getPythonPath(): string {
-    return runtimePath('.venv-wechat', 'Scripts', 'python.exe');
+    return runtimePath('tools', 'python311', 'python.exe');
   }
 
   /**
@@ -403,6 +403,11 @@ export abstract class BaseSidecarService {
       cwd: root,
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        PYTHONUTF8: '1',
+        PYTHONUNBUFFERED: '1',
+      },
     });
     this.child = child;
     this.childStartedAt = Date.now();

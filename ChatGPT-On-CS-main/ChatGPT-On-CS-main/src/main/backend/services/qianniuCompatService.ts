@@ -61,6 +61,7 @@ type CaptureResult = {
   image: string;
   chat_fingerprint: string;
   qianniu_foreground: boolean;
+  qianniu_was_foreground?: boolean;
   click_performed: boolean;
   tab_alert_x: number[];
   conversation_alerts: Array<{ x: number; y: number; pixels: number }>;

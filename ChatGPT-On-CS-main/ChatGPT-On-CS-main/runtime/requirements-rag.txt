@@ -1,0 +1,4 @@
+-r ../../../rag-server/requirements.txt
+onnxruntime==1.20.1
+numpy==1.26.4
+posthog==7.21.3

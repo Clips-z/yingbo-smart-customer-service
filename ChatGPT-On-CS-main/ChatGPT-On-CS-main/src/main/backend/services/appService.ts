@@ -46,6 +46,36 @@ export class AppService {
   }
 
   /**
+   * Ensure a bundled local collector has a task and an active platform config.
+   * This is intentionally idempotent so upgrades can repair older databases
+   * without creating duplicate tasks on every launch.
+   */
+  public async ensureLocalCompatTask(appId: string): Promise<Instance> {
+    if (!LOCAL_COMPAT_PLATFORM_IDS.has(appId)) {
+      throw new Error(`Unsupported local compatibility platform: ${appId}`);
+    }
+
+    const existing = await Instance.findOne({ where: { app_id: appId } });
+    if (!existing) {
+      const created = await this.addTask(appId);
+      if (!created) throw new Error(`Failed to initialize ${appId}`);
+      return created;
+    }
+
+    const [config] = await Config.findOrCreate({
+      where: { platform_id: appId, instance_id: '' },
+      defaults: {
+        platform_id: appId,
+        instance_id: '',
+        global: false,
+        active: true,
+      },
+    });
+    if (!config.active) await config.update({ active: true });
+    return existing;
+  }
+
+  /**
    * 添加一个任务
    */
   public async addTask(appId: string): Promise<Instance | null> {
