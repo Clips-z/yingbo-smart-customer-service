@@ -1168,6 +1168,10 @@ class BKServer {
       }),
     );
 
+    this.app.get('/api/v1/compat/qianniu/context', (req, res) => {
+      res.json({ success: true, data: this.qianniuCompatService.getContext() });
+    });
+
     this.app.post(
       '/api/v1/compat/qianniu/suggestions/draft',
       asyncHandler(async (req, res) => {

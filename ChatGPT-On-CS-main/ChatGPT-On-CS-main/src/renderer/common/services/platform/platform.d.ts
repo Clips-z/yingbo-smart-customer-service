@@ -140,6 +140,20 @@ export interface QianniuCollectorHealth {
   nextRetryAt?: string;
 }
 
+export interface QianniuCompanionContext {
+  platformId: string;
+  storeId: string;
+  accountId: string;
+  contactId: string;
+  chatFingerprint: string;
+  productId?: string | null;
+  incomingMessageFingerprint?: string | null;
+  contextRevision: number;
+  capturedAt: string;
+  confidence: number;
+  state: 'switching' | 'stable' | 'degraded' | 'disconnected';
+}
+
 export interface WechatCollectorHealth {
   state: 'stopped' | 'starting' | 'running' | 'degraded';
   processRunning: boolean;

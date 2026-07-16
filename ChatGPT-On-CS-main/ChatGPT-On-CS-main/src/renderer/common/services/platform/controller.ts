@@ -19,6 +19,7 @@ import {
   ReplySuggestionStatus,
   WechatCollectorHealth,
   QianniuCollectorHealth,
+  QianniuCompanionContext,
   WecomCollectorHealth,
 } from './platform';
 import { GET, POST } from '../common/api/request';
@@ -387,6 +388,12 @@ export async function getWechatCollectorHealth() {
 
 export async function getQianniuCollectorHealth() {
   return GET<{ data: QianniuCollectorHealth }>('/api/v1/compat/qianniu/health');
+}
+
+export async function getQianniuCompanionContext() {
+  return GET<{ data?: QianniuCompanionContext }>(
+    '/api/v1/compat/qianniu/context',
+  );
 }
 
 export async function getWecomCollectorHealth() {
