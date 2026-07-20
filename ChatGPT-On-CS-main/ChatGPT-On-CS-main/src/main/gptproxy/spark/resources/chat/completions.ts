@@ -77,7 +77,7 @@ export class Completions extends APIResource {
       body.header.uid = user;
     }
 
-    const controller = createStreamController(options?.signal);
+    const controller = createStreamController(options?.signal ?? undefined);
 
     const ws: WebSocket = new WebSocket(url);
 

@@ -36,7 +36,7 @@ export class Completions extends APIResource {
     });
 
     if (stream) {
-      const controller = createStreamController(options?.signal);
+      const controller = createStreamController(options?.signal ?? undefined);
 
       return this.afterSSEResponse(model, response, controller);
     }

@@ -38,7 +38,10 @@ export class TtsService {
       let audioBuffer: Buffer | null = null;
 
       if (provider === 'siliconflow' && config?.apiKey) {
-        audioBuffer = await this.synthesizeSiliconflow(text, config);
+        audioBuffer = await this.synthesizeSiliconflow(text, {
+          ...config,
+          apiKey: config.apiKey,
+        });
       } else {
         audioBuffer = await this.synthesizeEdge(text, config?.voice);
       }

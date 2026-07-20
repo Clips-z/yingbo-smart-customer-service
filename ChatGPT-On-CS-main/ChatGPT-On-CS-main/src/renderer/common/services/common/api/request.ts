@@ -117,15 +117,17 @@ function responseError(err: AxiosError): Promise<never> {
  */
 function request<T = ApiResponse>(
   url: string,
-  data: Record<string, unknown>,
+  data: object,
   config: ConfigType,
   method: Method,
 ): Promise<T> {
-  const payload = Object.fromEntries(
-    Object.entries(data).filter(
-      ([, v]) => v !== null && v !== undefined,
-    ),
-  );
+  const payload = Array.isArray(data)
+    ? data
+    : Object.fromEntries(
+        Object.entries(data).filter(
+          ([, v]) => v !== null && v !== undefined,
+        ),
+      );
 
   return instance
     .request<T>({
@@ -147,7 +149,7 @@ function request<T = ApiResponse>(
  */
 export function GET<T = ApiResponse>(
   url: string,
-  params: Record<string, unknown> = {},
+  params: object = {},
   config: ConfigType = {},
 ): Promise<T> {
   return request<T>(url, params, config, 'GET');
@@ -158,7 +160,7 @@ export function GET<T = ApiResponse>(
  */
 export function POST<T = ApiResponse>(
   url: string,
-  data: Record<string, unknown> = {},
+  data: object = {},
   config: ConfigType = {},
 ): Promise<T> {
   return request<T>(url, data, config, 'POST');
@@ -169,7 +171,7 @@ export function POST<T = ApiResponse>(
  */
 export function PUT<T = ApiResponse>(
   url: string,
-  data: Record<string, unknown> = {},
+  data: object = {},
   config: ConfigType = {},
 ): Promise<T> {
   return request<T>(url, data, config, 'PUT');
@@ -180,7 +182,7 @@ export function PUT<T = ApiResponse>(
  */
 export function DELETE<T = ApiResponse>(
   url: string,
-  data: Record<string, unknown> = {},
+  data: object = {},
   config: ConfigType = {},
 ): Promise<T> {
   return request<T>(url, data, config, 'DELETE');
