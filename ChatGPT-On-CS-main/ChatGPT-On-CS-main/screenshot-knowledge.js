@@ -50,6 +50,7 @@ const MOCK_RESPONSES = {
   ]},
 };
 
+let lastExportUrl = '';
 const server = http.createServer((req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -60,6 +61,7 @@ const server = http.createServer((req, res) => {
     hasPaused: false, hasKeywordMatch: true, hasUseGpt: true,
     hasMouseClose: true, hasEscClose: true, hasTransfer: true, hasReplace: true,
   }};
+  else if (url.includes('/api/v1/knowledge/export')) { lastExportUrl = url; mockData = { success: true }; }
   else if (url.includes('/api/v1/knowledge/products')) mockData = MOCK_RESPONSES['/api/v1/knowledge/products'];
   else if (url.includes('/api/v1/knowledge/store/q1/versions')) mockData = { success: true, data: [
     { id: 'version-1', version: 2, action: 'update', created_at: new Date().toISOString() },
@@ -188,6 +190,15 @@ app.whenReady().then(async () => {
     await shot(win, 'ui-product-copy-failed.png');
     console.log('✅ ui-product-copy-failed.png');
 
+    lastExportUrl = '';
+    await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"导出知识\"]')?.click()");
+    await wait(300);
+    await shot(win, 'ui-product-export-menu.png');
+    if (!await clickByText(win, '导出全部内容 · CSV')) throw new Error('product full CSV export option not found');
+    await wait(500);
+    if (!lastExportUrl.includes('kind=product&format=csv') || /keyword=|shop=|status=/.test(lastExportUrl)) throw new Error(`product full CSV export request invalid: ${lastExportUrl}`);
+    console.log('✅ product full CSV export');
+
     // 客服中心
     await nav(win, 'service');
     await wait(1000);
@@ -239,6 +250,14 @@ app.whenReady().then(async () => {
     // 店铺知识库 → 「新增问答」弹窗
     await nav(win, 'knowledge', 'store-kb');
     await wait(2000);
+
+    lastExportUrl = '';
+    if (!await clickByText(win, '手动导出')) throw new Error('store export menu not found');
+    await wait(300);
+    if (!await clickByText(win, '全部内容 · CSV')) throw new Error('store full CSV export option not found');
+    await wait(500);
+    if (!lastExportUrl.includes('kind=store&format=csv') || /keyword=|shop=|stage=/.test(lastExportUrl)) throw new Error(`store full CSV export request invalid: ${lastExportUrl}`);
+    console.log('✅ store full CSV export');
 
     await win.webContents.executeJavaScript("document.querySelector('[aria-label=删除]')?.click()");
     await wait(300);

@@ -312,6 +312,7 @@ const StatsPanel: React.FC<{
           <MenuList minW="190px">
             <MenuItem onClick={() => onExport('csv', false)}>当前筛选 · CSV</MenuItem>
             <MenuItem onClick={() => onExport('json', false)}>当前筛选 · JSON</MenuItem>
+            <MenuItem onClick={() => onExport('csv', true)}>全部内容 · CSV</MenuItem>
             <MenuItem onClick={() => onExport('json', true)}>全部内容 · JSON</MenuItem>
           </MenuList>
         </Menu>

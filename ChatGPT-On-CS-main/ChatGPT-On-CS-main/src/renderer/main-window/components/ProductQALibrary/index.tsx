@@ -488,6 +488,7 @@ const ProductQALibrary: React.FC = () => {
           <MenuList minW="190px">
             <MenuItem onClick={() => handleExport('csv', false)}>导出当前筛选 · CSV</MenuItem>
             <MenuItem onClick={() => handleExport('json', false)}>导出当前筛选 · JSON</MenuItem>
+            <MenuItem onClick={() => handleExport('csv', true)}>导出全部内容 · CSV</MenuItem>
             <MenuItem onClick={() => handleExport('json', true)}>导出全部内容 · JSON</MenuItem>
           </MenuList>
         </Menu>
