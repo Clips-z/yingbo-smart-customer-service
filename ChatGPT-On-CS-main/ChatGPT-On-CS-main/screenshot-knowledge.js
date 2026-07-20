@@ -156,6 +156,27 @@ app.whenReady().then(async () => {
     await shot(win, 'ui-backup-restore.png');
     console.log('✅ ui-backup-restore.png');
 
+    await nav(win, 'knowledge', 'product-qa');
+    await wait(1000);
+    const copySucceeded = await win.webContents.executeJavaScript(`
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async function(text) { window.__copiedProductId = text; } } });
+      document.querySelector('[aria-label="复制ID"]')?.click();
+      true;
+    `);
+    await wait(300);
+    const copiedId = await win.webContents.executeJavaScript('window.__copiedProductId');
+    const successToast = await win.webContents.executeJavaScript("document.body.innerText.includes('已复制商品ID')");
+    if (!copySucceeded || !copiedId || !successToast) throw new Error('product ID copy success feedback failed');
+    await win.webContents.executeJavaScript(`
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async function() { throw new Error('denied'); } } });
+      document.querySelector('[aria-label="复制ID"]')?.click();
+    `);
+    await wait(300);
+    const failureToast = await win.webContents.executeJavaScript("document.body.innerText.includes('复制失败')");
+    if (!failureToast) throw new Error('product ID copy failure feedback failed');
+    await shot(win, 'ui-product-copy-failed.png');
+    console.log('✅ ui-product-copy-failed.png');
+
     // 客服中心
     await nav(win, 'service');
     await wait(2000);

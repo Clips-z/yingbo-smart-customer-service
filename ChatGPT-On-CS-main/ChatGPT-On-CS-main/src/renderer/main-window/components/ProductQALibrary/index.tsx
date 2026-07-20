@@ -384,9 +384,14 @@ const ProductQALibrary: React.FC = () => {
     toast({ title: `已删除 ${selectedIds.length} 件商品`, status: 'warning', duration: 1800, isClosable: true });
   };
 
-  const handleCopyId = (id: string) => {
-    if (navigator.clipboard) navigator.clipboard.writeText(id).catch(() => {});
-    toast({ title: '已复制商品ID', status: 'info', duration: 1200, isClosable: true });
+  const handleCopyId = async (id: string) => {
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable');
+      await navigator.clipboard.writeText(id);
+      toast({ title: '已复制商品ID', status: 'success', duration: 1200, isClosable: true });
+    } catch {
+      toast({ title: '复制失败', description: '请检查系统剪贴板权限后重试', status: 'error', duration: 2500, isClosable: true });
+    }
   };
 
   const handleRetrySync = async (id: string) => {
