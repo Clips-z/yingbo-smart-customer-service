@@ -391,7 +391,7 @@ export class MessageService {
   public async choseRandomReply(reply: string) {
     const replies = reply.split('[or]');
     const chosenReply = specialTokenReplace(
-      replies[Math.floor(Math.random() * replies.length)],
+      replies[Math.floor(Math.random() * replies.length)] ?? '',
     );
 
     return chosenReply;
@@ -405,10 +405,6 @@ export class MessageService {
       const llmClient = this.createLLMClient(cfg, cfg.llmType);
       // 尝试使用它回复 Hi 来检查是否可用
       if ('chat' in llmClient) {
-        const retrievalTrace: Pick<ReplyDTO, 'retrievalStatus' | 'retrievalEvidence'> = {
-          retrievalStatus: 'disabled',
-          retrievalEvidence: [],
-        };
         // @ts-ignore
         const response = await llmClient.chat.completions.create({
           model: cfg.model,
@@ -460,6 +456,10 @@ export class MessageService {
     messages: MessageDTO[],
     sentimentResult?: { sentiment: string; summary: string; suggestedAction?: string } | null,
   ): Promise<ReplyDTO | null> {
+    const retrievalTrace: Pick<ReplyDTO, 'retrievalStatus' | 'retrievalEvidence'> = {
+      retrievalStatus: 'disabled',
+      retrievalEvidence: [],
+    };
     const llm_name = cfg.llm_type;
     if (!llm_name) {
       return null;

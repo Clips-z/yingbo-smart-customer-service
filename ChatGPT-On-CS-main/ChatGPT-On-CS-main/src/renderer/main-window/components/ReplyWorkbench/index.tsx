@@ -24,7 +24,6 @@ import {
   FiCornerUpLeft,
   FiSend,
   FiUser,
-  FiMessageSquare,
 } from 'react-icons/fi';
 import {
   fillQianniuSuggestion,
@@ -100,10 +99,10 @@ function CollectorHealthBadge({
   nextRetryAt,
   label,
 }: {
-  state?: string;
-  lastError?: string;
-  recoveryAction?: string;
-  nextRetryAt?: string;
+  state?: string | undefined;
+  lastError?: string | undefined;
+  recoveryAction?: string | undefined;
+  nextRetryAt?: string | undefined;
   label: string;
 }) {
   if (!state) return null;
@@ -602,7 +601,7 @@ const EmptyState = ({ tabKey }: { tabKey: string }) => {
     pending: { emoji: '✨', title: '没有待回复的消息', desc: '所有消息都已处理完毕，干得漂亮！' },
     handled: { emoji: '📋', title: '没有已处理记录', desc: '标记已处理的记录会显示在这里' },
   };
-  const msg = emptyMessages[tabKey] || emptyMessages.all;
+  const msg = emptyMessages[tabKey] ?? emptyMessages.all!;
   return (
     <Flex direction="column" align="center" justify="center" py={12} px={4} textAlign="center">
       <Text fontSize="40px" mb={3}>{msg.emoji}</Text>
@@ -626,6 +625,8 @@ const ReplyWorkbench = () => {
     isWechat,
     isWecom,
     isJinmai,
+    isPdd,
+    isDouyin,
     supportsModes,
     mode,
     allSuggestions,
@@ -637,6 +638,8 @@ const ReplyWorkbench = () => {
     qianniuCollectorHealth,
     wecomCollectorHealth,
     jinmaiCollectorHealth,
+    pddCollectorHealth,
+    douyinCollectorHealth,
     refresh,
     toggleSelect,
     selectAll,
@@ -676,7 +679,7 @@ const ReplyWorkbench = () => {
       const next = event.key.toLowerCase() === 'j'
         ? Math.min(listData.length - 1, current + 1)
         : Math.max(0, current - 1);
-      setActiveItemId(listData[next].id);
+      setActiveItemId(listData[next]?.id ?? null);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -687,7 +690,7 @@ const ReplyWorkbench = () => {
     if (listData.length > 0) {
       const exists = listData.some((s) => s.id === activeItemId);
       if (!exists) {
-        setActiveItemId(listData[0].id);
+        setActiveItemId(listData[0]!.id);
       }
     } else {
       setActiveItemId(null);
@@ -812,6 +815,12 @@ const ReplyWorkbench = () => {
           )}
           {isJinmai && jinmaiCollectorHealth && (
             <CollectorHealthBadge state={jinmaiCollectorHealth.state} lastError={jinmaiCollectorHealth.lastError} label="京麦消息采集" />
+          )}
+          {isPdd && pddCollectorHealth && (
+            <CollectorHealthBadge state={pddCollectorHealth.state} lastError={pddCollectorHealth.lastError} label="拼多多消息采集" />
+          )}
+          {isDouyin && douyinCollectorHealth && (
+            <CollectorHealthBadge state={douyinCollectorHealth.state} lastError={douyinCollectorHealth.lastError} label="抖音消息采集" />
           )}
         </Box>
 

@@ -21,6 +21,9 @@ import {
   QianniuCollectorHealth,
   QianniuCompanionContext,
   WecomCollectorHealth,
+  JinmaiCollectorHealth,
+  PddCollectorHealth,
+  DouyinCollectorHealth,
   RetrievalEvidenceItem,
 } from './platform';
 import { GET, POST } from '../common/api/request';
@@ -434,6 +437,14 @@ export async function getWecomCollectorHealth() {
 
 export async function getJinmaiCollectorHealth() {
   return GET<{ data: JinmaiCollectorHealth }>('/api/v1/compat/jinmai/health');
+}
+
+export async function getPddCollectorHealth() {
+  return GET<{ data: PddCollectorHealth }>('/api/v1/compat/pdd/health');
+}
+
+export async function getDouyinCollectorHealth() {
+  return GET<{ data: DouyinCollectorHealth }>('/api/v1/compat/douyin/health');
 }
 
 export async function getQianniuSuggestions(

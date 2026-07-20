@@ -111,7 +111,7 @@ const MyTextarea = forwardRef<HTMLTextAreaElement, MyTextareaProps>(
             right={3}
             bottom={3}
             color={isNearLimit ? 'orange.500' : 'gray.400'}
-            pointerEvents="none"  {/* 不阻挡点击 */}
+            pointerEvents="none"
           >
             {charCount} / {maxLength}
           </Text>

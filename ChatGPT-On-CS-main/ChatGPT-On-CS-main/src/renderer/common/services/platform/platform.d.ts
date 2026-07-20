@@ -191,6 +191,9 @@ export interface JinmaiCollectorHealth {
   restartAttempts: number;
 }
 
+export type PddCollectorHealth = JinmaiCollectorHealth;
+export type DouyinCollectorHealth = JinmaiCollectorHealth;
+
 export interface ReplySuggestion {
   id: number;
   platform_id: string;

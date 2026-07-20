@@ -5,7 +5,9 @@ import {
   batchUpdateSuggestionsStatus,
   clearSuggestions,
   emergencyStopReplies,
+  getDouyinCollectorHealth,
   getJinmaiCollectorHealth,
+  getPddCollectorHealth,
   getQianniuCollectorHealth,
   getQianniuSuggestions,
   getReplyMode,
@@ -73,12 +75,12 @@ export function useReplyWorkbench() {
   );
   const pddHealthQuery = useQuery(
     ['pdd-collector-health'],
-    () => import('../../../common/services/platform/controller').then(m => m.getPddCollectorHealth?.()),
+    getPddCollectorHealth,
     { enabled: isPdd, refetchInterval: 5000 },
   );
   const douyinHealthQuery = useQuery(
     ['douyin-collector-health'],
-    () => import('../../../common/services/platform/controller').then(m => m.getDouyinCollectorHealth?.()),
+    getDouyinCollectorHealth,
     { enabled: isDouyin, refetchInterval: 5000 },
   );
   const suggestionsQuery = useQuery(
@@ -212,7 +214,7 @@ export function useReplyWorkbench() {
 
   const handleClearHandled = useCallback(async () => {
     const targetPlatform =
-      activePlatformId === 'all' ? 'all' : activePlatformId;
+      activePlatformId === 'all' ? 'all' : activePlatformId || undefined;
     const count = handled.length;
     if (count === 0) {
       toast({ title: '没有可清理的已处理消息', status: 'info', duration: 2000 });
@@ -374,6 +376,8 @@ export function useReplyWorkbench() {
     qianniuCollectorHealth: qianniuHealthQuery.data?.data,
     wecomCollectorHealth: wecomHealthQuery.data?.data,
     jinmaiCollectorHealth: jinmaiHealthQuery.data?.data,
+    pddCollectorHealth: pddHealthQuery.data?.data,
+    douyinCollectorHealth: douyinHealthQuery.data?.data,
     // actions
     refresh,
     toggleSelect,
