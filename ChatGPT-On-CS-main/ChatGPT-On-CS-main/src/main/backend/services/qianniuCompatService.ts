@@ -333,19 +333,21 @@ export class QianniuCompatService {
     this.dispatchService.receiveBroadcast({ event, data: suggestion.toJSON() });
   }
 
+  private retryLoadMode(): void {
+    setTimeout(() => {
+      void this.loadMode().catch((error) => {
+        this.log.warn(
+          `Qianniu reply mode could not be loaded: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      });
+    }, 1000);
+  }
+
   public start(): void {
     if (process.platform !== 'win32') return;
-    void this.loadMode().catch(() => {
-      setTimeout(() => {
-        void this.loadMode().catch((error) => {
-          this.log.warn(
-            `Qianniu reply mode could not be loaded: ${
-              error instanceof Error ? error.message : String(error)
-            }`,
-          );
-        });
-      }, 1000);
-    });
+    void this.loadMode().catch(() => this.retryLoadMode());
     this.timer = setInterval(() => {
       void (async () => {
         const running = await isPlatformRunning('win_qianniu');
