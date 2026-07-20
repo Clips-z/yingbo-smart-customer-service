@@ -27,7 +27,7 @@
 
 ## 自查清单
 
-- [ ] `npm run lint` 无 error
+- [ ] `pnpm lint` 未增加 ESLint 债务
 - [ ] `pnpm typecheck` 无 error
 - [ ] 没有引入新的 `any` 类型
 - [ ] 没有 `@ts-ignore` / `@ts-nocheck`

@@ -66,7 +66,7 @@ export async function saveEvaluationCase(question: string, expectedKnowledgeIds:
 
 export async function fetchEvaluationCases() {
   const response = await GET<{ data: EvaluationCaseItem[] }>('/api/v1/quality/evaluation/cases');
-  return response.data;
+  return Array.isArray(response.data) ? response.data : [];
 }
 
 export async function deleteEvaluationCase(id: string) {

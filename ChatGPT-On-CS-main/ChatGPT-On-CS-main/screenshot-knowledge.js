@@ -91,11 +91,9 @@ const clickByText = async (win, text) => {
 };
 /** 截图：容错 */
 const shot = async (win, name) => {
-  try {
-    const img = await win.capturePage();
-    require('fs').writeFileSync(path.join(__dirname, name), img.toPNG());
-    return true;
-  } catch(e) { return false; }
+  const img = await win.capturePage();
+  if (img.isEmpty()) throw new Error(`empty screenshot: ${name}`);
+  require('fs').writeFileSync(path.join(__dirname, name), img.toPNG());
 };
 
 const steps = [
@@ -109,7 +107,7 @@ const steps = [
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({
-    width: 1280, height: 820, show: true,
+    width: 1280, height: 820, show: false,
     webPreferences: { contextIsolation: true, nodeIntegration: false, preload: MOCK_PRELOAD },
   });
   try {
@@ -155,6 +153,7 @@ app.whenReady().then(async () => {
     console.log('🎉 ALL SCREENSHOTS DONE');
   } catch (e) {
     console.log('❌ fatal:', e.message);
+    process.exitCode = 1;
   } finally {
     server.close();
     win.destroy();
