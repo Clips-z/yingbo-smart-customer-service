@@ -42,7 +42,7 @@ const MOCK_RESPONSES = {
     ], total: 3, stats: { total: 3, presale: 1, mid: 1, aftersale: 1 }, page: 1, pageSize: 20,
   }},
   '/api/v1/knowledge/candidates': { success: true, data: {
-    list: [{ id: 'candidate-1', question: '下单后多久可以发货？', answer: '现货订单通常在 24 小时内发出。', relatedQuestions: ['什么时候发货'], tags: ['物流', '发货'], stage: 'mid', shopId: 'shop_lixixi', sourceCount: 8, confidence: 0.92, evidenceReplyIds: [101, 108], status: 'pending', updatedAt: new Date().toISOString() }],
+    list: [{ id: 'candidate-1', question: '下单后多久可以发货？', answer: '现货订单通常在 24 小时内发出。', relatedQuestions: ['什么时候发货'], tags: ['物流', '发货'], stage: 'mid', shopId: 'shop_lixixi', sourceCount: 8, confidence: 0.92, evidenceReplyIds: [101, 108], evidence: [{ id: 101, question: '今天下单什么时候发货？', capturedAt: new Date().toISOString() }, { id: 108, question: '现货多久能寄出？', capturedAt: new Date().toISOString() }], status: 'pending', updatedAt: new Date().toISOString() }],
     total: 1,
   }},
   '/api/v1/governance/backups': { success: true, data: [
@@ -159,7 +159,7 @@ app.whenReady().then(async () => {
     await wait(1500);
     if (!await clickByText(win, '审核并批准')) throw new Error('candidate review button not found');
     await wait(800);
-    if (!await win.webContents.executeJavaScript("(function() { const el = document.querySelector('[role=dialog]'); if (!el) return false; const rect = el.getBoundingClientRect(); const style = getComputedStyle(el); return rect.width > 0 && rect.height > 0 && Number(style.opacity) > 0 && el.innerText.includes('来源回复：#101、#108') && el.innerText.includes('相似问法'); })()")) throw new Error('candidate evidence or editable details not shown');
+    if (!await win.webContents.executeJavaScript("(function() { const el = document.querySelector('[role=dialog]'); if (!el) return false; const rect = el.getBoundingClientRect(); const style = getComputedStyle(el); return rect.width > 0 && rect.height > 0 && Number(style.opacity) > 0 && el.innerText.includes('今天下单什么时候发货？') && el.innerText.includes('现货多久能寄出？') && el.innerText.includes('相似问法'); })()")) throw new Error('candidate evidence or editable details not shown');
     await shot(win, 'ui-candidate-review-details.png');
     if (!await clickByText(win, '取消')) throw new Error('candidate review cancel not found');
     await wait(500);

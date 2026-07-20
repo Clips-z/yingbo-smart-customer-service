@@ -11,6 +11,7 @@ export interface KnowledgeCandidateItem {
   sourceCount: number;
   confidence: number;
   evidenceReplyIds: number[];
+  evidence: Array<{ id: number; question: string; capturedAt: string }>;
   status: 'pending' | 'approved' | 'rejected' | 'merged';
   rejectionReason?: string;
   updatedAt: string;

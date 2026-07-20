@@ -102,6 +102,15 @@ const KnowledgeCandidates: React.FC = () => {
           {editing && <>
             <ModalBody>
               <Text fontSize="xs" color="gray.500" mb={3}>来源回复：{editing.evidenceReplyIds.map((id) => `#${id}`).join('、') || '暂无'}</Text>
+              <FormControl mb={3}>
+                <FormLabel>对话证据</FormLabel>
+                {editing.evidence.length > 0 ? editing.evidence.map((item) => (
+                  <Box key={item.id} bg="gray.50" borderRadius="lg" p={3} mb={2}>
+                    <Text fontSize="xs" color="gray.400">回复 #{item.id} · {new Date(item.capturedAt).toLocaleString('zh-CN')}</Text>
+                    <Text fontSize="sm" mt={1}>{item.question}</Text>
+                  </Box>
+                )) : <Text fontSize="sm" color="gray.500">原始回复已清理，仅保留来源编号。</Text>}
+              </FormControl>
               <FormControl mb={3}><FormLabel>客户问题</FormLabel><Textarea value={editing.question} onChange={(e) => setEditing({ ...editing, question: e.target.value })} /></FormControl>
               <FormControl mb={3}><FormLabel>标准答案</FormLabel><Textarea minH="140px" value={editing.answer} onChange={(e) => setEditing({ ...editing, answer: e.target.value })} /></FormControl>
               <FormControl mb={3}><FormLabel>相似问法（顿号分隔）</FormLabel><Input value={editing.relatedQuestions.join('、')} onChange={(e) => setEditing({ ...editing, relatedQuestions: e.target.value.split('、').map((value) => value.trim()).filter(Boolean) })} /></FormControl>

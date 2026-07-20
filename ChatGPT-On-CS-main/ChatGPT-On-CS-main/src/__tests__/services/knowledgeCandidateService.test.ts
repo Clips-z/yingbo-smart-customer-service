@@ -52,6 +52,12 @@ describe('KnowledgeCandidateService', () => {
     expect(first?.answer).toContain('[手机号]');
     expect(second).toMatchObject({ sourceCount: 2 });
     await expect(KnowledgeCandidate.count()).resolves.toBe(1);
+    const listed = await service.list();
+    expect(listed.list[0]).toMatchObject({
+      evidence: [{ id: feedback.suggestion_id }],
+    });
+    expect(listed.list[0].evidence[0].question).toContain('[手机号]');
+    expect(listed.list[0].evidence[0].question).not.toContain('13800138000');
   });
 
   it('only indexes knowledge after explicit approval', async () => {

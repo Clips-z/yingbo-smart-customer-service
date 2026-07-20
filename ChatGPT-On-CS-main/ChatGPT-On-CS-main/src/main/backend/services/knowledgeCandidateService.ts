@@ -94,7 +94,24 @@ export class KnowledgeCandidateService {
       offset: (page - 1) * pageSize,
       order: [['updated_at', 'DESC']],
     });
-    return { list: result.rows.map(json), total: result.count, page, pageSize };
+    const evidenceIds = [...new Set(result.rows.flatMap((item) => item.evidence_reply_ids || []))];
+    const evidenceRows = evidenceIds.length
+      ? await ReplySuggestion.findAll({ where: { id: { [Op.in]: evidenceIds } } })
+      : [];
+    const evidenceById = new Map(evidenceRows.map((item) => [item.id, {
+      id: item.id,
+      question: clean(item.incoming_content, 1000),
+      capturedAt: item.created_at.toISOString(),
+    }]));
+    return {
+      list: result.rows.map((item) => ({
+        ...json(item),
+        evidence: (item.evidence_reply_ids || []).map((id) => evidenceById.get(id)).filter(Boolean),
+      })),
+      total: result.count,
+      page,
+      pageSize,
+    };
   }
 
   async approve(id: string, patch: any = {}) {
