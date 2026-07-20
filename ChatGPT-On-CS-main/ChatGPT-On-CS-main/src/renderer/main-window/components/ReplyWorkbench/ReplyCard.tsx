@@ -17,8 +17,6 @@ import {
   FiCheck,
   FiClipboard,
   FiCornerUpLeft,
-  FiEdit3,
-  FiMessageSquare,
   FiUser,
   FiSend,
   FiBookOpen,

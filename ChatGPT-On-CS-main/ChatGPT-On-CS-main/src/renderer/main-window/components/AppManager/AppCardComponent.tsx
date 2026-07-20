@@ -3,7 +3,6 @@ import {
   Box,
   Flex,
   Image,
-  Badge,
   HStack,
   IconButton,
   Tooltip,

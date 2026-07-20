@@ -18,7 +18,6 @@ import {
   Text,
   Button,
   Box,
-  VStack,
 } from '@chakra-ui/react';
 import {
   FiSettings,

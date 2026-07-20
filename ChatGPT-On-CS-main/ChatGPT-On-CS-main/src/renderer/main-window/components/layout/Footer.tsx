@@ -2,7 +2,6 @@ import React from 'react';
 import {
   Box,
   Text,
-  Stack,
   Tooltip,
   Button,
   HStack,

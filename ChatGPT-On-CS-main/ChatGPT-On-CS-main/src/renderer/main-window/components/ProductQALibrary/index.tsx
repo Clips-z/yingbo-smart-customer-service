@@ -175,12 +175,13 @@ const ProductCard: React.FC<{
   product: ProductQA;
   batchMode: boolean;
   checked: boolean;
+  toggling: boolean;
   onCheck: (id: string, checked: boolean) => void;
   onToggle: (id: string, onSale: boolean) => void;
   onCopyId: (id: string) => void;
   onRetrySync: (id: string) => void;
   onEdit: (product: ProductQA) => void;
-}> = ({ product, batchMode, checked, onCheck, onToggle, onCopyId, onRetrySync, onEdit }) => {
+}> = ({ product, batchMode, checked, toggling, onCheck, onToggle, onCopyId, onRetrySync, onEdit }) => {
   return (
     <Box
       bg="white"
@@ -241,7 +242,7 @@ const ProductCard: React.FC<{
             {product.onSale ? '已上架' : '未上架'}
           </Text>
           {!batchMode && (
-            <Switch size="sm" colorScheme="green" isChecked={product.onSale} onChange={(e) => onToggle(product.id, e.target.checked)} sx={{ '& .chakra-switch__track': { borderRadius: 'full' } }} />
+            <Switch size="sm" colorScheme="green" isChecked={product.onSale} isDisabled={toggling} onChange={(e) => onToggle(product.id, e.target.checked)} sx={{ '& .chakra-switch__track': { borderRadius: 'full' } }} />
           )}
         </Flex>
         <HStack mt={2} spacing={2}>
@@ -508,7 +509,7 @@ const ProductQALibrary: React.FC = () => {
         ) : (
           <SimpleGrid columns={{ base: 2, md: 3, xl: 4 }} spacing={4}>
             {products.map((p) => (
-              <ProductCard key={p.id} product={p} batchMode={batchMode} checked={selected.has(p.id)}
+              <ProductCard key={p.id} product={p} batchMode={batchMode} checked={selected.has(p.id)} toggling={togglingIds.has(p.id)}
                 onCheck={(id, c) => setSelected((prev) => { const n = new Set(prev); if (c) n.add(id); else n.delete(id); return n; })}
                 onToggle={handleToggle} onCopyId={handleCopyId} onRetrySync={handleRetrySync} onEdit={openEdit} />
             ))}

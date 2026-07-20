@@ -1,7 +1,5 @@
 import { DispatchService } from './dispatchService';
 import { LoggerService } from './loggerService';
-import { ReplySuggestion } from '../entities/replySuggestion';
-import { Op } from 'sequelize';
 
 /**
  * 协作服务

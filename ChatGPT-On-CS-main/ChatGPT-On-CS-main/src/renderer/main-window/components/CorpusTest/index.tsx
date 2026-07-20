@@ -4,7 +4,6 @@ import {
   Flex,
   Text,
   Button,
-  Input,
   Textarea,
   Badge,
   Icon,
@@ -14,14 +13,12 @@ import {
   HStack,
   Divider,
   Progress,
-  useColorModeValue,
 } from '@chakra-ui/react';
 import {
   FiSend,
   FiCheckCircle,
   FiXCircle,
   FiClock,
-  FiTag,
 } from 'react-icons/fi';
 import {
   fetchStoreQAList,

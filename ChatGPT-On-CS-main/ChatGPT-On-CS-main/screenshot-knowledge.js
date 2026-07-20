@@ -123,7 +123,8 @@ app.whenReady().then(async () => {
 
     // 知识管理子页面
     for (const [sub, file] of steps) {
-      await nav(win, 'knowledge', sub);
+      if (sub === 'security') await nav(win, 'security');
+      else await nav(win, 'knowledge', sub);
       await wait(2500);
       await shot(win, file);
       console.log('✅', file);

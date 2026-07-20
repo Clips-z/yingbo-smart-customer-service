@@ -20,7 +20,7 @@ interface GlobalStore {
   setCurrentPlugin: (plugin: Plugin | null) => void;
 }
 
-const useGlobalStore = create<GlobalStore>((set, get) => ({
+const useGlobalStore = create<GlobalStore>((set) => ({
   logs: [],
   activePlatformId: null,
   activePlatformIds: [],

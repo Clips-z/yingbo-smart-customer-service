@@ -1,4 +1,4 @@
-import React, { useCallback, useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   Box,
   Flex,
@@ -24,7 +24,6 @@ import {
   Icon,
   Collapse,
   SimpleGrid,
-  Tooltip,
   Divider,
   Modal,
   ModalOverlay,

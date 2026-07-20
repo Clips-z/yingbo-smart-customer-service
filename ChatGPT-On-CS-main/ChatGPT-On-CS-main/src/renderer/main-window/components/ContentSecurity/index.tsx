@@ -27,7 +27,6 @@ import {
   FormControl,
   FormLabel,
   SimpleGrid,
-  Tooltip,
 } from '@chakra-ui/react';
 import {
   FiSearch,
@@ -301,7 +300,7 @@ const StatTile: React.FC<{ icon: React.ReactNode; label: string; value: number; 
 }) => (
   <Box bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="sm" p={3}>
     <Flex align="center" gap={2} mb={1}>
-      <Icon as={FiShield} color={`${color}.400`} boxSize={4} />
+      <Box color={`${color}.400`} fontSize="16px">{icon}</Box>
       <Text fontSize="11px" color="gray.500">{label}</Text>
     </Flex>
     <Text fontSize="22px" fontWeight={800} color="gray.800">{value}</Text>

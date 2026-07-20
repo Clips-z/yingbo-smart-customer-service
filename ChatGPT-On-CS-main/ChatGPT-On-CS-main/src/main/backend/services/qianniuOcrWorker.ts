@@ -1,6 +1,5 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import crypto from 'crypto';
-import path from 'path';
 import readline from 'readline';
 import {
   getRuntimeRoot,

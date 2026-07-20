@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, HStack, Box, Switch, Tooltip, Flex } from '@chakra-ui/react';
+import { Text, HStack, Switch, Tooltip, Flex } from '@chakra-ui/react';
 
 type GlobalSwitchProps = {
   isGlobal: boolean;

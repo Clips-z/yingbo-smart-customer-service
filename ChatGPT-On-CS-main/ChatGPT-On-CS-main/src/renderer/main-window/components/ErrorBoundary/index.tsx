@@ -5,7 +5,6 @@ import {
   AlertTitle,
   AlertDescription,
   Button,
-  Link,
   Box,
 } from '@chakra-ui/react';
 

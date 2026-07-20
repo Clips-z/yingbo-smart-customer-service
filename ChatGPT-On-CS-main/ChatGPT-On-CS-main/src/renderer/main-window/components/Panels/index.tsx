@@ -2,13 +2,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box,
   HStack,
-  Tooltip,
   IconButton,
   Text,
   VStack,
   Switch,
   Flex,
-  useColorModeValue,
 } from '@chakra-ui/react';
 import { useQuery } from '@tanstack/react-query';
 import { FiPause, FiPlay } from 'react-icons/fi';

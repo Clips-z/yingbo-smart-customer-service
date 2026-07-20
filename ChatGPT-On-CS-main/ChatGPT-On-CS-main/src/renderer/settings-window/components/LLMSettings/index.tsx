@@ -1,7 +1,6 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import {
   FormControl,
-  FormLabel,
   Select,
   VStack,
   useToast,
@@ -11,9 +10,7 @@ import {
   Text,
   Badge,
   Flex,
-  Divider,
 } from '@chakra-ui/react';
-import { FiZap, FiKey, FiCheckCircle } from 'react-icons/fi';
 import { useQuery } from '@tanstack/react-query';
 import {
   getConfig,

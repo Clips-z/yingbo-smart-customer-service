@@ -7,9 +7,8 @@ import {
   HStack,
   Spacer,
   Tooltip,
-  IconButton,
 } from '@chakra-ui/react';
-import { FiCheckSquare, FiTrash, FiTrash2, FiCheck } from 'react-icons/fi';
+import { FiTrash, FiTrash2, FiCheck } from 'react-icons/fi';
 import { ReplySuggestion } from '../../../common/services/platform/platform';
 
 interface BatchActionBarProps {

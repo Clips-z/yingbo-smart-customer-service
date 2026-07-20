@@ -1,4 +1,4 @@
-import { spawn, exec } from 'child_process';
+import { spawn } from 'child_process';
 import { createServer } from 'net';
 import fs from 'fs';
 import path from 'path';
