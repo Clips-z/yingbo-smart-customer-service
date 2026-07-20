@@ -113,6 +113,10 @@ export class KnowledgeCandidateService {
     await item.update({
       question: knowledge.question,
       answer: knowledge.answer,
+      related_questions: knowledge.relatedQuestions,
+      tags: knowledge.tags,
+      stage: knowledge.stage,
+      shop_id: knowledge.shopId,
       status: 'approved',
       approved_knowledge_id: knowledge.id,
       reviewed_at: new Date(),

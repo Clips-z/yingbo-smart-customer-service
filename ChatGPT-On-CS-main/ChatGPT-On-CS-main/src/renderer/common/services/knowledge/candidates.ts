@@ -4,10 +4,13 @@ export interface KnowledgeCandidateItem {
   id: string;
   question: string;
   answer: string;
+  relatedQuestions: string[];
+  tags: string[];
   stage: 'presale' | 'mid' | 'aftersale';
   shopId: string;
   sourceCount: number;
   confidence: number;
+  evidenceReplyIds: number[];
   status: 'pending' | 'approved' | 'rejected' | 'merged';
   rejectionReason?: string;
   updatedAt: string;

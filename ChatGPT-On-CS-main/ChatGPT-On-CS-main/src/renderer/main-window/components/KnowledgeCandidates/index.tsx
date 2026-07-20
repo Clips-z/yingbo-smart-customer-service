@@ -82,6 +82,8 @@ const KnowledgeCandidates: React.FC = () => {
               </Flex>
               <Text fontWeight="700">{item.question}</Text>
               <Text mt={2} fontSize="sm" color="gray.600" whiteSpace="pre-wrap">{item.answer}</Text>
+              {item.tags.length > 0 && <Flex gap={1} mt={2} wrap="wrap">{item.tags.map((tag) => <Badge key={tag} colorScheme="blue">{tag}</Badge>)}</Flex>}
+              {item.evidenceReplyIds.length > 0 && <Text mt={2} fontSize="xs" color="gray.500">来源回复：{item.evidenceReplyIds.map((id) => `#${id}`).join('、')}</Text>}
               {item.rejectionReason && <Text mt={2} fontSize="xs" color="red.500">原因：{item.rejectionReason}</Text>}
               {item.status === 'pending' && <Flex gap={2} mt={4} justify="end">
                 <Button size="sm" variant="ghost" onClick={() => { setRejecting(item); setRejectionReason('信息不准确或不具备通用性'); }}>驳回</Button>
@@ -92,20 +94,27 @@ const KnowledgeCandidates: React.FC = () => {
         </SimpleGrid>
       )}
 
-      {editing && (
-        <Box position="fixed" inset={0} bg="blackAlpha.500" zIndex={20} display="flex" alignItems="center" justifyContent="center" p={4}>
-          <Box bg="white" borderRadius="xl" p={5} w="min(680px, 100%)" maxH="90vh" overflowY="auto">
-            <Heading size="sm" mb={4}>审核知识内容</Heading>
-            <FormControl mb={3}><FormLabel>客户问题</FormLabel><Textarea value={editing.question} onChange={(e) => setEditing({ ...editing, question: e.target.value })} /></FormControl>
-            <FormControl mb={3}><FormLabel>标准答案</FormLabel><Textarea minH="140px" value={editing.answer} onChange={(e) => setEditing({ ...editing, answer: e.target.value })} /></FormControl>
-            <SimpleGrid columns={2} spacing={3}>
-              <FormControl><FormLabel>业务阶段</FormLabel><Select value={editing.stage} onChange={(e) => setEditing({ ...editing, stage: e.target.value as KnowledgeCandidateItem['stage'] })}><option value="presale">售前</option><option value="mid">售中</option><option value="aftersale">售后</option></Select></FormControl>
-              <FormControl><FormLabel>店铺 ID</FormLabel><Input value={editing.shopId} onChange={(e) => setEditing({ ...editing, shopId: e.target.value })} /></FormControl>
-            </SimpleGrid>
-            <Flex justify="end" gap={2} mt={5}><Button onClick={() => setEditing(null)}>取消</Button><Button colorScheme="blue" onClick={approve}>批准并入库</Button></Flex>
-          </Box>
-        </Box>
-      )}
+      <Modal isOpen={Boolean(editing)} onClose={() => setEditing(null)} size="xl" isCentered scrollBehavior="inside" motionPreset="none">
+        <ModalOverlay bg="blackAlpha.400" />
+        <ModalContent borderRadius="xl">
+          <ModalHeader fontSize="16px">审核知识内容</ModalHeader>
+          <ModalCloseButton />
+          {editing && <>
+            <ModalBody>
+              <Text fontSize="xs" color="gray.500" mb={3}>来源回复：{editing.evidenceReplyIds.map((id) => `#${id}`).join('、') || '暂无'}</Text>
+              <FormControl mb={3}><FormLabel>客户问题</FormLabel><Textarea value={editing.question} onChange={(e) => setEditing({ ...editing, question: e.target.value })} /></FormControl>
+              <FormControl mb={3}><FormLabel>标准答案</FormLabel><Textarea minH="140px" value={editing.answer} onChange={(e) => setEditing({ ...editing, answer: e.target.value })} /></FormControl>
+              <FormControl mb={3}><FormLabel>相似问法（顿号分隔）</FormLabel><Input value={editing.relatedQuestions.join('、')} onChange={(e) => setEditing({ ...editing, relatedQuestions: e.target.value.split('、').map((value) => value.trim()).filter(Boolean) })} /></FormControl>
+              <FormControl mb={3}><FormLabel>标签（顿号分隔）</FormLabel><Input value={editing.tags.join('、')} onChange={(e) => setEditing({ ...editing, tags: e.target.value.split('、').map((value) => value.trim()).filter(Boolean) })} /></FormControl>
+              <SimpleGrid columns={2} spacing={3}>
+                <FormControl><FormLabel>业务阶段</FormLabel><Select value={editing.stage} onChange={(e) => setEditing({ ...editing, stage: e.target.value as KnowledgeCandidateItem['stage'] })}><option value="presale">售前</option><option value="mid">售中</option><option value="aftersale">售后</option></Select></FormControl>
+                <FormControl><FormLabel>店铺 ID</FormLabel><Input value={editing.shopId} onChange={(e) => setEditing({ ...editing, shopId: e.target.value })} /></FormControl>
+              </SimpleGrid>
+            </ModalBody>
+            <ModalFooter gap={2}><Button variant="ghost" onClick={() => setEditing(null)}>取消</Button><Button colorScheme="blue" isDisabled={!editing.question.trim() || !editing.answer.trim() || !editing.shopId.trim()} onClick={approve}>批准并入库</Button></ModalFooter>
+          </>}
+        </ModalContent>
+      </Modal>
 
       <Modal isOpen={Boolean(rejecting)} onClose={() => setRejecting(null)} isCentered>
         <ModalOverlay bg="blackAlpha.400" />

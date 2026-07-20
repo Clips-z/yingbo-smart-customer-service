@@ -59,9 +59,29 @@ describe('KnowledgeCandidateService', () => {
     knowledge.setIndexer(indexer);
     const candidate = await service.considerFeedback(await acceptedFeedback());
     expect(indexer).not.toHaveBeenCalled();
-    const result = await service.approve(candidate!.id, { answer: '审核后的答案' });
-    expect(result.candidate).toMatchObject({ status: 'approved' });
-    expect(result.knowledge).toMatchObject({ answer: '审核后的答案', enabled: true });
+    const result = await service.approve(candidate!.id, {
+      answer: '审核后的答案',
+      relatedQuestions: ['多久能发出'],
+      tags: ['物流'],
+      stage: 'mid',
+      shopId: 'shop-reviewed',
+    });
+    expect(result.candidate).toMatchObject({
+      status: 'approved',
+      answer: '审核后的答案',
+      relatedQuestions: ['多久能发出'],
+      tags: ['物流'],
+      stage: 'mid',
+      shopId: 'shop-reviewed',
+    });
+    expect(result.knowledge).toMatchObject({
+      answer: '审核后的答案',
+      relatedQuestions: ['多久能发出'],
+      tags: ['物流'],
+      stage: 'mid',
+      shopId: 'shop-reviewed',
+      enabled: true,
+    });
     expect(indexer).toHaveBeenCalledTimes(1);
   });
 });
