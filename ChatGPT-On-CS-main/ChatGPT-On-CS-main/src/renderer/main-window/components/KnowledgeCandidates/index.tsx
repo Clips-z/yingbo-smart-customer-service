@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Badge, Box, Button, Flex, FormControl, FormLabel, Heading, Input, Select,
-  SimpleGrid, Spinner, Text, Textarea, useToast,
+  SimpleGrid, Spinner, Text, Textarea, useToast, Modal, ModalOverlay,
+  ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
 } from '@chakra-ui/react';
 import {
   approveKnowledgeCandidate,
@@ -17,6 +18,8 @@ const KnowledgeCandidates: React.FC = () => {
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<KnowledgeCandidateItem | null>(null);
+  const [rejecting, setRejecting] = useState<KnowledgeCandidateItem | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('信息不准确或不具备通用性');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -40,10 +43,11 @@ const KnowledgeCandidates: React.FC = () => {
     await load();
   };
 
-  const reject = async (item: KnowledgeCandidateItem) => {
-    const reason = window.prompt('请输入驳回原因（便于后续复盘）', '信息不准确或不具备通用性');
-    if (reason == null) return;
-    await rejectKnowledgeCandidate(item.id, reason);
+  const reject = async () => {
+    const reason = rejectionReason.trim();
+    if (!rejecting || !reason) return;
+    await rejectKnowledgeCandidate(rejecting.id, reason);
+    setRejecting(null);
     toast({ status: 'info', title: '已驳回' });
     await load();
   };
@@ -80,7 +84,7 @@ const KnowledgeCandidates: React.FC = () => {
               <Text mt={2} fontSize="sm" color="gray.600" whiteSpace="pre-wrap">{item.answer}</Text>
               {item.rejectionReason && <Text mt={2} fontSize="xs" color="red.500">原因：{item.rejectionReason}</Text>}
               {item.status === 'pending' && <Flex gap={2} mt={4} justify="end">
-                <Button size="sm" variant="ghost" onClick={() => reject(item)}>驳回</Button>
+                <Button size="sm" variant="ghost" onClick={() => { setRejecting(item); setRejectionReason('信息不准确或不具备通用性'); }}>驳回</Button>
                 <Button size="sm" colorScheme="blue" onClick={() => setEditing({ ...item })}>审核并批准</Button>
               </Flex>}
             </Box>
@@ -102,6 +106,25 @@ const KnowledgeCandidates: React.FC = () => {
           </Box>
         </Box>
       )}
+
+      <Modal isOpen={Boolean(rejecting)} onClose={() => setRejecting(null)} isCentered>
+        <ModalOverlay bg="blackAlpha.400" />
+        <ModalContent borderRadius="xl">
+          <ModalHeader fontSize="16px">驳回知识候选</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text fontSize="sm" fontWeight="600" mb={3}>{rejecting?.question}</Text>
+            <FormControl>
+              <FormLabel fontSize="sm">驳回原因</FormLabel>
+              <Textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} minH="110px" />
+            </FormControl>
+          </ModalBody>
+          <ModalFooter gap={2}>
+            <Button variant="ghost" onClick={() => setRejecting(null)}>取消</Button>
+            <Button colorScheme="red" isDisabled={!rejectionReason.trim()} onClick={reject}>确认驳回</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 };

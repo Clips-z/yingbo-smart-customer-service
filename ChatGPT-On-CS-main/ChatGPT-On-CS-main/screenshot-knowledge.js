@@ -41,6 +41,10 @@ const MOCK_RESPONSES = {
       { id: 'q3', question: '如何选择适合的型号？', answer: '请提供使用场景、身高体重和预算，客服会协助推荐。', relatedQuestions: ['型号怎么选'], tags: ['选购'], triggerCount: 53, stage: 'presale', matchType: 'fuzzy', updatedAt: new Date().toISOString(), shopId: 'shop_xinghe', enabled: true, syncStatus: 'failed', syncError: '等待 RAG 服务恢复' },
     ], total: 3, stats: { total: 3, presale: 1, mid: 1, aftersale: 1 }, page: 1, pageSize: 20,
   }},
+  '/api/v1/knowledge/candidates': { success: true, data: {
+    list: [{ id: 'candidate-1', question: '下单后多久可以发货？', answer: '现货订单通常在 24 小时内发出。', stage: 'mid', shopId: 'shop_lixixi', sourceCount: 8, confidence: 0.92, status: 'pending', updatedAt: new Date().toISOString() }],
+    total: 1,
+  }},
 };
 
 const server = http.createServer((req, res) => {
@@ -55,6 +59,7 @@ const server = http.createServer((req, res) => {
   }};
   else if (url.includes('/api/v1/knowledge/products')) mockData = MOCK_RESPONSES['/api/v1/knowledge/products'];
   else if (url.includes('/api/v1/knowledge/store-qa')) mockData = MOCK_RESPONSES['/api/v1/knowledge/store-qa'];
+  else if (url.includes('/api/v1/knowledge/candidates')) mockData = MOCK_RESPONSES['/api/v1/knowledge/candidates'];
   else if (url.includes('reply-mode') || url.includes('/mode')) mockData = { success: true, data: { mode: 'assist' } };
   else if (url.includes('suggestions')) mockData = { success: true, data: [] };
   else if (url.includes('health') || url.includes('collector')) mockData = { success: true, data: { state: 'running', processRunning: true, lastError: null, restartAttempts: 0 } };
@@ -102,6 +107,7 @@ const steps = [
   ['corpus-test', 'ui-corpus.png'],
   ['product-qa', 'ui-product-qa2.png'],
   ['store-kb', 'ui-store-kb2.png'],
+  ['knowledge-candidates', 'ui-candidates.png'],
   ['security', 'ui-security.png'],
 ];
 
@@ -129,6 +135,13 @@ app.whenReady().then(async () => {
       await shot(win, file);
       console.log('✅', file);
     }
+
+    await nav(win, 'knowledge', 'knowledge-candidates');
+    await wait(1500);
+    if (!await clickByText(win, '驳回')) throw new Error('candidate reject button not found');
+    await wait(500);
+    await shot(win, 'ui-candidate-reject.png');
+    console.log('✅ ui-candidate-reject.png');
 
     // 客服中心
     await nav(win, 'service');
