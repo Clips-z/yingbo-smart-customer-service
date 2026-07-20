@@ -45,6 +45,9 @@ const MOCK_RESPONSES = {
     list: [{ id: 'candidate-1', question: '下单后多久可以发货？', answer: '现货订单通常在 24 小时内发出。', stage: 'mid', shopId: 'shop_lixixi', sourceCount: 8, confidence: 0.92, status: 'pending', updatedAt: new Date().toISOString() }],
     total: 1,
   }},
+  '/api/v1/governance/backups': { success: true, data: [
+    { id: 'backup-1', size: 245760, sha256: 'a0c53f28d31a4f5fbc69078db1fc938f', createdAt: new Date().toISOString(), valid: true },
+  ]},
 };
 
 const server = http.createServer((req, res) => {
@@ -60,6 +63,8 @@ const server = http.createServer((req, res) => {
   else if (url.includes('/api/v1/knowledge/products')) mockData = MOCK_RESPONSES['/api/v1/knowledge/products'];
   else if (url.includes('/api/v1/knowledge/store-qa')) mockData = MOCK_RESPONSES['/api/v1/knowledge/store-qa'];
   else if (url.includes('/api/v1/knowledge/candidates')) mockData = MOCK_RESPONSES['/api/v1/knowledge/candidates'];
+  else if (url.includes('/api/v1/governance/backups')) mockData = MOCK_RESPONSES['/api/v1/governance/backups'];
+  else if (url.includes('/api/v1/governance/audit')) mockData = { success: true, data: [] };
   else if (url.includes('reply-mode') || url.includes('/mode')) mockData = { success: true, data: { mode: 'assist' } };
   else if (url.includes('suggestions')) mockData = { success: true, data: [] };
   else if (url.includes('health') || url.includes('collector')) mockData = { success: true, data: { state: 'running', processRunning: true, lastError: null, restartAttempts: 0 } };
@@ -108,6 +113,7 @@ const steps = [
   ['product-qa', 'ui-product-qa2.png'],
   ['store-kb', 'ui-store-kb2.png'],
   ['knowledge-candidates', 'ui-candidates.png'],
+  ['governance', 'ui-governance.png'],
   ['security', 'ui-security.png'],
 ];
 
@@ -142,6 +148,13 @@ app.whenReady().then(async () => {
     await wait(500);
     await shot(win, 'ui-candidate-reject.png');
     console.log('✅ ui-candidate-reject.png');
+
+    await nav(win, 'knowledge', 'governance');
+    await wait(1500);
+    if (!await clickByText(win, '恢复')) throw new Error('backup restore button not found');
+    await wait(500);
+    await shot(win, 'ui-backup-restore.png');
+    console.log('✅ ui-backup-restore.png');
 
     // 客服中心
     await nav(win, 'service');
