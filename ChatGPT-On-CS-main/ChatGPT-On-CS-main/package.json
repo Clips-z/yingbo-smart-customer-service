@@ -29,6 +29,7 @@
     "check:python": "node scripts/check-python-runtime.js",
     "check:package": "node scripts/check-package-artifacts.js",
     "test:qianniu-ocr": "python scripts/test-qianniu-ocr-layout.py",
+    "typecheck:baseline": "node scripts/check-type-baseline.js",
     "smoke:wechat-reply": "node scripts/smoke-auto-reply.js",
     "wechat:sidecar": "node scripts/start-wechat-sidecar.js --backend auto",
     "wechat:sidecar:probe": ".venv-wechat\\Scripts\\python.exe scripts\\wechat-sidecar.py --backend auto --duration 20s --dry-run",
