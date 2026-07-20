@@ -80,7 +80,7 @@ export class AppService {
    */
   public async addTask(appId: string): Promise<Instance | null> {
     // 使用事务
-    const instance = await this.sequelize
+    const createdInstance = await this.sequelize
       .transaction(async (t: Transaction) => {
         const instance = await Instance.create(
           {
@@ -137,7 +137,7 @@ export class AppService {
       });
 
     await this.dispatchService.syncConfig();
-    return instance;
+    return createdInstance;
   }
 
   /**

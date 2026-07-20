@@ -80,6 +80,7 @@ export type Model = OpenAI.Models.Model;
 
 // eslint-disable-next-line no-redeclare
 export namespace Models {
+  // eslint-disable-next-line @typescript-eslint/no-shadow
   export type Model = OpenAI.Models.Model;
   // eslint-disable-next-line @typescript-eslint/no-shadow
   export import ModelsPage = OpenAI.Models.ModelsPage;

@@ -55,7 +55,7 @@ export async function runCorpusTest(query: string): Promise<CorpusTestResult> {
   };
 }
 
-export async function saveEvaluationCase(question: string, expectedKnowledgeIds: string[] = [], id?: string) {
+export async function saveEvaluationCase(question: string, expectedKnowledgeIds: string[], id?: string) {
   await POST('/api/v1/quality/evaluation/cases/save', {
     id,
     question,

@@ -47,7 +47,7 @@ const PromptKnowledge: React.FC<PromptKnowledgeProps> = ({
   useEffect(() => {
     if (!config.ragEnabled) {
       setRagHealth(null);
-      return;
+      return undefined;
     }
 
     let cancelled = false;

@@ -491,7 +491,7 @@ const StoreKnowledgeBase: React.FC = () => {
           ) : (
             <VStack spacing={0} align="stretch">
               {items.map((it) => (
-                <QAListItem key={it.id} item={it} selected={selectedIds.has(it.id)} onToggleSelect={(id, checked) => setSelectedIds((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; })} onEdit={openEdit} onRequestDelete={(item) => { setPendingDelete(item); delOnOpen(); }} onRetrySync={retrySync} onRollback={handleRollback} />
+                <QAListItem key={it.id} item={it} selected={selectedIds.has(it.id)} onToggleSelect={(id, checked) => setSelectedIds((prev) => { const n = new Set(prev); if (checked) n.add(id); else n.delete(id); return n; })} onEdit={openEdit} onRequestDelete={(item) => { setPendingDelete(item); delOnOpen(); }} onRetrySync={retrySync} onRollback={handleRollback} />
               ))}
             </VStack>
           )}

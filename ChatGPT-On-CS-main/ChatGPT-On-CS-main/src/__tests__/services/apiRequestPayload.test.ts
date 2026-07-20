@@ -49,4 +49,15 @@ describe('API request payload normalization', () => {
       }),
     );
   });
+
+  it('preserves business error details', async () => {
+    const body = { code: 422, message: 'invalid request', data: { field: 'name' } };
+    mockRequest.mockResolvedValueOnce({ data: body });
+
+    await expect(POST('/config')).rejects.toMatchObject({
+      message: body.message,
+      code: body.code,
+      details: body,
+    });
+  });
 });

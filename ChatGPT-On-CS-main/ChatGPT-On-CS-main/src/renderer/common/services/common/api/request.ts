@@ -60,14 +60,13 @@ instance.interceptors.response.use(
 function checkRes<T>(data: T): T {
   const body = data as unknown as ApiResponse;
   if (data === undefined || data === null) {
-    throw { message: '服务器异常' } as ApiError;
+    throw new Error('服务器异常');
   }
   if (body.code && (body.code < 200 || body.code >= 400)) {
-    throw {
-      message: body.message || '请求失败',
+    throw Object.assign(new Error(body.message || '请求失败'), {
       code: body.code,
       details: data,
-    } as ApiError;
+    });
   }
   return data;
 }
@@ -138,8 +137,10 @@ function request<T = ApiResponse>(
       params: !['POST', 'PUT'].includes(method) ? payload : null,
       ...config,
     })
-    .then((res) => checkRes<T>(res.data))
-    .catch((err: AxiosError) => responseError(err));
+    .then(
+      (res) => checkRes<T>(res.data),
+      (err: AxiosError) => responseError(err),
+    );
 }
 
 /**

@@ -279,7 +279,7 @@ const Pagination: React.FC<{
         <Button size="sm" variant="ghost" onClick={() => go(localPage - 1)} isDisabled={localPage <= 1} borderRadius="lg">上一页</Button>
         <HStack spacing={1} align="center">
           <Text>第</Text>
-          <Input value={localPage} onChange={(e) => { const v = parseInt(e.target.value.replace(/\D/g, ''), 10); if (!isNaN(v)) setLocalPage(v); }} onBlur={() => go(localPage)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} w="44px" h="30px" textAlign="center" size="sm" borderRadius="lg" px={1} />
+          <Input value={localPage} onChange={(e) => { const v = parseInt(e.target.value.replace(/\D/g, ''), 10); if (!Number.isNaN(v)) setLocalPage(v); }} onBlur={() => go(localPage)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} w="44px" h="30px" textAlign="center" size="sm" borderRadius="lg" px={1} />
           <Text>/ {totalPages} 页</Text>
         </HStack>
         <Button size="sm" variant="ghost" onClick={() => go(localPage + 1)} isDisabled={localPage >= totalPages} borderRadius="lg">下一页</Button>
@@ -509,7 +509,7 @@ const ProductQALibrary: React.FC = () => {
           <SimpleGrid columns={{ base: 2, md: 3, xl: 4 }} spacing={4}>
             {products.map((p) => (
               <ProductCard key={p.id} product={p} batchMode={batchMode} checked={selected.has(p.id)}
-                onCheck={(id, c) => setSelected((prev) => { const n = new Set(prev); c ? n.add(id) : n.delete(id); return n; })}
+                onCheck={(id, c) => setSelected((prev) => { const n = new Set(prev); if (c) n.add(id); else n.delete(id); return n; })}
                 onToggle={handleToggle} onCopyId={handleCopyId} onRetrySync={handleRetrySync} onEdit={openEdit} />
             ))}
           </SimpleGrid>

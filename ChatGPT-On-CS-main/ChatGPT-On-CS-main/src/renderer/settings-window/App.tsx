@@ -171,9 +171,9 @@ const App = () => {
       electron.ipcRenderer.on(
         'update-settings-params',
         // @ts-ignore
-        (receivedArgs: string[]) => {
-          console.log('update-settings-params', receivedArgs);
-          handleParams(receivedArgs);
+        (updatedArgs: string[]) => {
+          console.log('update-settings-params', updatedArgs);
+          handleParams(updatedArgs);
         },
       );
     }
