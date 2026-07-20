@@ -83,7 +83,7 @@ export async function mergeStoreKnowledge(targetId: string, sourceId: string) {
   await POST('/api/v1/knowledge/store-qa/merge', { targetId, sourceId });
 }
 
-export async function bulkImportStoreKnowledge(rows: Array<Record<string, unknown>>) {
+export async function bulkImportStoreKnowledge(rows: object[]) {
   const response = await POST<{
     data: { results: Array<{ row: number; success: boolean; id?: string; error?: string }> };
   }>('/api/v1/knowledge/store-qa/import', { rows });

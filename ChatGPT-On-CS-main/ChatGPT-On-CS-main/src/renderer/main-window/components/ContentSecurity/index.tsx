@@ -124,7 +124,7 @@ const ContentSecurity: React.FC = () => {
       setOverview(ov);
       setWords(ws);
     } catch {
-      toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
+      toast({ title: '加载失败', status: 'error', duration: 2000, isClosable: true });
     } finally {
       setLoading(false);
     }
@@ -139,13 +139,13 @@ const ContentSecurity: React.FC = () => {
     await addSensitiveWord(word, category, action);
     setModalOpen(false);
     await load();
-    toast({ title: `已添加「${word}」`, status: 'success', duration: 1800, isClosest: true });
+    toast({ title: `已添加「${word}」`, status: 'success', duration: 1800, isClosable: true });
   };
 
   const handleDelete = async (w: SensitiveWord) => {
     await deleteSensitiveWord(w.id);
     await load();
-    toast({ title: `已删除「${w.word}」`, status: 'warning', duration: 1500, isClosest: true });
+    toast({ title: `已删除「${w.word}」`, status: 'warning', duration: 1500, isClosable: true });
   };
 
   const togglePolicy = async (key: 'filterEnabled' | 'riskTipEnabled' | 'manualReviewEnabled') => {

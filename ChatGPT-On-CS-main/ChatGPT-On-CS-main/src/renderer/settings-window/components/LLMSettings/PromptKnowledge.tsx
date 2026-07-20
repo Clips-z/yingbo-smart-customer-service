@@ -117,7 +117,7 @@ const PromptKnowledge: React.FC<PromptKnowledgeProps> = ({
       if (!config.ragEnabled || !text.trim()) return;
       setSyncing(true);
       try {
-        const result = await POST<{ success: boolean; data?: { chunks: number } }>(
+        const result = await POST<{ success: boolean; message?: string; data?: { chunks: number } }>(
           '/api/v1/rag/text-upload',
           { text, filename: 'knowledge_base.txt' },
         );

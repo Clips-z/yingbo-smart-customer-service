@@ -14,7 +14,7 @@ import {
   Divider,
   Tooltip,
 } from '@chakra-ui/react';
-import { FiEdit2, FiMessageSquare, FiBan, FiTag } from 'react-icons/fi';
+import { FiEdit2, FiMessageSquare, FiSlash, FiTag } from 'react-icons/fi';
 import {
   fetchIndustryTemplates,
   toggleIndustry,
@@ -78,7 +78,7 @@ const IndustryCard: React.FC<{
       <Flex align="center" justify="space-between" px={4} py={3}>
         <HStack spacing={4}>
           <Metric icon={<FiMessageSquare size={13} />} label="话术" value={industry.phraseCount} />
-          <Metric icon={<FiBan size={13} />} label="禁用词" value={industry.bannedWordCount} />
+          <Metric icon={<FiSlash size={13} />} label="禁用词" value={industry.bannedWordCount} />
           <Metric icon={<FiTag size={13} />} label="术语" value={industry.termCount} />
         </HStack>
         <Tooltip label="配置行业话术与禁用词" placement="top">
@@ -154,7 +154,7 @@ const IndustryConfig: React.FC = () => {
       setTotal(res.total);
       setEnabledCount(res.enabledCount);
     } catch {
-      toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
+      toast({ title: '加载失败', status: 'error', duration: 2000, isClosable: true });
     } finally {
       setLoading(false);
     }
@@ -171,7 +171,7 @@ const IndustryConfig: React.FC = () => {
     try {
       await toggleIndustry(id, enabled);
     } catch {
-      toast({ title: '操作失败', status: 'error', duration: 1500, isClosest: true });
+      toast({ title: '操作失败', status: 'error', duration: 1500, isClosable: true });
     }
   };
 
@@ -181,7 +181,7 @@ const IndustryConfig: React.FC = () => {
       description: `话术 ${industry.phraseCount} · 禁用词 ${industry.bannedWordCount} · 术语 ${industry.termCount}`,
       status: 'info',
       duration: 2500,
-      isClosest: true,
+      isClosable: true,
     });
   };
 

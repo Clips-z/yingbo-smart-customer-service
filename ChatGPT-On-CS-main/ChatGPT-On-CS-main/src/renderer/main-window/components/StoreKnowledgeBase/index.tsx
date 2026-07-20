@@ -237,7 +237,7 @@ const QAListItem: React.FC<{
             <HStack spacing={1} ml="auto">
               <IconButton aria-label="编辑" icon={<FiEdit2 size={13} />} size="xs" variant="ghost" color="gray.400" borderRadius="md" onClick={(e) => { e.stopPropagation(); onEdit(item); }} _hover={{ color: 'brand.500', bg: 'brand.50' }} />
               <IconButton aria-label="删除" icon={<FiTrash2 size={13} />} size="xs" variant="ghost" color="gray.400" borderRadius="md" onClick={(e) => { e.stopPropagation(); onRequestDelete(item); }} _hover={{ color: 'red.500', bg: 'red.50' }} />
-              <Box as="button" onClick={(e) => { e.stopPropagation(); setExpanded((v) => !v); }} color="gray.400" _hover={{ color: 'brand.500' }} display="flex">
+              <Box as="button" onClick={(e: React.MouseEvent<HTMLButtonElement>) => { e.stopPropagation(); setExpanded((v) => !v); }} color="gray.400" _hover={{ color: 'brand.500' }} display="flex">
                 <Icon as={expanded ? FiChevronDownSmall : FiChevronRight} boxSize={4} />
               </Box>
             </HStack>
@@ -376,7 +376,7 @@ const StoreKnowledgeBase: React.FC = () => {
       const res = await fetchStoreQAList({ keyword, shop, stage, page, pageSize });
       setItems(res.list); setTotal(res.total); setStats(res.stats);
     } catch {
-      toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
+      toast({ title: '加载失败', status: 'error', duration: 2000, isClosable: true });
     } finally { setLoading(false); }
   };
 
@@ -390,10 +390,10 @@ const StoreKnowledgeBase: React.FC = () => {
   const handleSubmit = async (data: { question: string; answer: string; relatedQuestions: string[]; stage: QAStage; tags: string[]; matchType: QAMatchType; enabled: boolean; effectiveAt?: string; expiresAt?: string }) => {
     if (editing) {
       await updateQA(editing.id, data);
-      toast({ title: '已保存修改', status: 'success', duration: 1800, isClosest: true });
+      toast({ title: '已保存修改', status: 'success', duration: 1800, isClosable: true });
     } else {
       await addQA({ ...data, shopId: shop === 'all' ? 'shop_lixixi' : shop });
-      toast({ title: '问答已创建', status: 'success', duration: 1800, isClosest: true });
+      toast({ title: '问答已创建', status: 'success', duration: 1800, isClosable: true });
     }
     modalOnClose();
     setPage(1);
@@ -424,7 +424,7 @@ const StoreKnowledgeBase: React.FC = () => {
     delOnClose();
     setPendingDelete(null);
     await loadData();
-    toast({ title: '已删除该问答', status: 'warning', duration: 1800, isClosest: true });
+    toast({ title: '已删除该问答', status: 'warning', duration: 1800, isClosable: true });
   };
 
   const retrySync = async (id: string) => {

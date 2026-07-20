@@ -175,7 +175,7 @@ const ValidityManagement: React.FC = () => {
       setList(res.list);
       setCounts(res.counts);
     } catch {
-      toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
+      toast({ title: '加载失败', status: 'error', duration: 2000, isClosable: true });
     } finally {
       setLoading(false);
     }
@@ -190,13 +190,13 @@ const ValidityManagement: React.FC = () => {
     const created = await addValidityRule(data);
     onClose();
     await load();
-    toast({ title: `已创建「${created.name}」`, status: 'success', duration: 2000, isClosest: true });
+    toast({ title: `已创建「${created.name}」`, status: 'success', duration: 2000, isClosable: true });
   };
 
   const handleDelete = async (rule: ValidityRule) => {
     await deleteValidityRule(rule.id);
     await load();
-    toast({ title: `已删除「${rule.name}」`, status: 'warning', duration: 1800, isClosest: true });
+    toast({ title: `已删除「${rule.name}」`, status: 'warning', duration: 1800, isClosable: true });
   };
 
   const statusBadges: { key: string; label: string; color: string }[] = [
@@ -307,7 +307,7 @@ const ValidityManagement: React.FC = () => {
                         _hover={{ color: 'brand.500', bg: 'brand.50' }}
                       />
                       <MenuList>
-                        <MenuItem icon={<FiEdit2 size={13} />} onClick={() => toast({ title: '编辑功能开发中', status: 'info', duration: 1500, isClosest: true })}>
+                        <MenuItem icon={<FiEdit2 size={13} />} onClick={() => toast({ title: '编辑功能开发中', status: 'info', duration: 1500, isClosable: true })}>
                           编辑
                         </MenuItem>
                         <MenuItem icon={<FiTrash2 size={13} />} color="red.500" onClick={() => handleDelete(r)}>

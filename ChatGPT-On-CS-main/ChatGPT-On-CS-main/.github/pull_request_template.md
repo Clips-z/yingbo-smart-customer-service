@@ -28,7 +28,7 @@
 ## 自查清单
 
 - [ ] `npm run lint` 无 error
-- [ ] `pnpm typecheck:baseline` 未增加类型债务
+- [ ] `pnpm typecheck` 无 error
 - [ ] 没有引入新的 `any` 类型
 - [ ] 没有 `@ts-ignore` / `@ts-nocheck`
 - [ ] 关键路径有 try/catch 错误处理

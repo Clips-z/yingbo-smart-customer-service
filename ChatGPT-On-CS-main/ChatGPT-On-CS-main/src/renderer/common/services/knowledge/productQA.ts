@@ -102,7 +102,7 @@ export async function retryProductSync(id: string) {
   return response.data;
 }
 
-export async function bulkImportProducts(rows: Array<Record<string, unknown>>) {
+export async function bulkImportProducts(rows: object[]) {
   const response = await POST<{
     data: { results: Array<{ row: number; success: boolean; id?: string; error?: string }> };
   }>('/api/v1/knowledge/products/import', { rows });

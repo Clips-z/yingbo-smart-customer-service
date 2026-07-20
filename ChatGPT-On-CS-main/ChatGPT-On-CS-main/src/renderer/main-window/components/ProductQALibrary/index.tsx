@@ -323,7 +323,7 @@ const ProductQALibrary: React.FC = () => {
       setProducts(res.list);
       setTotal(res.total);
     } catch {
-      toast({ title: '加载失败', status: 'error', duration: 2000, isClosest: true });
+      toast({ title: '加载失败', status: 'error', duration: 2000, isClosable: true });
     } finally {
       setLoading(false);
     }
@@ -337,7 +337,7 @@ const ProductQALibrary: React.FC = () => {
       await toggleProductOnSale(id, onSale);
       setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, onSale } : p)));
     } catch {
-      toast({ title: '操作失败', status: 'error', duration: 1500, isClosest: true });
+      toast({ title: '操作失败', status: 'error', duration: 1500, isClosable: true });
     } finally {
       setTogglingIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
     }
@@ -349,7 +349,7 @@ const ProductQALibrary: React.FC = () => {
     addOnClose();
     setPage(1);
     await loadData();
-    toast({ title: editingProduct ? '商品知识已更新' : '商品已添加', status: 'success', duration: 1800, isClosest: true });
+    toast({ title: editingProduct ? '商品知识已更新' : '商品已添加', status: 'success', duration: 1800, isClosable: true });
     setEditingProduct(null);
   };
 
@@ -369,7 +369,7 @@ const ProductQALibrary: React.FC = () => {
     if (selectedIds.length === 0) return;
     await batchSetOnSale(selectedIds, onSale);
     await loadData();
-    toast({ title: `${onSale ? '已上架' : '已下架'} ${selectedIds.length} 件商品`, status: 'success', duration: 1800, isClosest: true });
+    toast({ title: `${onSale ? '已上架' : '已下架'} ${selectedIds.length} 件商品`, status: 'success', duration: 1800, isClosable: true });
     setSelected(new Set());
   };
 
@@ -378,12 +378,12 @@ const ProductQALibrary: React.FC = () => {
     setConfirmDelete(false);
     setSelected(new Set());
     await loadData();
-    toast({ title: `已删除 ${selectedIds.length} 件商品`, status: 'warning', duration: 1800, isClosest: true });
+    toast({ title: `已删除 ${selectedIds.length} 件商品`, status: 'warning', duration: 1800, isClosable: true });
   };
 
   const handleCopyId = (id: string) => {
     if (navigator.clipboard) navigator.clipboard.writeText(id).catch(() => {});
-    toast({ title: '已复制商品ID', status: 'info', duration: 1200, isClosest: true });
+    toast({ title: '已复制商品ID', status: 'info', duration: 1200, isClosable: true });
   };
 
   const handleRetrySync = async (id: string) => {

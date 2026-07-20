@@ -20,7 +20,7 @@ import {
   FiSend,
   FiCheckCircle,
   FiXCircle,
-  FiHistory,
+  FiClock,
   FiTag,
 } from 'react-icons/fi';
 import {
@@ -130,7 +130,7 @@ const CorpusTest: React.FC = () => {
         setCorpus(res.list);
         setSavedCases(await fetchEvaluationCases());
       } catch {
-        toast({ title: '知识库加载失败', status: 'error', duration: 2000, isClosest: true });
+        toast({ title: '知识库加载失败', status: 'error', duration: 2000, isClosable: true });
       } finally {
         setLoading(false);
       }
@@ -140,7 +140,7 @@ const CorpusTest: React.FC = () => {
   const runTest = async (q: string) => {
     const text = q.trim();
     if (!text) {
-      toast({ title: '请输入测试问题', status: 'warning', duration: 1500, isClosest: true });
+      toast({ title: '请输入测试问题', status: 'warning', duration: 1500, isClosable: true });
       return;
     }
     setTesting(true);
@@ -260,7 +260,7 @@ const CorpusTest: React.FC = () => {
           {/* 历史 */}
           <Box flex="1" minH="0" overflowY="auto" bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="sm" p={3}>
             <HStack mb={2}>
-              <Icon as={FiHistory} color="gray.400" boxSize={3.5} />
+              <Icon as={FiClock} color="gray.400" boxSize={3.5} />
               <Text fontSize="12px" fontWeight={700} color="gray.600">测试历史</Text>
             </HStack>
             {history.length === 0 ? (

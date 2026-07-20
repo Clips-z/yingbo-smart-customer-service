@@ -50,11 +50,13 @@ const MAIN_NAV: NavItem[] = [
 ];
 
 /* 底部工具栏 */
-const BOTTOM_NAV: NavItem[] = [
-  { key: 'favorites' as any, label: '收藏', icon: <FiStar size={18} /> },
-  { key: 'docs' as any, label: '文档', icon: <FiBook size={18} /> },
-  { key: 'notifications' as any, label: '通知', icon: <FiBell size={18} /> },
-  { key: 'help' as any, label: '帮助', icon: <FiHelpCircle size={18} /> },
+type BottomNavKey = 'favorites' | 'docs' | 'notifications' | 'help';
+
+const BOTTOM_NAV: Array<Omit<NavItem, 'key'> & { key: BottomNavKey }> = [
+  { key: 'favorites', label: '收藏', icon: <FiStar size={18} /> },
+  { key: 'docs', label: '文档', icon: <FiBook size={18} /> },
+  { key: 'notifications', label: '通知', icon: <FiBell size={18} /> },
+  { key: 'help', label: '帮助', icon: <FiHelpCircle size={18} /> },
 ];
 
 interface AppSidebarProps {
@@ -117,7 +119,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               label={item.label}
               placement="right"
               hasArrow
-              offset={{ mainAxis: 8 }}
+              offset={[0, 8]}
               openDelay={300}
             >
               <Box
@@ -185,7 +187,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             label={item.label}
             placement="right"
             hasArrow
-            offset={{ mainAxis: 8 }}
+            offset={[0, 8]}
             openDelay={300}
           >
             <Box
@@ -242,7 +244,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         ))}
 
         {/* 用户头像 */}
-        <Tooltip label="用户" placement="right" hasArrow offset={{ mainAxis: 8 }}>
+        <Tooltip label="用户" placement="right" hasArrow offset={[0, 8]}>
           <Box
             as="button"
             display="flex"
