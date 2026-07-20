@@ -74,3 +74,49 @@ export function getUnattendedConfigKey(platformId: string):
   if (platformId === 'win_qianniu') return 'qianniu_unattended_enabled';
   return undefined;
 }
+
+export type AutomaticDeliveryDecision =
+  | { allowed: true; riskLevel: 'low' }
+  | {
+      allowed: false;
+      riskLevel: 'medium' | 'high';
+      code: 'unsafe_source' | 'low_ocr_confidence' | 'ambiguous_conversation' | 'insufficient_evidence' | 'high_risk_content';
+    };
+
+export function evaluateAutomaticDelivery(input: {
+  safeToAutoSend?: boolean;
+  source?: string;
+  retrievalStatus?: string;
+  ocrConfidence?: number;
+  minimumOcrConfidence?: number;
+  content?: string;
+  conversationStable?: boolean;
+}): AutomaticDeliveryDecision {
+  if (!input.safeToAutoSend) return { allowed: false, riskLevel: 'medium', code: 'unsafe_source' };
+  if (input.conversationStable === false) {
+    return { allowed: false, riskLevel: 'medium', code: 'ambiguous_conversation' };
+  }
+  if (
+    input.ocrConfidence != null &&
+    input.ocrConfidence < (input.minimumOcrConfidence ?? 0.88)
+  ) {
+    return { allowed: false, riskLevel: 'medium', code: 'low_ocr_confidence' };
+  }
+  if (/(已退款|一定赔偿|保证到账|百分百|绝对可以|无需审核)/.test(input.content || '')) {
+    return { allowed: false, riskLevel: 'high', code: 'high_risk_content' };
+  }
+  if (
+    !['keyword', 'plugin'].includes(input.source || '') &&
+    input.retrievalStatus !== 'hit'
+  ) {
+    return { allowed: false, riskLevel: 'medium', code: 'insufficient_evidence' };
+  }
+  return { allowed: true, riskLevel: 'low' };
+}
+
+export function getMinimumOcrConfidence(platformId: string): number {
+  if (platformId === 'win_qianniu') return Number(process.env.QIANNIU_OCR_MIN_CONFIDENCE || 0.88);
+  if (platformId === 'win_wechat') return Number(process.env.WECHAT_OCR_MIN_CONFIDENCE || 0.85);
+  if (platformId === 'win_wecom') return Number(process.env.WECOM_OCR_MIN_CONFIDENCE || 0.85);
+  return 0.9;
+}

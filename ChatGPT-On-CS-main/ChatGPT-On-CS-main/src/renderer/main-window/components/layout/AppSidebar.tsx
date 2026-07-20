@@ -23,6 +23,7 @@ export interface NavItem {
 
 /** 知识管理子菜单项 */
 export type KnowledgeSubKey =
+  | 'knowledge-candidates'
   | 'product-qa'
   | 'store-kb'
   | 'industry-config'
@@ -30,6 +31,7 @@ export type KnowledgeSubKey =
   | 'corpus-test';
 
 export const KNOWLEDGE_SUB_ITEMS: { key: KnowledgeSubKey; label: string }[] = [
+  { key: 'knowledge-candidates', label: '对话知识候选' },
   { key: 'product-qa', label: '商品问答库' },
   { key: 'store-kb', label: '店铺知识库' },
   { key: 'industry-config', label: '行业相关配置' },

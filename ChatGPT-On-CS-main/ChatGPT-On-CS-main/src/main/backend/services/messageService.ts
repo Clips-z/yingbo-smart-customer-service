@@ -404,6 +404,10 @@ export class MessageService {
       const llmClient = this.createLLMClient(cfg, cfg.llmType);
       // 尝试使用它回复 Hi 来检查是否可用
       if ('chat' in llmClient) {
+        const retrievalTrace: Pick<ReplyDTO, 'retrievalStatus' | 'retrievalEvidence'> = {
+          retrievalStatus: 'disabled',
+          retrievalEvidence: [],
+        };
         // @ts-ignore
         const response = await llmClient.chat.completions.create({
           model: cfg.model,
@@ -514,7 +518,7 @@ export class MessageService {
           messages:
             llm_name === 'coze'
               ? this.toConversationMessages(messages)
-              : await this.toLLMMessages(ctx, messages, cfg, sentimentResult),
+              : await this.toLLMMessages(ctx, messages, cfg, sentimentResult, retrievalTrace),
           stream: true,
           user: [
             cfg.platform_id || cfg.platform || 'platform',
@@ -532,6 +536,7 @@ export class MessageService {
         return {
           type: 'TEXT',
           content: chunks.join(''),
+          ...retrievalTrace,
         };
       } catch (error) {
         this.log.error(
@@ -646,6 +651,7 @@ export class MessageService {
     messages: MessageDTO[],
     cfg?: Config,
     sentimentResult?: { sentiment: string; summary: string; suggestedAction?: string } | null,
+    retrievalTrace?: Pick<ReplyDTO, 'retrievalStatus' | 'retrievalEvidence'>,
   ): Promise<Array<{ role: string; content: string }>> {
     const result: Array<{ role: string; content: string }> = [];
 
@@ -675,8 +681,12 @@ export class MessageService {
       if (cfg?.rag_enabled) {
         // RAG 向量检索模式
         const ragResult = await this.retrieveRagKnowledge(messages);
-        if (ragResult) {
-          selectedKnowledge = ragResult;
+        if (retrievalTrace) {
+          retrievalTrace.retrievalStatus = ragResult.status;
+          retrievalTrace.retrievalEvidence = ragResult.evidence;
+        }
+        if (ragResult.content) {
+          selectedKnowledge = ragResult.content;
           knowledgeSource = '向量检索+Reranking';
         } else if (cfg?.knowledge_base?.trim()) {
           // RAG 不可用时降级为关键词匹配
@@ -685,6 +695,7 @@ export class MessageService {
             messages,
           );
           knowledgeSource = '关键词匹配（RAG降级）';
+          if (retrievalTrace) retrievalTrace.retrievalStatus = 'fallback';
         }
       } else if (cfg?.knowledge_base?.trim()) {
         // 原有关键词匹配模式
@@ -766,7 +777,11 @@ export class MessageService {
    */
   private async retrieveRagKnowledge(
     messages: MessageDTO[],
-  ): Promise<string> {
+  ): Promise<{
+    content: string;
+    status: 'hit' | 'weak_hit' | 'no_hit' | 'error';
+    evidence: NonNullable<ReplyDTO['retrievalEvidence']>;
+  }> {
     try {
       const query =
         messages
@@ -774,7 +789,7 @@ export class MessageService {
           .reverse()
           .find((message) => message.role === 'OTHER')?.content || '';
 
-      if (!query.trim()) return '';
+      if (!query.trim()) return { content: '', status: 'no_hit', evidence: [] };
 
       const ragUrl = process.env.RAG_SERVICE_URL || 'http://127.0.0.1:8000';
       const response = await axios.get(`${ragUrl}/api/search`, {
@@ -783,21 +798,41 @@ export class MessageService {
       });
 
       const results = response.data?.results || [];
-      if (!results.length) return '';
+      if (!results.length) return { content: '', status: 'no_hit', evidence: [] };
 
       // 使用完整内容（full_content 优先，回退到 content）
       const docs = results
         .map((r: { full_content?: string; content?: string }) => r.full_content || r.content || '')
         .filter((text: string) => text.trim());
 
-      if (!docs.length) return '';
+      if (!docs.length) return { content: '', status: 'no_hit', evidence: [] };
 
-      return docs.join('\n\n---\n\n').slice(0, 6000);
+      const evidence = results.slice(0, 5).map((item: any, index: number) => {
+        const source = String(item.source || item.metadata?.source || 'RAG 知识库');
+        const knowledgeId = source.match(/(?:product|store-qa)-([\w-]+)\.txt$/)?.[1];
+        return {
+          knowledgeId,
+          source: source.slice(0, 500),
+          contentExcerpt: String(item.full_content || item.content || '').slice(0, 1000),
+          vectorScore: Number.isFinite(Number(item.vector_score)) ? Number(item.vector_score) : undefined,
+          rerankScore: Number.isFinite(Number(item.rerank_score)) ? Number(item.rerank_score) : undefined,
+          rank: index + 1,
+        };
+      });
+      const topScore = evidence[0]?.rerankScore ?? evidence[0]?.vectorScore;
+      const status = topScore != null && topScore < Number(process.env.RAG_MIN_AUTO_SCORE || 0.5)
+        ? 'weak_hit'
+        : 'hit';
+      return {
+        content: docs.join('\n\n---\n\n').slice(0, 6000),
+        status,
+        evidence,
+      };
     } catch (error) {
       this.log.warn(
         `RAG 向量检索失败，将降级为关键词匹配: ${error instanceof Error ? error.message : String(error)}`,
       );
-      return '';
+      return { content: '', status: 'error', evidence: [] };
     }
   }
 

@@ -21,8 +21,20 @@ import {
   QianniuCollectorHealth,
   QianniuCompanionContext,
   WecomCollectorHealth,
+  RetrievalEvidenceItem,
 } from './platform';
 import { GET, POST } from '../common/api/request';
+
+export async function getSuggestionEvidence(id: number) {
+  const response = await GET<{ data: RetrievalEvidenceItem[] }>(
+    `/api/v1/quality/suggestions/${id}/evidence`,
+  );
+  return response.data;
+}
+
+export async function markSuggestionEvidence(id: string, relevant: boolean) {
+  await POST(`/api/v1/quality/evidence/${id}/feedback`, { relevant });
+}
 
 export async function getPlatformList() {
   console.log('getPlatformList');

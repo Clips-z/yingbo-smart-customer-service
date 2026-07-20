@@ -228,6 +228,18 @@ export interface ReplySuggestion {
   updated_at: string;
 }
 
+export interface RetrievalEvidenceItem {
+  id: string;
+  suggestion_id: number;
+  knowledge_id?: string | null;
+  source: string;
+  content_excerpt: string;
+  vector_score?: number | null;
+  rerank_score?: number | null;
+  rank: number;
+  relevance_feedback?: 'relevant' | 'irrelevant' | null;
+}
+
 export interface Session {
   id: number;
   platform: string;

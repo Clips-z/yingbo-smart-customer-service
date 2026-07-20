@@ -21,16 +21,20 @@ import {
   FiMessageSquare,
   FiUser,
   FiSend,
+  FiBookOpen,
 } from 'react-icons/fi';
 import {
   fillQianniuSuggestion,
   fillWechatSuggestion,
   fillWecomSuggestion,
   updateQianniuSuggestionStatus,
+  getSuggestionEvidence,
+  markSuggestionEvidence,
 } from '../../../common/services/platform/controller';
 import {
   QianniuReplyMode,
   ReplySuggestion,
+  RetrievalEvidenceItem,
 } from '../../../common/services/platform/platform';
 import { useToast } from '../../hooks/useToast';
 import {
@@ -79,7 +83,23 @@ const ReplyCard = React.memo(
     const { toast } = useToast();
     const [content, setContent] = useState(item.reply_content.slice(0, 300));
     const [isWorking, setIsWorking] = useState(false);
+    const [evidence, setEvidence] = useState<RetrievalEvidenceItem[] | null>(null);
     const { onCopy, hasCopied } = useClipboard(content);
+
+    const toggleEvidence = async () => {
+      if (evidence) {
+        setEvidence(null);
+        return;
+      }
+      setEvidence(await getSuggestionEvidence(item.id));
+    };
+
+    const markIrrelevant = async (id: string) => {
+      await markSuggestionEvidence(id, false);
+      setEvidence((current) => current?.map((entry) =>
+        entry.id === id ? { ...entry, relevance_feedback: 'irrelevant' } : entry,
+      ) || null);
+    };
 
     useEffect(
       () => setContent(item.reply_content.slice(0, 300)),
@@ -300,6 +320,27 @@ const ReplyCard = React.memo(
               isDisabled={item.status === 'sent'}
             />
           </Box>
+
+          {item.retrieval_status && item.retrieval_status !== 'disabled' && (
+            <Box mt={2}>
+              <Button size="xs" variant="ghost" leftIcon={<FiBookOpen />} onClick={toggleEvidence}>
+                {evidence ? '收起回复依据' : `查看回复依据 · ${item.retrieval_status}`}
+              </Button>
+              {evidence && (
+                <Box mt={2} borderWidth="1px" borderColor="blue.100" bg="blue.50" borderRadius="md" p={2}>
+                  {evidence.length === 0 ? <Text fontSize="xs" color="gray.500">本次没有命中可引用的知识</Text> : evidence.map((entry) => (
+                    <Box key={entry.id} py={1.5} borderBottomWidth="1px" borderColor="blue.100" _last={{ borderBottomWidth: 0 }}>
+                      <Flex justify="space-between" gap={2}>
+                        <Text fontSize="xs" fontWeight="700">#{entry.rank} {entry.source}</Text>
+                        <Button size="xs" variant="link" colorScheme="red" isDisabled={entry.relevance_feedback === 'irrelevant'} onClick={() => markIrrelevant(entry.id)}>不相关</Button>
+                      </Flex>
+                      <Text fontSize="xs" color="gray.600" mt={1} noOfLines={3}>{entry.content_excerpt}</Text>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
 
           {/* 底部操作栏 */}
           <Flex justify="space-between" align="center" mt={3} gap={2} wrap="wrap">

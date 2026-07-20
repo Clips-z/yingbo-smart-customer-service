@@ -13,6 +13,7 @@ import IndustryConfig from '../IndustryConfig';
 import ValidityManagement from '../ValidityManagement';
 import CorpusTest from '../CorpusTest';
 import ContentSecurity from '../ContentSecurity';
+import KnowledgeCandidates from '../KnowledgeCandidates';
 
 /* ── 工作台内容（保持不变）── */
 const DashboardContent = () => (
@@ -145,6 +146,8 @@ const MainLayout = () => {
               case 'knowledge':
                 // 根据知识管理子项渲染不同视图（后续 Task #14/#15 实现）
                 switch (activeKnowledgeSub) {
+                  case 'knowledge-candidates':
+                    return <KnowledgeCandidates />;
                   case 'product-qa':
                     return <ProductQALibrary />;
                   case 'store-kb':
@@ -180,6 +183,7 @@ const MainLayout = () => {
 
 /** 知识管理子项 → 显示名称映射 */
 const KNOWLEDGE_SUB_LABELS: Record<KnowledgeSubKey, string> = {
+  'knowledge-candidates': '对话知识候选',
   'product-qa': '商品问答库',
   'store-kb': '店铺知识库',
   'industry-config': '行业相关配置',

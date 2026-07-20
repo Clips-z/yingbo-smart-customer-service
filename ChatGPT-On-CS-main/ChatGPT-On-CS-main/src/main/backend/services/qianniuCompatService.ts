@@ -27,10 +27,13 @@ import {
 import { rapidOcrPythonPath, runtimePath } from './runtimePaths';
 import {
   assertReplyModeAllowed,
+  evaluateAutomaticDelivery,
   evaluateReplyModeChange,
   getDefaultReplyMode,
+  getMinimumOcrConfidence,
   normalizeReplyMode,
 } from './replySafetyPolicy';
+import { saveRetrievalEvidence } from './retrievalEvidenceService';
 import {
   evaluateQianniuCapture,
   normalizeQianniuContact,
@@ -44,6 +47,7 @@ import { QianniuContextTracker } from './qianniuContextTracker';
 import { assertDeliveryContext } from './deliveryContextGuard';
 import { extractQianniuContextEvidence } from './qianniuContextEvidence';
 import { sanitizeQianniuRecentMessages } from './qianniuRecentMessages';
+import { RecordReplyFeedbackInput } from './replyFeedbackService';
 
 const execFileAsync = promisify(execFile);
 
@@ -109,6 +113,7 @@ export class QianniuCompatService {
     private dispatchService: DispatchService,
     private appService: AppService,
     private log: LoggerService,
+    private onFeedback?: (input: RecordReplyFeedbackInput) => Promise<void>,
   ) {}
 
   public getMode(): QianniuReplyMode {
@@ -668,6 +673,16 @@ export class QianniuCompatService {
 
       if (reply.type !== 'TEXT' || !reply.content.trim()) return;
 
+      const deliveryDecision = evaluateAutomaticDelivery({
+        safeToAutoSend: reply.safeToAutoSend,
+        source: reply.source,
+        retrievalStatus: reply.retrievalStatus,
+        ocrConfidence: confidence,
+        minimumOcrConfidence: getMinimumOcrConfidence('win_qianniu'),
+        content: reply.content,
+        conversationStable: Boolean(contextUpdate?.snapshot.state === 'stable'),
+      });
+
       const [suggestion, created] = await ReplySuggestion.findOrCreate({
         where: { message_key: key },
         defaults: {
@@ -695,6 +710,10 @@ export class QianniuCompatService {
           context_revision: contextUpdate?.snapshot.contextRevision || null,
           draft_state: 'draft',
           draft_updated_at: new Date(),
+          retrieval_status: reply.retrievalStatus || 'disabled',
+          risk_level: deliveryDecision.riskLevel,
+          ocr_confidence: confidence,
+          ocr_reason_codes: deliveryDecision.allowed ? [] : [deliveryDecision.code],
           message_key: key,
           status: 'pending',
           created_at: new Date(),
@@ -705,13 +724,19 @@ export class QianniuCompatService {
         this.log.info(`千牛重复采集事件已忽略: ${sender}`);
         return;
       }
+      await saveRetrievalEvidence(suggestion, reply);
+      if (this.onFeedback) void this.onFeedback({
+          suggestionId: suggestion.id,
+          eventKey: `suggestion:${suggestion.id}:generated`,
+          action: 'generated',
+        }).catch((error) => this.log.warn(`回复反馈保存失败：${String(error)}`));
       this.broadcastSuggestion('qianniu_suggestion_created', suggestion);
 
       this.log.success(`千牛兼容采集: ${sender} -> ${content}`);
       if (
         this.replyMode === 'unattended' &&
         reply.type === 'TEXT' &&
-        reply.safeToAutoSend === true
+        deliveryDecision.allowed
       ) {
         const requestId = await reserveSuggestionDelivery(suggestion.id, 'send');
         try {
@@ -722,6 +747,12 @@ export class QianniuCompatService {
             status: 'sent',
           });
           if (!completed) throw new Error('发送结果已过期，未更新回复状态');
+          if (this.onFeedback) void this.onFeedback({
+              suggestionId: suggestion.id,
+              eventKey: `suggestion:${suggestion.id}:sent:${requestId}`,
+              action: 'sent',
+              finalContent: reply.content,
+            }).catch((error) => this.log.warn(`回复反馈保存失败：${String(error)}`));
         } catch (error) {
           await finishSuggestionDelivery({
             id: suggestion.id,
@@ -729,14 +760,20 @@ export class QianniuCompatService {
             status: 'failed',
             error: error instanceof Error ? error.message : String(error),
           });
+          if (this.onFeedback) void this.onFeedback({
+              suggestionId: suggestion.id,
+              eventKey: `suggestion:${suggestion.id}:failed:${requestId}`,
+              action: 'failed',
+              reasonCode: 'delivery_failed',
+            }).catch((feedbackError) => this.log.warn(`回复反馈保存失败：${String(feedbackError)}`));
           throw error;
         }
         await suggestion.reload();
         this.broadcastSuggestion('qianniu_suggestion_updated', suggestion);
         this.log.success(`千牛兼容回复已发送: ${sender}`);
       } else {
-        if (this.replyMode === 'unattended' && !reply.safeToAutoSend) {
-          this.log.warn('回复来源不可靠，已阻止千牛自动发送并保留为待确认');
+        if (this.replyMode === 'unattended' && !deliveryDecision.allowed) {
+          this.log.warn(`自动发送已阻止并保留待确认：${deliveryDecision.code}`);
         }
         this.log.info(`影子回复已生成: ${reply.content}`);
       }

@@ -18,6 +18,15 @@ export interface RagHealth {
   totalChunks?: number;
 }
 
+export interface RagSearchItem {
+  knowledgeId?: string;
+  source: string;
+  content: string;
+  vectorScore?: number;
+  rerankScore?: number;
+  rank: number;
+}
+
 const RAG_PORT = 8000;
 
 export class RagService {
@@ -108,6 +117,28 @@ export class RagService {
       { text, filename },
       { timeout: 60_000 },
     );
+  }
+
+  public async search(query: string, topK = 5): Promise<RagSearchItem[]> {
+    const text = String(query || '').trim();
+    if (!text) return [];
+    const axios = (await import('axios')).default;
+    const ragUrl = process.env.RAG_SERVICE_URL || `http://127.0.0.1:${RAG_PORT}`;
+    const response = await axios.get(`${ragUrl}/api/search`, {
+      params: { query: text, top_k: Math.min(20, Math.max(1, topK)) },
+      timeout: 10_000,
+    });
+    return (response.data?.results || []).map((item: any, index: number) => {
+      const source = String(item.source || item.metadata?.source || 'RAG 知识库');
+      return {
+        knowledgeId: source.match(/(?:product|store-qa)-([\w-]+)\.txt$/)?.[1],
+        source,
+        content: String(item.full_content || item.content || ''),
+        vectorScore: Number.isFinite(Number(item.vector_score)) ? Number(item.vector_score) : undefined,
+        rerankScore: Number.isFinite(Number(item.rerank_score)) ? Number(item.rerank_score) : undefined,
+        rank: index + 1,
+      };
+    });
   }
 
   /**

@@ -31,7 +31,16 @@ import {
 import { PddSidecarService } from './services/pddSidecarService';
 import { DouyinSidecarService } from './services/douyinSidecarService';
 import { RagService } from './services/ragService';
-import { ReplyModeDeniedError } from './services/replySafetyPolicy';
+import {
+  evaluateAutomaticDelivery,
+  getMinimumOcrConfidence,
+  ReplyModeDeniedError,
+} from './services/replySafetyPolicy';
+import {
+  listRetrievalEvidence,
+  markRetrievalEvidence,
+  saveRetrievalEvidence,
+} from './services/retrievalEvidenceService';
 import { KnowledgeService } from './services/knowledgeService';
 import {
   ReplyFeedbackAction,
@@ -42,6 +51,8 @@ import {
   serializeKnowledgeExport,
 } from './services/knowledgeExportService';
 import { ReplySuggestion } from './entities/replySuggestion';
+import { KnowledgeCandidateService } from './services/knowledgeCandidateService';
+import { EvaluationService } from './services/evaluationService';
 import { CompanionContextRegistry } from './services/companionContextRegistry';
 import {
   CTX_APP_ID,
@@ -80,6 +91,10 @@ class BKServer {
   private knowledgeService: KnowledgeService;
 
   private replyFeedbackService: ReplyFeedbackService;
+
+  private knowledgeCandidateService: KnowledgeCandidateService;
+
+  private evaluationService: EvaluationService;
 
   private qianniuCompatService: QianniuCompatService;
 
@@ -162,10 +177,17 @@ class BKServer {
     this.appService = new AppService(this.dispatchService, sequelize);
     this.knowledgeService = new KnowledgeService(sequelize);
     this.replyFeedbackService = new ReplyFeedbackService();
+    this.knowledgeCandidateService = new KnowledgeCandidateService(this.knowledgeService);
     this.qianniuCompatService = new QianniuCompatService(
       this.dispatchService,
       this.appService,
       this.loggerService,
+      async (input) => {
+        const result = await this.replyFeedbackService.record(input);
+        if (result.created) {
+          await this.knowledgeCandidateService.considerFeedback(result.feedback);
+        }
+      },
     );
     this.wechatSidecarService = new WechatSidecarService(
       port,
@@ -176,6 +198,9 @@ class BKServer {
     this.ragService = new RagService(
       this.loggerService,
       this.dispatchService,
+    );
+    this.evaluationService = new EvaluationService((query, topK) =>
+      this.ragService.search(query, topK),
     );
     this.knowledgeService.setIndexer((text, filename) =>
       this.ragService.uploadText(text, filename),
@@ -273,7 +298,10 @@ class BKServer {
           reasonCode: req.body.reasonCode,
           metadata: req.body.metadata,
         });
-        res.json({ success: true, data: result });
+        const candidate = result.created
+          ? await this.knowledgeCandidateService.considerFeedback(result.feedback)
+          : null;
+        res.json({ success: true, data: { ...result, candidate } });
       }),
     );
     this.app.get(
@@ -283,6 +311,81 @@ class BKServer {
           success: true,
           data: await this.replyFeedbackService.getMetrics(Number(req.query.days) || 7),
         });
+      }),
+    );
+    this.app.get(
+      '/api/v1/quality/suggestions/:id/evidence',
+      asyncHandler(async (req, res) => {
+        res.json({
+          success: true,
+          data: await listRetrievalEvidence(Number(req.params.id)),
+        });
+      }),
+    );
+    this.app.post(
+      '/api/v1/quality/evidence/:id/feedback',
+      asyncHandler(async (req, res) => {
+        res.json({
+          success: true,
+          data: await markRetrievalEvidence(
+            String(req.params.id),
+            req.body.relevant !== false,
+          ),
+        });
+      }),
+    );
+    this.app.get(
+      '/api/v1/knowledge/candidates',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeCandidateService.list(req.query) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/candidates/approve',
+      asyncHandler(async (req, res) => {
+        res.json({
+          success: true,
+          data: await this.knowledgeCandidateService.approve(String(req.body.id || ''), req.body),
+        });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/candidates/reject',
+      asyncHandler(async (req, res) => {
+        res.json({
+          success: true,
+          data: await this.knowledgeCandidateService.reject(String(req.body.id || ''), req.body.reason),
+        });
+      }),
+    );
+    this.app.post(
+      '/api/v1/quality/evaluation/search',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.evaluationService.search(req.body.question) });
+      }),
+    );
+    this.app.get(
+      '/api/v1/quality/evaluation/cases',
+      asyncHandler(async (_req, res) => {
+        res.json({ success: true, data: await this.evaluationService.listCases() });
+      }),
+    );
+    this.app.post(
+      '/api/v1/quality/evaluation/cases/save',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.evaluationService.saveCase(req.body) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/quality/evaluation/cases/delete',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.evaluationService.deleteCase(String(req.body.id || '')) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/quality/evaluation/run',
+      asyncHandler(async (_req, res) => {
+        res.json({ success: true, data: await this.evaluationService.runCases() });
       }),
     );
 
@@ -379,6 +482,16 @@ class BKServer {
           String(platformId),
           String(sender),
         );
+        const deliveryDecision = evaluateAutomaticDelivery({
+          safeToAutoSend: reply.safeToAutoSend,
+          source: reply.source,
+          retrievalStatus: reply.retrievalStatus,
+          ocrConfidence: binding?.snapshot.confidence,
+          minimumOcrConfidence: getMinimumOcrConfidence(String(platformId)),
+          conversationStable: Boolean(binding),
+          content: reply.content,
+        });
+        const safeReply = { ...reply, safeToAutoSend: deliveryDecision.allowed };
         const suggestion = await ReplySuggestion.create({
           ...(binding
             ? {
@@ -399,10 +512,22 @@ class BKServer {
           sender: String(sender),
           incoming_content: String(content),
           reply_content: reply.content,
+          original_reply_content: reply.content,
+          draft_content: reply.content,
+          retrieval_status: reply.retrievalStatus || 'disabled',
+          risk_level: deliveryDecision.riskLevel,
+          ocr_confidence: binding?.snapshot.confidence ?? null,
+          ocr_reason_codes: deliveryDecision.allowed ? [] : [deliveryDecision.code],
           status: reply.type === 'NO_REPLY' ? 'dismissed' : 'pending',
           created_at: new Date(),
           updated_at: new Date(),
         });
+        await saveRetrievalEvidence(suggestion, reply);
+        void this.replyFeedbackService.record({
+          suggestionId: suggestion.id,
+          eventKey: `suggestion:${suggestion.id}:generated`,
+          action: 'generated',
+        }).catch((error) => this.loggerService.warn(`回复反馈保存失败：${String(error)}`));
         this.dispatchService.receiveBroadcast({
           event: 'reply_suggestion_created',
           data: suggestion.toJSON(),
@@ -411,7 +536,7 @@ class BKServer {
         res.json({
           success: true,
           data: {
-            reply,
+            reply: safeReply,
             saved: reply.type !== 'NO_REPLY',
             suggestionId: suggestion.id,
             mode:

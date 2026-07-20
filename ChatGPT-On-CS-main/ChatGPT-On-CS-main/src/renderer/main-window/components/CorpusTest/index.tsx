@@ -28,7 +28,16 @@ import {
   QAItem,
   STAGE_LABELS,
 } from '../../../common/services/knowledge/storeKB';
-import { runCorpusTest, CorpusTestResult } from '../../../common/services/knowledge/corpusTest';
+import {
+  runCorpusTest,
+  CorpusTestResult,
+  EvaluationSummary,
+  runSavedEvaluation,
+  saveEvaluationCase,
+  deleteEvaluationCase,
+  EvaluationCaseItem,
+  fetchEvaluationCases,
+} from '../../../common/services/knowledge/corpusTest';
 
 const SUGGESTED = [
   '这款衣服会缩水吗？',
@@ -108,12 +117,16 @@ const CorpusTest: React.FC = () => {
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<CorpusTestResult | null>(null);
   const [history, setHistory] = useState<CorpusTestResult[]>([]);
+  const [summary, setSummary] = useState<EvaluationSummary | null>(null);
+  const [savedCases, setSavedCases] = useState<EvaluationCaseItem[]>([]);
+  const [editingCaseId, setEditingCaseId] = useState<string | undefined>();
 
   useEffect(() => {
     (async () => {
       try {
         const res = await fetchStoreQAList({ page: 1, pageSize: 100 });
         setCorpus(res.list);
+        setSavedCases(await fetchEvaluationCases());
       } catch {
         toast({ title: '知识库加载失败', status: 'error', duration: 2000, isClosest: true });
       } finally {
@@ -122,20 +135,47 @@ const CorpusTest: React.FC = () => {
     })();
   }, []);
 
-  const runTest = (q: string) => {
+  const runTest = async (q: string) => {
     const text = q.trim();
     if (!text) {
       toast({ title: '请输入测试问题', status: 'warning', duration: 1500, isClosest: true });
       return;
     }
     setTesting(true);
-    // 模拟推理延迟
-    setTimeout(() => {
-      const res = runCorpusTest(text, corpus);
+    try {
+      const res = await runCorpusTest(text);
       setResult(res);
       setHistory((prev) => [res, ...prev].slice(0, 8));
+    } catch (error) {
+      toast({ title: '真实检索失败', description: String(error), status: 'error', duration: 2500 });
+    } finally {
       setTesting(false);
-    }, 500);
+    }
+  };
+
+  const saveCase = async () => {
+    const text = query.trim();
+    if (!text) return;
+    await saveEvaluationCase(text, result?.matched ? [result.matched.id] : [], editingCaseId);
+    setSavedCases(await fetchEvaluationCases());
+    setEditingCaseId(undefined);
+    toast({ title: editingCaseId ? '测试用例已更新' : '已保存为回归测试用例', status: 'success', duration: 1800 });
+  };
+
+  const runRegression = async () => {
+    setTesting(true);
+    try { setSummary(await runSavedEvaluation()); }
+    finally { setTesting(false); }
+  };
+
+  const exportSummary = () => {
+    if (!summary) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(summary, null, 2)], { type: 'application/json;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `knowledge-evaluation-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const matchedCount = useMemo(
@@ -181,8 +221,19 @@ const CorpusTest: React.FC = () => {
               bgGradient="linear-gradient(135deg, #4A5BB3, #3866D4)"
               _hover={{ bgGradient: 'linear-gradient(135deg, #43529F, #2F5AC0)' }}
             >
-              模拟发送
+              真实检索
             </Button>
+            <Flex mt={2} gap={2}>
+              <Button size="xs" flex="1" variant="outline" onClick={saveCase} isDisabled={!query.trim()}>保存为测试用例</Button>
+              <Button size="xs" flex="1" variant="outline" onClick={runRegression}>运行回归集</Button>
+            </Flex>
+            {summary && (
+              <Box mt={3} bg="green.50" borderRadius="md" p={2}>
+                <Text fontSize="11px" fontWeight="700">回归集 {summary.total} 条 · Hit@1 {summary.hitAt1}% · Hit@5 {summary.hitAt5}%</Text>
+                <Text fontSize="10px" color="gray.500">未命中 {summary.noHitRate}% · 风险误放 {summary.unsafePassCount} · P95 {summary.p95LatencyMs}ms</Text>
+                <Button mt={1} size="xs" variant="link" onClick={exportSummary}>导出本次报告 JSON</Button>
+              </Box>
+            )}
 
             <Text fontSize="11px" color="gray.400" mt={3} mb={1}>试试这些：</Text>
             <Flex wrap="wrap" gap={1.5}>
@@ -239,6 +290,17 @@ const CorpusTest: React.FC = () => {
                 ))}
               </VStack>
             )}
+            <Divider my={3} />
+            <Text fontSize="12px" fontWeight={700} color="gray.600" mb={2}>已保存回归用例（{savedCases.length}）</Text>
+            <VStack spacing={1.5} align="stretch">
+              {savedCases.slice(0, 20).map((item) => (
+                <Flex key={item.id} bg={editingCaseId === item.id ? 'blue.50' : 'gray.50'} borderRadius="md" p={2} gap={2} align="center">
+                  <Text fontSize="11px" flex="1" noOfLines={1}>{item.question}</Text>
+                  <Button size="xs" variant="link" onClick={() => { setQuery(item.question); setEditingCaseId(item.id); }}>编辑</Button>
+                  <Button size="xs" variant="link" colorScheme="red" onClick={async () => { await deleteEvaluationCase(item.id); setSavedCases(await fetchEvaluationCases()); }}>删除</Button>
+                </Flex>
+              ))}
+            </VStack>
           </Box>
         </VStack>
 
@@ -260,7 +322,7 @@ const CorpusTest: React.FC = () => {
                 <Text fontSize="14px" fontWeight={700} color="gray.700">
                   {result.matched ? '命中知识库' : '未命中'}
                 </Text>
-                <Text fontSize="11px" color="gray.400">查询：{result.query}</Text>
+                  <Text fontSize="11px" color="gray.400">查询：{result.query} · {result.latencyMs}ms</Text>
               </Flex>
               <Divider borderColor="gray.100" />
               {result.candidates.length === 0 ? (
@@ -269,7 +331,14 @@ const CorpusTest: React.FC = () => {
                 result.candidates.map((c, i) => (
                   <ResultCard
                     key={c.item.id}
-                    result={{ query: result.query, matched: c.item, score: c.score, candidates: [] }}
+                    result={{
+                      query: result.query,
+                      matched: c.item,
+                      score: c.score,
+                      candidates: [],
+                      latencyMs: result.latencyMs,
+                      retrievalStatus: result.retrievalStatus,
+                    }}
                     rank={i + 1}
                   />
                 ))

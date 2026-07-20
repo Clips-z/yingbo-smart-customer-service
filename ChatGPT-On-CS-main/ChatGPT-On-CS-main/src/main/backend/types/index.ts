@@ -29,6 +29,15 @@ export interface ReplyDTO {
   type: MessageType;
   source?: 'keyword' | 'llm' | 'default' | 'plugin' | 'error';
   safeToAutoSend?: boolean;
+  retrievalStatus?: 'disabled' | 'hit' | 'weak_hit' | 'no_hit' | 'fallback' | 'error';
+  retrievalEvidence?: Array<{
+    knowledgeId?: string;
+    source: string;
+    contentExcerpt: string;
+    vectorScore?: number;
+    rerankScore?: number;
+    rank: number;
+  }>;
 }
 
 export interface Platform {

@@ -1,65 +1,79 @@
-/* ─────────────────────────────────────────────────────────────
- * 问答语料测试 —— 数据类型与 Mock 匹配服务
- * 说明：前端语料测试（输入问题 → 在知识库中匹配最相似 QA）。
- * ───────────────────────────────────────────────────────────── */
-
+import { GET, POST } from '../common/api/request';
 import { QAItem } from './storeKB';
 
 export interface CorpusTestResult {
   query: string;
   matched: QAItem | null;
-  score: number; // 0~100 匹配度
+  score: number;
+  latencyMs: number;
+  retrievalStatus: string;
   candidates: { item: QAItem; score: number }[];
 }
 
-/**
- * 简易中文相似度匹配（字符重合度 + 子串包含）
- * 纯前端 mock，用于演示语料测试流程
- */
-function similarity(a: string, b: string): number {
-  const s1 = a.toLowerCase();
-  const s2 = b.toLowerCase();
-  if (!s1 || !s2) return 0;
-  if (s1 === s2) return 100;
-
-  // 子串包含加权
-  let score = 0;
-  if (s2.includes(s1) || s1.includes(s2)) score += 60;
-
-  // 字符重合度（Jaccard）
-  const set1 = new Set(s1.split(''));
-  const set2 = new Set(s2.split(''));
-  let inter = 0;
-  set1.forEach((c) => {
-    if (set2.has(c)) inter++;
-  });
-  const union = new Set([...set1, ...set2]).size;
-  const jac = union ? inter / union : 0;
-  score += jac * 40;
-
-  return Math.min(100, Math.round(score));
+export interface EvaluationSummary {
+  total: number;
+  hitAt1: number;
+  hitAt3: number;
+  hitAt5: number;
+  noHitRate: number;
+  unsafePassCount: number;
+  p95LatencyMs: number;
 }
 
-/** 在知识库 QA 中匹配最佳结果 */
-export function runCorpusTest(query: string, corpus: QAItem[]): CorpusTestResult {
-  const candidates = corpus
-    .map((item) => ({
-      item,
-      score: Math.max(
-        similarity(query, item.question),
-        similarity(query, item.answer),
-        ...item.relatedQuestions.map((rq) => similarity(query, rq))
-      ),
-    }))
-    .filter((c) => c.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+export interface EvaluationCaseItem {
+  id: string;
+  question: string;
+  expected_knowledge_ids: string[];
+  expected_action: 'answer' | 'assist' | 'transfer' | 'no_answer';
+  enabled: boolean;
+}
 
-  const top = candidates[0] ?? null;
+export async function runCorpusTest(query: string): Promise<CorpusTestResult> {
+  const response = await POST<{ data: any }>('/api/v1/quality/evaluation/search', { question: query });
+  const candidates = (response.data.candidates || []).map((candidate: any) => ({
+    score: candidate.score,
+    item: {
+      id: candidate.knowledgeId || candidate.source,
+      question: candidate.question,
+      answer: candidate.answer,
+      relatedQuestions: [],
+      tags: [],
+      triggerCount: 0,
+      stage: candidate.stage,
+      matchType: 'fuzzy',
+      updatedAt: new Date().toISOString(),
+      shopId: '',
+    } as QAItem,
+  }));
   return {
-    query,
-    matched: top ? top.item : null,
-    score: top ? top.score : 0,
+    query: response.data.query,
+    matched: candidates[0]?.item || null,
+    score: candidates[0]?.score || 0,
+    latencyMs: response.data.latencyMs,
+    retrievalStatus: response.data.retrievalStatus,
     candidates,
   };
+}
+
+export async function saveEvaluationCase(question: string, expectedKnowledgeIds: string[] = [], id?: string) {
+  await POST('/api/v1/quality/evaluation/cases/save', {
+    id,
+    question,
+    expectedKnowledgeIds,
+    expectedAction: 'answer',
+  });
+}
+
+export async function fetchEvaluationCases() {
+  const response = await GET<{ data: EvaluationCaseItem[] }>('/api/v1/quality/evaluation/cases');
+  return response.data;
+}
+
+export async function deleteEvaluationCase(id: string) {
+  await POST('/api/v1/quality/evaluation/cases/delete', { id });
+}
+
+export async function runSavedEvaluation() {
+  const response = await POST<{ data: EvaluationSummary }>('/api/v1/quality/evaluation/run', {});
+  return response.data;
 }
