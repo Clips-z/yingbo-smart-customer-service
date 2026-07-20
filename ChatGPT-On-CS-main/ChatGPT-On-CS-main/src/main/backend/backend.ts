@@ -33,6 +33,14 @@ import { DouyinSidecarService } from './services/douyinSidecarService';
 import { RagService } from './services/ragService';
 import { ReplyModeDeniedError } from './services/replySafetyPolicy';
 import { KnowledgeService } from './services/knowledgeService';
+import {
+  ReplyFeedbackAction,
+  ReplyFeedbackService,
+} from './services/replyFeedbackService';
+import {
+  KnowledgeExportFormat,
+  serializeKnowledgeExport,
+} from './services/knowledgeExportService';
 import { ReplySuggestion } from './entities/replySuggestion';
 import { CompanionContextRegistry } from './services/companionContextRegistry';
 import {
@@ -70,6 +78,8 @@ class BKServer {
   private appService: AppService;
 
   private knowledgeService: KnowledgeService;
+
+  private replyFeedbackService: ReplyFeedbackService;
 
   private qianniuCompatService: QianniuCompatService;
 
@@ -151,6 +161,7 @@ class BKServer {
 
     this.appService = new AppService(this.dispatchService, sequelize);
     this.knowledgeService = new KnowledgeService(sequelize);
+    this.replyFeedbackService = new ReplyFeedbackService();
     this.qianniuCompatService = new QianniuCompatService(
       this.dispatchService,
       this.appService,
@@ -232,6 +243,48 @@ class BKServer {
       this.analyticsController.getTopSenders(req, res));
     this.app.get('/api/analytics/avg-response-time', (req, res) =>
       this.analyticsController.getAvgResponseTime(req, res));
+
+    const feedbackActions: ReplyFeedbackAction[] = [
+      'generated',
+      'draft_saved',
+      'copied',
+      'filled',
+      'sent',
+      'dismissed',
+      'restored',
+      'failed',
+      'transferred',
+      'evidence_irrelevant',
+    ];
+    this.app.post(
+      '/api/v1/quality/feedback',
+      asyncHandler(async (req, res) => {
+        const suggestionId = Number(req.body.suggestionId);
+        const action = String(req.body.action || '') as ReplyFeedbackAction;
+        if (!Number.isInteger(suggestionId) || suggestionId <= 0 || !feedbackActions.includes(action)) {
+          res.status(400).json({ success: false, message: '无效的回复反馈' });
+          return;
+        }
+        const result = await this.replyFeedbackService.record({
+          suggestionId,
+          action,
+          eventKey: req.body.eventKey ? String(req.body.eventKey) : undefined,
+          finalContent: req.body.finalContent,
+          reasonCode: req.body.reasonCode,
+          metadata: req.body.metadata,
+        });
+        res.json({ success: true, data: result });
+      }),
+    );
+    this.app.get(
+      '/api/v1/quality/metrics',
+      asyncHandler(async (req, res) => {
+        res.json({
+          success: true,
+          data: await this.replyFeedbackService.getMetrics(Number(req.query.days) || 7),
+        });
+      }),
+    );
 
     this.app.get('/', (req, res) => {
       res.type('html').send(`
@@ -1876,6 +1929,15 @@ class BKServer {
       }),
     );
     this.app.post(
+      '/api/v1/knowledge/products/update',
+      asyncHandler(async (req, res) => {
+        res.json({
+          success: true,
+          data: await this.knowledgeService.updateProduct(String(req.body.id || ''), req.body),
+        });
+      }),
+    );
+    this.app.post(
       '/api/v1/knowledge/products/status',
       asyncHandler(async (req, res) => {
         const ids = Array.isArray(req.body.ids) ? req.body.ids.map(String).slice(0, 500) : [];
@@ -1942,6 +2004,26 @@ class BKServer {
         }
         const data = await this.knowledgeService.retrySync(kind, String(req.body.id || ''));
         res.json({ success: true, data });
+      }),
+    );
+    this.app.get(
+      '/api/v1/knowledge/export',
+      asyncHandler(async (req, res) => {
+        const kind = String(req.query.kind || '') as 'store' | 'product';
+        const format = String(req.query.format || 'csv') as KnowledgeExportFormat;
+        if (!['store', 'product'].includes(kind) || !['csv', 'json'].includes(format)) {
+          res.status(400).json({ success: false, message: '无效的知识库导出格式' });
+          return;
+        }
+        const records = await this.knowledgeService.exportKnowledge(kind, req.query);
+        const exported = serializeKnowledgeExport(format, records);
+        const date = new Date().toISOString().slice(0, 10);
+        res.setHeader('Content-Type', exported.contentType);
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="yingbo-${kind}-knowledge-${date}.${exported.extension}"`,
+        );
+        res.send(exported.body);
       }),
     );
 

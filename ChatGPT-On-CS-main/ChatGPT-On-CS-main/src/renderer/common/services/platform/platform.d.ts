@@ -215,6 +215,15 @@ export interface ReplySuggestion {
   status: ReplySuggestionStatus;
   delivery_error?: string | null;
   delivery_request_id?: string | null;
+  final_reply_content?: string | null;
+  model_provider?: string | null;
+  model_name?: string | null;
+  prompt_version?: string | null;
+  generation_latency_ms?: number | null;
+  retrieval_status?: string | null;
+  risk_level?: string | null;
+  ocr_confidence?: number | null;
+  ocr_reason_codes?: string[] | null;
   created_at: string;
   updated_at: string;
 }

@@ -12,6 +12,7 @@ export interface QAItem {
   stage: QAStage;
   matchType: QAMatchType;
   updatedAt: string;
+  createdAt?: string;
   shopId: string;
   enabled?: boolean;
   syncStatus?: 'pending' | 'synced' | 'failed';

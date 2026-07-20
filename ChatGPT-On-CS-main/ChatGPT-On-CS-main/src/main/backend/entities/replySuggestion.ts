@@ -57,6 +57,24 @@ export class ReplySuggestion extends Model {
 
   declare delivery_error: string | null;
 
+  declare final_reply_content: string | null;
+
+  declare model_provider: string | null;
+
+  declare model_name: string | null;
+
+  declare prompt_version: string | null;
+
+  declare generation_latency_ms: number | null;
+
+  declare retrieval_status: string | null;
+
+  declare risk_level: string | null;
+
+  declare ocr_confidence: number | null;
+
+  declare ocr_reason_codes: string[] | null;
+
   declare status: ReplySuggestionStatus;
 
   declare created_at: Date;
@@ -161,6 +179,15 @@ export function initReplySuggestion(sequelize: Sequelize) {
         type: DataTypes.STRING(500),
         allowNull: true,
       },
+      final_reply_content: { type: DataTypes.TEXT, allowNull: true },
+      model_provider: { type: DataTypes.STRING(100), allowNull: true },
+      model_name: { type: DataTypes.STRING(160), allowNull: true },
+      prompt_version: { type: DataTypes.STRING(100), allowNull: true },
+      generation_latency_ms: { type: DataTypes.INTEGER, allowNull: true },
+      retrieval_status: { type: DataTypes.STRING(32), allowNull: true },
+      risk_level: { type: DataTypes.STRING(20), allowNull: true },
+      ocr_confidence: { type: DataTypes.FLOAT, allowNull: true },
+      ocr_reason_codes: { type: DataTypes.JSON, allowNull: true },
       status: {
         type: DataTypes.STRING(32),
         allowNull: false,
@@ -210,6 +237,15 @@ export async function checkAndAddFields(sequelize: Sequelize) {
     context_revision: { type: DataTypes.INTEGER, allowNull: true },
     draft_state: { type: DataTypes.STRING(32), allowNull: true },
     draft_updated_at: { type: DataTypes.DATE, allowNull: true },
+    final_reply_content: { type: DataTypes.TEXT, allowNull: true },
+    model_provider: { type: DataTypes.STRING(100), allowNull: true },
+    model_name: { type: DataTypes.STRING(160), allowNull: true },
+    prompt_version: { type: DataTypes.STRING(100), allowNull: true },
+    generation_latency_ms: { type: DataTypes.INTEGER, allowNull: true },
+    retrieval_status: { type: DataTypes.STRING(32), allowNull: true },
+    risk_level: { type: DataTypes.STRING(20), allowNull: true },
+    ocr_confidence: { type: DataTypes.FLOAT, allowNull: true },
+    ocr_reason_codes: { type: DataTypes.JSON, allowNull: true },
   };
 
   for (const [name, definition] of Object.entries(nullableColumns)) {

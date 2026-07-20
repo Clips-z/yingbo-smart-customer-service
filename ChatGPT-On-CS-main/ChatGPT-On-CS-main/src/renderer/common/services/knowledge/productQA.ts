@@ -13,6 +13,8 @@ export interface ProductQA {
   hue: number;
   syncStatus?: 'pending' | 'synced' | 'failed';
   syncError?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ProductQAListParams {
@@ -61,6 +63,25 @@ export async function addProductQA(input: {
   const response = await POST<{ data: ProductQA }>(
     '/api/v1/knowledge/products/create',
     { ...input, shopName: shop?.name || input.shopId },
+  );
+  return response.data;
+}
+
+export async function updateProductQA(
+  id: string,
+  input: {
+    name: string;
+    platformProductId: string;
+    barcode?: string;
+    shopId: string;
+    onSale: boolean;
+    tags?: string[];
+  },
+) {
+  const shop = SHOP_OPTIONS.find((item) => item.id === input.shopId);
+  const response = await POST<{ data: ProductQA }>(
+    '/api/v1/knowledge/products/update',
+    { id, ...input, shopName: shop?.name || input.shopId },
   );
   return response.data;
 }

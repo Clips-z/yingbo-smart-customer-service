@@ -434,6 +434,29 @@ export async function getQianniuSuggestions(
   );
 }
 
+export type ReplyFeedbackAction =
+  | 'generated'
+  | 'draft_saved'
+  | 'copied'
+  | 'filled'
+  | 'sent'
+  | 'dismissed'
+  | 'restored'
+  | 'failed'
+  | 'transferred'
+  | 'evidence_irrelevant';
+
+export async function recordReplyFeedback(input: {
+  suggestionId: number;
+  eventKey?: string;
+  action: ReplyFeedbackAction;
+  finalContent?: string;
+  reasonCode?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  return POST('/api/v1/quality/feedback', input);
+}
+
 export async function fillQianniuSuggestion(id: number, content: string) {
   return POST<{ data: ReplySuggestion }>(
     '/api/v1/compat/qianniu/suggestions/fill',

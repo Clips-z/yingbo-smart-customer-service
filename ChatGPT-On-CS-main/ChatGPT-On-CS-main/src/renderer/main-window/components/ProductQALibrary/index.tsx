@@ -44,13 +44,14 @@ import {
   FiSearch,
   FiChevronDown,
   FiPlus,
-  FiMoreHorizontal,
   FiList,
   FiCopy,
   FiTrash2,
   FiCheckCircle,
   FiXCircle,
   FiUpload,
+  FiDownload,
+  FiEdit2,
 } from 'react-icons/fi';
 import {
   fetchProductQAList,
@@ -63,29 +64,40 @@ import {
   ProductQA,
   retryProductSync,
   bulkImportProducts,
+  updateProductQA,
 } from '../../../common/services/knowledge/productQA';
 import {
   ImportPreview,
   parseProductImport,
 } from '../../../common/services/knowledge/knowledgeImport';
+import { downloadKnowledgeExport } from '../../../common/services/knowledge/knowledgeExport';
 
 /* ════════════════════ 新增商品弹窗 ════════════════════ */
 const AddProductModal: React.FC<{
   isOpen: boolean;
+  editing: ProductQA | null;
   onClose: () => void;
   onSubmit: (data: {
-    name: string; platformProductId: string; barcode: string; shopId: string; onSale: boolean;
+    name: string; platformProductId: string; barcode: string; shopId: string; onSale: boolean; tags: string[];
   }) => void;
-}> = ({ isOpen, onClose, onSubmit }) => {
+}> = ({ isOpen, editing, onClose, onSubmit }) => {
   const [name, setName] = useState('');
   const [platformProductId, setPlatformProductId] = useState('');
   const [barcode, setBarcode] = useState('');
   const [shopId, setShopId] = useState('shop_lixixi');
   const [onSale, setOnSale] = useState(true);
+  const [tags, setTags] = useState('');
 
   useEffect(() => {
-    if (isOpen) { setName(''); setPlatformProductId(''); setBarcode(''); setShopId('shop_lixixi'); setOnSale(true); }
-  }, [isOpen]);
+    if (isOpen) {
+      setName(editing?.name || '');
+      setPlatformProductId(editing?.platformProductId || '');
+      setBarcode(editing?.barcode || '');
+      setShopId(editing?.shopId || 'shop_lixixi');
+      setOnSale(editing?.onSale !== false);
+      setTags((editing?.tags || []).join('、'));
+    }
+  }, [isOpen, editing]);
 
   const valid = name.trim() && platformProductId.trim();
 
@@ -93,7 +105,7 @@ const AddProductModal: React.FC<{
     <Modal isOpen={isOpen} onClose={onClose} size="md" isCentered>
       <ModalOverlay bg="blackAlpha.400" />
       <ModalContent borderRadius="xl">
-        <ModalHeader fontSize="16px" fontWeight={800}>添加商品</ModalHeader>
+        <ModalHeader fontSize="16px" fontWeight={800}>{editing ? '查看并编辑商品知识' : '添加商品'}</ModalHeader>
         <ModalCloseButton />
         <ModalBody pb={2}>
           <VStack spacing={3} align="stretch">
@@ -120,6 +132,10 @@ const AddProductModal: React.FC<{
               <Input size="sm" borderRadius="lg" placeholder="如 888874062298" value={platformProductId} onChange={(e) => setPlatformProductId(e.target.value)} />
             </FormControl>
             <FormControl>
+              <FormLabel fontSize="12px" color="gray.600" mb={1}>知识标签（顿号分隔）</FormLabel>
+              <Input size="sm" borderRadius="lg" placeholder="如：服装、洗护" value={tags} onChange={(e) => setTags(e.target.value)} />
+            </FormControl>
+            <FormControl>
               <FormLabel fontSize="12px" color="gray.600" mb={1}>商品条码（选填）</FormLabel>
               <Input size="sm" borderRadius="lg" placeholder="69 开头条码" value={barcode} onChange={(e) => setBarcode(e.target.value)} />
             </FormControl>
@@ -142,11 +158,11 @@ const AddProductModal: React.FC<{
           <Button size="sm" variant="ghost" mr={2} onClick={onClose} borderRadius="lg">取消</Button>
           <Button
             size="sm" colorScheme="brand" isDisabled={!valid}
-            onClick={() => onSubmit({ name: name.trim(), platformProductId: platformProductId.trim(), barcode: barcode.trim(), shopId, onSale })}
+            onClick={() => onSubmit({ name: name.trim(), platformProductId: platformProductId.trim(), barcode: barcode.trim(), shopId, onSale, tags: tags.split('、').map((item) => item.trim()).filter(Boolean) })}
             borderRadius="lg"
             bgGradient="linear-gradient(135deg, #4A5BB3, #3866D4)"
           >
-            确认添加
+            {editing ? '保存修改' : '确认添加'}
           </Button>
         </ModalFooter>
       </ModalContent>
@@ -163,7 +179,8 @@ const ProductCard: React.FC<{
   onToggle: (id: string, onSale: boolean) => void;
   onCopyId: (id: string) => void;
   onRetrySync: (id: string) => void;
-}> = ({ product, batchMode, checked, onCheck, onToggle, onCopyId, onRetrySync }) => {
+  onEdit: (product: ProductQA) => void;
+}> = ({ product, batchMode, checked, onCheck, onToggle, onCopyId, onRetrySync, onEdit }) => {
   return (
     <Box
       bg="white"
@@ -235,6 +252,11 @@ const ProductCard: React.FC<{
             <Button size="xs" variant="link" colorScheme={product.syncStatus === 'failed' ? 'red' : 'orange'} onClick={() => onRetrySync(product.id)}>同步</Button>
           )}
         </HStack>
+        {!batchMode && (
+          <Button mt={2} size="xs" w="full" variant="ghost" colorScheme="brand" leftIcon={<FiEdit2 />} onClick={() => onEdit(product)}>
+            查看完整内容并编辑
+          </Button>
+        )}
       </Box>
     </Box>
   );
@@ -292,6 +314,7 @@ const ProductQALibrary: React.FC = () => {
   const importDisclosure = useDisclosure();
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductQA | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -320,12 +343,24 @@ const ProductQALibrary: React.FC = () => {
     }
   };
 
-  const handleAdd = async (data: { name: string; platformProductId: string; barcode: string; shopId: string; onSale: boolean }) => {
-    await addProductQA(data);
+  const handleSave = async (data: { name: string; platformProductId: string; barcode: string; shopId: string; onSale: boolean; tags: string[] }) => {
+    if (editingProduct) await updateProductQA(editingProduct.id, data);
+    else await addProductQA(data);
     addOnClose();
     setPage(1);
     await loadData();
-    toast({ title: '商品已添加', status: 'success', duration: 1800, isClosest: true });
+    toast({ title: editingProduct ? '商品知识已更新' : '商品已添加', status: 'success', duration: 1800, isClosest: true });
+    setEditingProduct(null);
+  };
+
+  const openAdd = () => {
+    setEditingProduct(null);
+    addOnOpen();
+  };
+
+  const openEdit = (product: ProductQA) => {
+    setEditingProduct(product);
+    addOnOpen();
   };
 
   const selectedIds = useMemo(() => Array.from(selected), [selected]);
@@ -383,6 +418,15 @@ const ProductQALibrary: React.FC = () => {
     }
   };
 
+  const handleExport = async (format: 'csv' | 'json', all: boolean) => {
+    try {
+      await downloadKnowledgeExport('product', format, all ? {} : { keyword, shop, status });
+      toast({ title: '商品知识已导出', description: all ? '已导出全部内容' : '已按当前筛选导出', status: 'success', duration: 1800 });
+    } catch (error) {
+      toast({ title: '导出失败', description: String(error), status: 'error', duration: 2500 });
+    }
+  };
+
   const statusLabel = useMemo(() => ({ all: '上架状态', on: '已上架', off: '未上架' }[status]), [status]);
   const shopLabel = SHOP_OPTIONS.find((s) => s.id === shop)?.name ?? '全部店铺';
 
@@ -431,14 +475,21 @@ const ProductQALibrary: React.FC = () => {
           </HStack>
         )}
 
-        <IconButton aria-label="更多" icon={<FiMoreHorizontal />} size="sm" variant="ghost" borderRadius="lg" colorScheme="gray" />
+        <Menu>
+          <MenuButton as={IconButton} aria-label="导出知识" icon={<FiDownload />} size="sm" variant="ghost" borderRadius="lg" colorScheme="gray" />
+          <MenuList minW="190px">
+            <MenuItem onClick={() => handleExport('csv', false)}>导出当前筛选 · CSV</MenuItem>
+            <MenuItem onClick={() => handleExport('json', false)}>导出当前筛选 · JSON</MenuItem>
+            <MenuItem onClick={() => handleExport('json', true)}>导出全部内容 · JSON</MenuItem>
+          </MenuList>
+        </Menu>
 
         <Box flex="1" />
 
         <Button size="sm" variant="outline" colorScheme="gray" leftIcon={<FiUpload />} borderRadius="lg" onClick={importDisclosure.onOpen}>
           导入 CSV / Excel
         </Button>
-        <Button size="sm" colorScheme="brand" leftIcon={<FiPlus />} borderRadius="lg" bgGradient="linear-gradient(135deg, #4A5BB3, #3866D4)" _hover={{ bgGradient: 'linear-gradient(135deg, #43529F, #2F5AC0)' }} onClick={addOnOpen}>
+        <Button size="sm" colorScheme="brand" leftIcon={<FiPlus />} borderRadius="lg" bgGradient="linear-gradient(135deg, #4A5BB3, #3866D4)" _hover={{ bgGradient: 'linear-gradient(135deg, #43529F, #2F5AC0)' }} onClick={openAdd}>
           添加商品
         </Button>
       </Flex>
@@ -457,7 +508,7 @@ const ProductQALibrary: React.FC = () => {
             {products.map((p) => (
               <ProductCard key={p.id} product={p} batchMode={batchMode} checked={selected.has(p.id)}
                 onCheck={(id, c) => setSelected((prev) => { const n = new Set(prev); c ? n.add(id) : n.delete(id); return n; })}
-                onToggle={handleToggle} onCopyId={handleCopyId} onRetrySync={handleRetrySync} />
+                onToggle={handleToggle} onCopyId={handleCopyId} onRetrySync={handleRetrySync} onEdit={openEdit} />
             ))}
           </SimpleGrid>
         )}
@@ -468,7 +519,7 @@ const ProductQALibrary: React.FC = () => {
           onPageSizeChange={(s) => { setPageSize(s); setPage(1); }} />
       )}
 
-      <AddProductModal isOpen={addOpen} onClose={addOnClose} onSubmit={handleAdd} />
+      <AddProductModal isOpen={addOpen} editing={editingProduct} onClose={() => { addOnClose(); setEditingProduct(null); }} onSubmit={handleSave} />
 
       <Modal isOpen={importDisclosure.isOpen} onClose={importDisclosure.onClose} size="lg" isCentered>
         <ModalOverlay bg="blackAlpha.400" />

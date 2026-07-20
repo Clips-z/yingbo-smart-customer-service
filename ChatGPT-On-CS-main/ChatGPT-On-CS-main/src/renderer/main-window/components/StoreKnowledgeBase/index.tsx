@@ -17,6 +17,7 @@ import {
   VStack,
   Badge,
   Select,
+  Switch,
   Textarea,
   useToast,
   Spinner,
@@ -52,6 +53,7 @@ import {
   FiChevronDown as FiChevronDownSmall,
   FiUpload,
   FiFilter,
+  FiDownload,
 } from 'react-icons/fi';
 import {
   fetchStoreQAList,
@@ -71,6 +73,7 @@ import {
   parseStoreImport,
   StoreImportPreview,
 } from '../../../common/services/knowledge/knowledgeImport';
+import { downloadKnowledgeExport } from '../../../common/services/knowledge/knowledgeExport';
 
 const STAGE_COLOR: Record<QAStage, string> = { presale: 'blue', mid: 'orange', aftersale: 'purple' };
 
@@ -81,7 +84,7 @@ const QAEditModal: React.FC<{
   onClose: () => void;
   onSubmit: (data: {
     question: string; answer: string; relatedQuestions: string[];
-    stage: QAStage; tags: string[]; matchType: QAMatchType;
+    stage: QAStage; tags: string[]; matchType: QAMatchType; enabled: boolean;
   }) => void;
 }> = ({ isOpen, editing, onClose, onSubmit }) => {
   const [question, setQuestion] = useState('');
@@ -90,6 +93,7 @@ const QAEditModal: React.FC<{
   const [stage, setStage] = useState<QAStage>('presale');
   const [tags, setTags] = useState('');
   const [matchType, setMatchType] = useState<QAMatchType>('exact');
+  const [enabled, setEnabled] = useState(true);
 
   useEffect(() => {
     if (isOpen) {
@@ -99,6 +103,7 @@ const QAEditModal: React.FC<{
       setStage(editing?.stage ?? 'presale');
       setTags((editing?.tags ?? []).join('、'));
       setMatchType(editing?.matchType ?? 'exact');
+      setEnabled(editing?.enabled !== false);
     }
   }, [isOpen, editing]);
 
@@ -116,6 +121,13 @@ const QAEditModal: React.FC<{
               <FormLabel fontSize="12px" color="gray.600" mb={1}>问题</FormLabel>
               <Textarea size="sm" rows={2} borderRadius="lg" placeholder="客户常问的问题" value={question} onChange={(e) => setQuestion(e.target.value)} bg="gray.50" borderColor="gray.200" />
             </FormControl>
+            <Flex align="center" justify="space-between" bg="gray.50" p={3} borderRadius="lg">
+              <Box>
+                <Text fontSize="12.5px" fontWeight={600} color="gray.700">参与智能回复</Text>
+                <Text fontSize="10px" color="gray.400">关闭后仍可查看、编辑和导出，但不会参与检索</Text>
+              </Box>
+              <Switch size="sm" colorScheme="green" isChecked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+            </Flex>
             <FormControl>
               <FormLabel fontSize="12px" color="gray.600" mb={1}>关联回复</FormLabel>
               <Textarea size="sm" rows={3} borderRadius="lg" placeholder="AI 客服应回复的内容" value={answer} onChange={(e) => setAnswer(e.target.value)} bg="gray.50" borderColor="gray.200" />
@@ -153,7 +165,7 @@ const QAEditModal: React.FC<{
             onClick={() => onSubmit({
               question: question.trim(), answer: answer.trim(),
               relatedQuestions: relatedQuestions.split('\n').map((s) => s.trim()).filter(Boolean),
-              stage, tags: tags.split('、').map((s) => s.trim()).filter(Boolean), matchType,
+              stage, tags: tags.split('、').map((s) => s.trim()).filter(Boolean), matchType, enabled,
             })}
             borderRadius="lg"
             bgGradient="linear-gradient(135deg, #4A5BB3, #3866D4)"
@@ -188,6 +200,7 @@ const QAListItem: React.FC<{
             <Badge colorScheme="gray" bg="gray.100" color="gray.600" borderRadius="full" fontSize="10px" px={2} fontWeight={700}>触发 {item.triggerCount}</Badge>
             <Badge colorScheme={STAGE_COLOR[item.stage]} borderRadius="full" fontSize="10px" px={2} fontWeight={600}>{STAGE_LABELS[item.stage]}</Badge>
             {item.matchType === 'fuzzy' && <Badge colorScheme="teal" variant="subtle" borderRadius="full" fontSize="10px" px={2}>模糊</Badge>}
+            {item.enabled === false && <Badge colorScheme="gray" borderRadius="full" fontSize="10px" px={2}>已停用</Badge>}
             <Badge colorScheme={item.syncStatus === 'synced' ? 'green' : item.syncStatus === 'failed' ? 'red' : 'orange'} borderRadius="full" fontSize="10px" px={2}>
               {item.syncStatus === 'synced' ? '已同步' : item.syncStatus === 'failed' ? '同步失败' : '待同步'}
             </Badge>
@@ -239,7 +252,8 @@ const StatsPanel: React.FC<{
   stage: QAStage | 'all'; onStage: (v: QAStage | 'all') => void;
   onAdd: () => void;
   onImport: () => void;
-}> = ({ stats, keyword, onKeyword, shop, onShop, stage, onStage, onAdd, onImport }) => {
+  onExport: (format: 'csv' | 'json', all: boolean) => void;
+}> = ({ stats, keyword, onKeyword, shop, onShop, stage, onStage, onAdd, onImport, onExport }) => {
   const [showProductFilter, setShowProductFilter] = useState(false);
   const statCards = [
     { key: 'all' as const, label: '全部', value: stats.total, color: 'gray.600' },
@@ -271,6 +285,16 @@ const StatsPanel: React.FC<{
       </Button>
       <SimpleGrid columns={2} spacing={2}>
         <ActionTile icon={FiUpload} label="导入 CSV / Excel" onClick={onImport} />
+        <Menu>
+          <MenuButton as={Button} variant="outline" colorScheme="gray" size="sm" borderRadius="lg" h="auto" py={2.5} fontSize="11px" fontWeight={600} color="gray.600">
+            <VStack spacing={1}><Icon as={FiDownload} boxSize={4} /><Text>手动导出</Text></VStack>
+          </MenuButton>
+          <MenuList minW="190px">
+            <MenuItem onClick={() => onExport('csv', false)}>当前筛选 · CSV</MenuItem>
+            <MenuItem onClick={() => onExport('json', false)}>当前筛选 · JSON</MenuItem>
+            <MenuItem onClick={() => onExport('json', true)}>全部内容 · JSON</MenuItem>
+          </MenuList>
+        </Menu>
       </SimpleGrid>
       <Divider borderColor="gray.100" />
       <VStack spacing={2} align="stretch">
@@ -342,7 +366,7 @@ const StoreKnowledgeBase: React.FC = () => {
   const openAdd = () => { setEditing(null); modalOnOpen(); };
   const openEdit = (item: QAItem) => { setEditing(item); modalOnOpen(); };
 
-  const handleSubmit = async (data: { question: string; answer: string; relatedQuestions: string[]; stage: QAStage; tags: string[]; matchType: QAMatchType }) => {
+  const handleSubmit = async (data: { question: string; answer: string; relatedQuestions: string[]; stage: QAStage; tags: string[]; matchType: QAMatchType; enabled: boolean }) => {
     if (editing) {
       await updateQA(editing.id, data);
       toast({ title: '已保存修改', status: 'success', duration: 1800, isClosest: true });
@@ -391,6 +415,19 @@ const StoreKnowledgeBase: React.FC = () => {
     } finally { setImporting(false); }
   };
 
+  const handleExport = async (format: 'csv' | 'json', all: boolean) => {
+    try {
+      await downloadKnowledgeExport('store', format, all ? {} : {
+        keyword,
+        shop,
+        stage,
+      });
+      toast({ title: '知识库已导出', description: all ? '已导出全部店铺问答' : '已按当前筛选导出', status: 'success', duration: 1800 });
+    } catch (error) {
+      toast({ title: '导出失败', description: String(error), status: 'error', duration: 2500 });
+    }
+  };
+
   return (
     <Flex h="full" gap={4} align="stretch">
       <Box flex="1" minW="0" display="flex" flexDirection="column">
@@ -432,7 +469,7 @@ const StoreKnowledgeBase: React.FC = () => {
       </Box>
 
       <Box w="300px" flexShrink={0} bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="sm" p={4} overflowY="auto">
-        <StatsPanel stats={stats} keyword={keyword} onKeyword={(v) => { setKeyword(v); setPage(1); }} shop={shop} onShop={(v) => { setShop(v); setPage(1); }} stage={stage} onStage={(v) => { setStage(v); setPage(1); }} onAdd={openAdd} onImport={importDisclosure.onOpen} />
+        <StatsPanel stats={stats} keyword={keyword} onKeyword={(v) => { setKeyword(v); setPage(1); }} shop={shop} onShop={(v) => { setShop(v); setPage(1); }} stage={stage} onStage={(v) => { setStage(v); setPage(1); }} onAdd={openAdd} onImport={importDisclosure.onOpen} onExport={handleExport} />
       </Box>
 
       <QAEditModal isOpen={modalOpen} editing={editing} onClose={modalOnClose} onSubmit={handleSubmit} />

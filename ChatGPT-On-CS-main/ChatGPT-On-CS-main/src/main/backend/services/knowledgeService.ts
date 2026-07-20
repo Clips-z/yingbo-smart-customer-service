@@ -6,6 +6,7 @@ import {
   validateProductKnowledgeInput,
   validateStoreKnowledgeInput,
 } from './knowledgeValidation';
+import { KnowledgeExportRecord } from './knowledgeExportService';
 
 const paging = (pageValue: unknown, pageSizeValue: unknown) => {
   const page = Math.max(1, Number(pageValue) || 1);
@@ -26,6 +27,8 @@ const productJson = (item: ProductKnowledge) => ({
   hue: item.hue,
   syncStatus: item.sync_status,
   syncError: item.sync_error || undefined,
+  createdAt: item.created_at.toISOString(),
+  updatedAt: item.updated_at.toISOString(),
 });
 
 const storeJson = (item: StoreKnowledge) => ({
@@ -42,6 +45,7 @@ const storeJson = (item: StoreKnowledge) => ({
   enabled: item.enabled,
   syncStatus: item.sync_status,
   syncError: item.sync_error || undefined,
+  createdAt: item.created_at.toISOString(),
 });
 
 export class KnowledgeService {
@@ -122,6 +126,26 @@ export class KnowledgeService {
       updated_at: new Date(),
     });
     if (sync && item.on_sale) await this.syncProduct(item);
+    return productJson(item);
+  }
+
+  async updateProduct(id: string, body: any) {
+    const item = await ProductKnowledge.findByPk(id);
+    if (!item) throw new Error('商品不存在');
+    const input = validateProductKnowledgeInput(body);
+    await item.update({
+      name: input.name,
+      platform_product_id: input.platformProductId,
+      barcode: input.barcode,
+      shop_id: input.shopId,
+      shop_name: input.shopName,
+      tags: input.tags,
+      on_sale: input.onSale,
+      sync_status: 'pending',
+      sync_error: null,
+      updated_at: new Date(),
+    });
+    if (item.on_sale) await this.syncProduct(item);
     return productJson(item);
   }
 
@@ -241,5 +265,69 @@ export class KnowledgeService {
       }
     }
     return results;
+  }
+
+  async exportKnowledge(
+    kind: 'store' | 'product',
+    query: any,
+  ): Promise<KnowledgeExportRecord[]> {
+    if (kind === 'product') {
+      const where: any = {};
+      const keyword = String(query.keyword || '').trim();
+      if (keyword) {
+        where[Op.or] = [
+          { name: { [Op.like]: `%${keyword}%` } },
+          { platform_product_id: { [Op.like]: `%${keyword}%` } },
+          { barcode: { [Op.like]: `%${keyword}%` } },
+        ];
+      }
+      if (query.shop && query.shop !== 'all') where.shop_id = String(query.shop);
+      if (query.status === 'on') where.on_sale = true;
+      if (query.status === 'off') where.on_sale = false;
+      const rows = await ProductKnowledge.findAll({ where, order: [['updated_at', 'DESC']] });
+      return rows.map((item) => ({
+        id: item.id,
+        kind: 'product',
+        name: item.name,
+        platformProductId: item.platform_product_id,
+        barcode: item.barcode || undefined,
+        shopId: item.shop_id,
+        shopName: item.shop_name,
+        tags: item.tags || [],
+        enabled: item.on_sale,
+        syncStatus: item.sync_status,
+        syncError: item.sync_error || undefined,
+        createdAt: item.created_at.toISOString(),
+        updatedAt: item.updated_at.toISOString(),
+      }));
+    }
+
+    const where: any = {};
+    const keyword = String(query.keyword || '').trim();
+    if (keyword) {
+      where[Op.or] = [
+        { question: { [Op.like]: `%${keyword}%` } },
+        { answer: { [Op.like]: `%${keyword}%` } },
+      ];
+    }
+    if (query.shop && query.shop !== 'all') where.shop_id = String(query.shop);
+    if (query.stage && query.stage !== 'all') where.stage = String(query.stage);
+    const rows = await StoreKnowledge.findAll({ where, order: [['updated_at', 'DESC']] });
+    return rows.map((item) => ({
+      id: item.id,
+      kind: 'store',
+      question: item.question,
+      answer: item.answer,
+      relatedQuestions: item.related_questions || [],
+      tags: item.tags || [],
+      shopId: item.shop_id,
+      stage: item.stage,
+      matchType: item.match_type,
+      enabled: item.enabled,
+      syncStatus: item.sync_status,
+      syncError: item.sync_error || undefined,
+      createdAt: item.created_at.toISOString(),
+      updatedAt: item.updated_at.toISOString(),
+    }));
   }
 }

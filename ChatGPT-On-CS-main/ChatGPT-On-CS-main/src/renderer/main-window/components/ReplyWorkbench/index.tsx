@@ -31,6 +31,7 @@ import {
   fillWecomSuggestion,
   saveQianniuSuggestionDraft,
   updateQianniuSuggestionStatus,
+  recordReplyFeedback,
 } from '../../../common/services/platform/controller';
 import { QianniuReplyMode, ReplySuggestion } from '../../../common/services/platform/platform';
 import {
@@ -249,6 +250,12 @@ const ConversationDetail = React.memo(
           nextContent,
           target.context_revision,
         );
+        void recordReplyFeedback({
+          suggestionId: target.id,
+          action: 'draft_saved',
+          finalContent: nextContent,
+          metadata: { platformId: target.platform_id },
+        }).catch(() => undefined);
         lastPersistedRef.current = { id: target.id, content: nextContent };
       },
       [],
@@ -293,9 +300,24 @@ const ConversationDetail = React.memo(
         setIsWorking(true);
         try {
           await fillFn(item.id, content);
+          void recordReplyFeedback({
+            suggestionId: item.id,
+            eventKey: `suggestion:${item.id}:filled:${Date.now()}`,
+            action: 'filled',
+            finalContent: content,
+            metadata: { platformId: item.platform_id },
+          }).catch(() => undefined);
           toast({ title: successTitle, description: successDesc, status: 'success', duration: 3500, isClosable: true });
           onChanged();
         } catch (error) {
+          void recordReplyFeedback({
+            suggestionId: item.id,
+            eventKey: `suggestion:${item.id}:failed:${Date.now()}`,
+            action: 'failed',
+            finalContent: content,
+            reasonCode: 'fill_failed',
+            metadata: { platformId: item.platform_id },
+          }).catch(() => undefined);
           toast({ title: errorTitle, description: extractErrorMessage(error), status: 'error', duration: 5000, isClosable: true });
           onChanged();
         } finally {
@@ -313,6 +335,13 @@ const ConversationDetail = React.memo(
       setIsWorking(true);
       try {
         await updateQianniuSuggestionStatus(item.id, status);
+        void recordReplyFeedback({
+          suggestionId: item.id,
+          eventKey: `suggestion:${item.id}:${status}:${Date.now()}`,
+          action: status === 'dismissed' ? 'dismissed' : 'restored',
+          finalContent: content,
+          metadata: { platformId: item.platform_id },
+        }).catch(() => undefined);
         onChanged();
       } finally {
         setIsWorking(false);
@@ -329,6 +358,16 @@ const ConversationDetail = React.memo(
     const pColor = platformColorMap[item.platform_id] || 'gray';
     const isSent = item.status === 'sent';
     const deliveryInProgress = item.status === 'preparing' || item.status === 'sending';
+    const handleCopy = () => {
+      onCopy();
+      void recordReplyFeedback({
+        suggestionId: item.id,
+        eventKey: `suggestion:${item.id}:copied:${Date.now()}`,
+        action: 'copied',
+        finalContent: content,
+        metadata: { platformId: item.platform_id },
+      }).catch(() => undefined);
+    };
 
     return (
       <Box h="full" display="flex" flexDirection="column">
@@ -454,7 +493,7 @@ const ConversationDetail = React.memo(
                 <IconButton
                   aria-label="复制回复"
                   icon={<FiClipboard />}
-                  onClick={onCopy}
+                  onClick={handleCopy}
                   color={hasCopied ? 'green.500' : 'gray.400'}
                   _hover={{ color: 'brand.500', bg: 'brand.50' }}
                   borderRadius="md"

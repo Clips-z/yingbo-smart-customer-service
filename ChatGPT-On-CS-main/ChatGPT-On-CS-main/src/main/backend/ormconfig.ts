@@ -35,6 +35,10 @@ import { TransferKeyword, initTransfer } from './entities/transfer';
 import { ReplaceKeyword, initReplace } from './entities/replace';
 import { initProductKnowledge } from './entities/productKnowledge';
 import { initStoreKnowledge } from './entities/storeKnowledge';
+import { initKnowledgeCandidate } from './entities/knowledgeCandidate';
+import { initReplyFeedback } from './entities/replyFeedback';
+import { initRetrievalEvidence } from './entities/retrievalEvidence';
+import { initEvaluationCase } from './entities/evaluationCase';
 
 // Get user's documents directory path
 // 支持通过环境变量重定向数据库目录（用于沙箱/CI 环境）
@@ -101,6 +105,10 @@ initTransfer(sequelize);
 initReplace(sequelize);
 initProductKnowledge(sequelize);
 initStoreKnowledge(sequelize);
+initKnowledgeCandidate(sequelize);
+initReplyFeedback(sequelize);
+initRetrievalEvidence(sequelize);
+initEvaluationCase(sequelize);
 
 // 异步初始化和数据填充函数
 async function initDb(): Promise<void> {
