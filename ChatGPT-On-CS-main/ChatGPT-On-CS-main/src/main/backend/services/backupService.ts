@@ -5,14 +5,21 @@ import { Sequelize } from 'sequelize';
 import { appendAuditEvent } from './auditService';
 
 const hashFile = async (filename: string) =>
-  crypto.createHash('sha256').update(await fs.readFile(filename)).digest('hex');
+  crypto
+    .createHash('sha256')
+    .update((await fs.readFile(filename)) as crypto.BinaryLike)
+    .digest('hex');
 
 export class BackupService {
   private databaseFile: string;
   private backupDir: string;
 
   constructor(private sequelize: Sequelize) {
-    this.databaseFile = path.resolve(String((sequelize.options as any).storage));
+    const options = (sequelize as Sequelize & {
+      options: { storage?: string };
+    }).options;
+    if (!options.storage) throw new Error('SQLite storage path is missing');
+    this.databaseFile = path.resolve(options.storage);
     this.backupDir = path.join(path.dirname(this.databaseFile), 'backups');
   }
 

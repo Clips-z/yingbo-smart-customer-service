@@ -1,4 +1,9 @@
-import { DataTypes, Model, Sequelize } from 'sequelize';
+import {
+  DataTypes,
+  Model,
+  ModelAttributeColumnOptions,
+  Sequelize,
+} from 'sequelize';
 
 export type ReplySuggestionStatus =
   | 'pending'
@@ -218,8 +223,11 @@ export function initReplySuggestion(sequelize: Sequelize) {
 }
 
 export async function checkAndAddFields(sequelize: Sequelize) {
-  const tableDescription = await ReplySuggestion.describe();
-  const nullableColumns: Record<string, object> = {
+  const tableDescription = (await ReplySuggestion.describe()) as Record<
+    string,
+    unknown
+  >;
+  const nullableColumns: Record<string, ModelAttributeColumnOptions> = {
     original_reply_content: { type: DataTypes.TEXT, allowNull: true },
     draft_content: { type: DataTypes.TEXT, allowNull: true },
     conversation_key: { type: DataTypes.STRING(64), allowNull: true },

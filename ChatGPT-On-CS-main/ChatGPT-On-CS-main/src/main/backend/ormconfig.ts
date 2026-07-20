@@ -66,7 +66,10 @@ if (fs.existsSync(restoreMarker)) {
   const backupDir = path.join(APP_DIR, 'backups');
   const source = path.resolve(backupDir, path.basename(String(request.database || '')));
   if (source.startsWith(`${path.resolve(backupDir)}${path.sep}`) && fs.existsSync(source)) {
-    const actual = crypto.createHash('sha256').update(fs.readFileSync(source)).digest('hex');
+    const actual = crypto
+      .createHash('sha256')
+      .update(fs.readFileSync(source) as crypto.BinaryLike)
+      .digest('hex');
     if (actual === request.sha256) {
       if (fs.existsSync(DB_FILE_PATH)) {
         fs.copyFileSync(DB_FILE_PATH, path.join(backupDir, `pre-restore-${Date.now()}.db`));
@@ -99,7 +102,7 @@ export const sequelize = new Sequelize({
 });
 
 // SQLite WAL 模式 + 性能优化 PRAGMA
-sequelize.afterConnect(async (connection: any) => {
+sequelize.addHook('afterConnect', async (connection: any) => {
   if (connection && connection.run) {
     // WAL 模式 — 允许读和写同时进行
     connection.run('PRAGMA journal_mode=WAL;');

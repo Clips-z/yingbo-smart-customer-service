@@ -54,7 +54,7 @@ export function initStoreKnowledge(sequelize: Sequelize) {
 }
 
 export async function checkAndAddFields(sequelize: Sequelize) {
-  const table = await StoreKnowledge.describe();
+  const table = (await StoreKnowledge.describe()) as Record<string, unknown>;
   for (const name of ['effective_at', 'expires_at']) {
     if (!table[name]) {
       await sequelize.getQueryInterface().addColumn('n_store_knowledge', name, {

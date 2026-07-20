@@ -76,7 +76,9 @@ export type DraftRestorationDecision =
   | { action: 'hide'; reason: 'different-conversation' }
   | { action: 'hold'; reason: 'context-not-stable' };
 
-const REQUIRED_IDENTITY_FIELDS: Array<keyof CompanionContextSnapshot> = [
+type RequiredIdentityField = 'platformId' | 'storeId' | 'accountId' | 'contactId';
+
+const REQUIRED_IDENTITY_FIELDS: RequiredIdentityField[] = [
   'platformId',
   'storeId',
   'accountId',

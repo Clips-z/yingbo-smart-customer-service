@@ -328,6 +328,7 @@ export class ConfigController {
     | undefined
   > {
     const config = await this.findConfig(appId, instanceId);
+    if (!config) return undefined;
     // 关键：LLM 字段（key/system_prompt 等）允许全局兜底，
     // 因此设置页里看到空配置时仍显示全局配置的值。
     const merged = await this.mergeWithGlobalConfig(config);

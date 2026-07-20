@@ -76,11 +76,7 @@ export class QianniuContextTracker {
       recentMessagesReused:
         shouldReuseRecentMessages || Boolean(input.recentMessagesReused),
     };
-    buildConversationKey({
-      ...observationInput,
-      contextRevision: 0,
-      state: 'stable',
-    });
+    buildConversationKey(observationInput);
     const observedAt = Date.parse(observationInput.capturedAt);
     if (!Number.isFinite(observedAt)) throw new Error('capturedAt is invalid');
     if (observedAt < this.lastObservedAt && this.current) {

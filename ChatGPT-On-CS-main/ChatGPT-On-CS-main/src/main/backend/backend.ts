@@ -26,8 +26,10 @@ import {
 } from './services/wecomSidecarService';
 import {
   JinmaiCollectorState,
+  JinmaiReplyMode,
   JinmaiSidecarService,
 } from './services/jinmaiSidecarService';
+import { CollectorState, ReplyMode } from './services/baseSidecarService';
 import { PddSidecarService } from './services/pddSidecarService';
 import { DouyinSidecarService } from './services/douyinSidecarService';
 import { RagService } from './services/ragService';
@@ -50,7 +52,10 @@ import {
   KnowledgeExportFormat,
   serializeKnowledgeExport,
 } from './services/knowledgeExportService';
-import { ReplySuggestion } from './entities/replySuggestion';
+import {
+  ReplySuggestion,
+  ReplySuggestionStatus,
+} from './entities/replySuggestion';
 import { KnowledgeCandidateService } from './services/knowledgeCandidateService';
 import { EvaluationService } from './services/evaluationService';
 import { BackupService } from './services/backupService';
@@ -274,18 +279,12 @@ class BKServer {
 
   private setupRoutes(): void {
     // ========== 数据分析 API ==========
-    this.app.get('/api/analytics/overview', (req, res) =>
-      this.analyticsController.getOverview(req, res));
-    this.app.get('/api/analytics/daily-trend', (req, res) =>
-      this.analyticsController.getDailyTrend(req, res));
-    this.app.get('/api/analytics/platform-distribution', (req, res) =>
-      this.analyticsController.getPlatformDistribution(req, res));
-    this.app.get('/api/analytics/status-distribution', (req, res) =>
-      this.analyticsController.getStatusDistribution(req, res));
-    this.app.get('/api/analytics/top-senders', (req, res) =>
-      this.analyticsController.getTopSenders(req, res));
-    this.app.get('/api/analytics/avg-response-time', (req, res) =>
-      this.analyticsController.getAvgResponseTime(req, res));
+    this.app.get('/api/analytics/overview', this.analyticsController.getOverview);
+    this.app.get('/api/analytics/daily-trend', this.analyticsController.getDailyTrend);
+    this.app.get('/api/analytics/platform-distribution', this.analyticsController.getPlatformDistribution);
+    this.app.get('/api/analytics/status-distribution', this.analyticsController.getStatusDistribution);
+    this.app.get('/api/analytics/top-senders', this.analyticsController.getTopSenders);
+    this.app.get('/api/analytics/avg-response-time', this.analyticsController.getAvgResponseTime);
 
     const feedbackActions: ReplyFeedbackAction[] = [
       'generated',
@@ -1457,7 +1456,8 @@ class BKServer {
         try {
           const { text, filename } = req.body || {};
           if (!text || typeof text !== 'string') {
-            return res.status(400).json({ success: false, message: '文本不能为空' });
+            res.status(400).json({ success: false, message: '文本不能为空' });
+            return;
           }
           const axios = (await import('axios')).default;
           const resp = await axios.post(
@@ -1671,7 +1671,7 @@ class BKServer {
       const error = String(req.body?.error || '');
       const validStates = ['stopped', 'starting', 'running', 'degraded'];
       this.wecomSidecarService.reportHealth(
-        validStates.includes(state) ? state : 'running',
+        (validStates.includes(state) ? state : 'running') as CollectorState,
         error,
       );
       res.json({ success: true });
@@ -1861,7 +1861,7 @@ class BKServer {
           res.status(400).json({ success: false, message: 'Invalid mode' });
           return;
         }
-        await this.pddSidecarService.setMode(mode);
+        await this.pddSidecarService.setMode(mode as ReplyMode);
         res.json({ success: true, data: { mode } });
       }),
     );
@@ -1871,7 +1871,7 @@ class BKServer {
     this.app.post('/api/v1/compat/pdd/health', (req, res) => {
       const { state, error } = req.body || {};
       if (state && ['stopped', 'starting', 'running', 'degraded'].includes(state)) {
-        this.pddSidecarService.reportHealth(state, error);
+        this.pddSidecarService.reportHealth(state as CollectorState, error);
       }
       res.json({ success: true });
     });
@@ -1947,7 +1947,7 @@ class BKServer {
           res.status(400).json({ success: false, message: 'Invalid mode' });
           return;
         }
-        await this.douyinSidecarService.setMode(mode);
+        await this.douyinSidecarService.setMode(mode as ReplyMode);
         res.json({ success: true, data: { mode } });
       }),
     );
@@ -1957,7 +1957,7 @@ class BKServer {
     this.app.post('/api/v1/compat/douyin/health', (req, res) => {
       const { state, error } = req.body || {};
       if (state && ['stopped', 'starting', 'running', 'degraded'].includes(state)) {
-        this.douyinSidecarService.reportHealth(state, error);
+        this.douyinSidecarService.reportHealth(state as CollectorState, error);
       }
       res.json({ success: true });
     });

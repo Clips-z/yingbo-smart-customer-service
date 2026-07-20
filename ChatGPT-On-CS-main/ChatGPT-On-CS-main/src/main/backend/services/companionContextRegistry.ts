@@ -28,8 +28,9 @@ export class CompanionContextRegistry {
       this.trackers.set(input.platformId, tracker);
     }
     const cached = this.history.get(this.historyKey(input));
-    const shouldRestore =
-      !input.recentMessages?.length && cached?.recentMessages?.length;
+    const shouldRestore = Boolean(
+      !input.recentMessages?.length && cached?.recentMessages?.length,
+    );
     const update = tracker.observe({
       ...input,
       recentMessages: shouldRestore

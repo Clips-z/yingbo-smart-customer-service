@@ -9,9 +9,9 @@ class BackendServiceManager {
 
   private process: ReturnType<typeof spawn> | null;
 
-  private logStream: fs.WriteStream;
+  private logStream!: fs.WriteStream;
 
-  private logFilePath: string;
+  private logFilePath!: string;
 
   private port: number;
 
