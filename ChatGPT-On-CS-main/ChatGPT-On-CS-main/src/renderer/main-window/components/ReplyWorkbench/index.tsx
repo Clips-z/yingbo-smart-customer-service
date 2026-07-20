@@ -338,7 +338,7 @@ const ConversationDetail = React.memo(
           setIsWorking(false);
         }
       },
-      [item.id, content, toast, onChanged],
+      [item.id, item.platform_id, content, toast, onChanged],
     );
 
     const fillReply = () => handleFill(fillQianniuSuggestion, '已填入千牛输入框', `${item.sender}，请在千牛中确认后发送`, '填入失败');
@@ -695,7 +695,7 @@ const ReplyWorkbench = () => {
     } else {
       setActiveItemId(null);
     }
-  }, [listData]);
+  }, [activeItemId, listData]);
 
   const activeItem = useMemo(
     () => listData.find((s) => s.id === activeItemId) || null,

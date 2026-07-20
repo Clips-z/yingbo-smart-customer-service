@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Flex,
@@ -370,7 +370,7 @@ const StoreKnowledgeBase: React.FC = () => {
   const [importPreview, setImportPreview] = useState<StoreImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetchStoreQAList({ keyword, shop, stage, page, pageSize });
@@ -378,9 +378,11 @@ const StoreKnowledgeBase: React.FC = () => {
     } catch {
       toast({ title: '加载失败', status: 'error', duration: 2000, isClosable: true });
     } finally { setLoading(false); }
-  };
+  }, [keyword, page, pageSize, shop, stage, toast]);
 
-  useEffect(() => { loadData(); /* eslint-disable-next-line */ }, [keyword, shop, stage, page]);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 

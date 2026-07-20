@@ -135,7 +135,7 @@ const CorpusTest: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [toast]);
 
   const runTest = async (q: string) => {
     const text = q.trim();

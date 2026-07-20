@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useCallback, useState, useMemo, useEffect } from 'react';
 import {
   Box,
   Flex,
@@ -316,7 +316,7 @@ const ProductQALibrary: React.FC = () => {
   const [importing, setImporting] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductQA | null>(null);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetchProductQAList({ keyword, shop, status, page, pageSize });
@@ -327,9 +327,11 @@ const ProductQALibrary: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [keyword, page, pageSize, shop, status, toast]);
 
-  useEffect(() => { loadData(); /* eslint-disable-next-line */ }, [keyword, shop, status, page, pageSize]);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleToggle = async (id: string, onSale: boolean) => {
     setTogglingIds((prev) => new Set(prev).add(id));

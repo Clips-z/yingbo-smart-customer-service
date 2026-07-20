@@ -90,7 +90,10 @@ export function useReplyWorkbench() {
   );
 
   const mode = modeQuery.data?.data.mode || 'hint';
-  const allSuggestions: ReplySuggestion[] = suggestionsQuery.data?.data || [];
+  const allSuggestions = useMemo<ReplySuggestion[]>(
+    () => suggestionsQuery.data?.data ?? [],
+    [suggestionsQuery.data?.data],
+  );
 
   const suggestions = useMemo(
     () =>
@@ -135,7 +138,7 @@ export function useReplyWorkbench() {
         return next;
       });
     }
-  }, [suggestions]);
+  }, [selectedIds.size, suggestions]);
 
   const toggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => {

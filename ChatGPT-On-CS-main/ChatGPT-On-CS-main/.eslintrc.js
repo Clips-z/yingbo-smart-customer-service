@@ -35,6 +35,14 @@ module.exports = {
     'no-use-before-define': 'off',
     'no-dupe-class-members': 'off',
   },
+  overrides: [
+    {
+      files: ['*.ts', '*.tsx'],
+      rules: {
+        'no-undef': 'off',
+      },
+    },
+  ],
   parserOptions: {
     ecmaVersion: 2022,
     sourceType: 'module',

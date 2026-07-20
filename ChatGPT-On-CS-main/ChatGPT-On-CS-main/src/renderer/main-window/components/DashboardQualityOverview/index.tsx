@@ -15,7 +15,10 @@ const DashboardQualityOverview: React.FC = () => {
   const configQuery = useQuery(['dashboard-llm-config'], () => getConfig({ type: 'llm' }));
   const ragQuery = useQuery(['dashboard-rag-health'], () => GET<{ data: { state: string; totalChunks?: number; lastError?: string } }>('/api/v1/rag/health'), { refetchInterval: 10000 });
 
-  const suggestions = suggestionsQuery.data?.data || [];
+  const suggestions = useMemo(
+    () => suggestionsQuery.data?.data ?? [],
+    [suggestionsQuery.data?.data],
+  );
   const stats = useMemo(() => {
     const pending = suggestions.filter((item) => ['pending', 'failed'].includes(item.status));
     return {

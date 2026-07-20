@@ -126,7 +126,10 @@ function CompanionSurface() {
   const health = healthQuery.data?.data as
     | { state?: string; phase?: string; lastScanDurationMs?: number }
     | undefined;
-  const suggestions = suggestionsQuery.data?.data || [];
+  const suggestions = useMemo(
+    () => suggestionsQuery.data?.data ?? [],
+    [suggestionsQuery.data?.data],
+  );
   const suggestion = useMemo(
     () => selectCompanionSuggestion(context, suggestions),
     [context, suggestions],
