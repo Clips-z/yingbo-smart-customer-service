@@ -40,6 +40,10 @@ module.exports = {
       files: ['*.ts', '*.tsx'],
       rules: {
         'no-undef': 'off',
+        'no-empty-function': 'off',
+        'no-useless-constructor': 'off',
+        '@typescript-eslint/no-empty-function': 'error',
+        '@typescript-eslint/no-useless-constructor': 'error',
       },
     },
   ],
