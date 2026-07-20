@@ -14,6 +14,7 @@ import ValidityManagement from '../ValidityManagement';
 import CorpusTest from '../CorpusTest';
 import ContentSecurity from '../ContentSecurity';
 import KnowledgeCandidates from '../KnowledgeCandidates';
+import DashboardQualityOverview from '../DashboardQualityOverview';
 
 /* ── 工作台内容（保持不变）── */
 const DashboardContent = () => (
@@ -41,6 +42,9 @@ const DashboardContent = () => (
         />
       </Tooltip>
     </Flex>
+
+    {/* 平台卡片 */}
+    <DashboardQualityOverview />
 
     {/* 平台卡片 */}
     <AppManager />

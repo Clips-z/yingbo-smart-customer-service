@@ -15,6 +15,7 @@ import {
   VStack,
   IconButton,
   Checkbox,
+  Select,
   useClipboard,
 } from '@chakra-ui/react';
 import {
@@ -32,8 +33,10 @@ import {
   saveQianniuSuggestionDraft,
   updateQianniuSuggestionStatus,
   recordReplyFeedback,
+  getSuggestionEvidence,
+  markSuggestionEvidence,
 } from '../../../common/services/platform/controller';
-import { QianniuReplyMode, ReplySuggestion } from '../../../common/services/platform/platform';
+import { QianniuReplyMode, ReplySuggestion, RetrievalEvidenceItem } from '../../../common/services/platform/platform';
 import {
   formatTime,
   getHealthColorScheme,
@@ -46,6 +49,7 @@ import {
 import BatchActionBar from './BatchActionBar';
 import { useReplyWorkbench } from './useReplyWorkbench';
 import { useToast } from '../../hooks/useToast';
+import { replyAgeMinutes, sortReplies } from './replyPriority';
 
 // ── 常量 ──────────────────────────────────────────
 const platformEmoji: Record<string, string> = {
@@ -135,6 +139,8 @@ const ConversationListItem = React.memo(
   }) => {
     const statusBorder = leftBorderColorMap[item.status] || 'gray.200';
     const pColor = platformColorMap[item.platform_id] || 'gray';
+    const ageMinutes = replyAgeMinutes(item);
+    const overdue = ['pending', 'failed'].includes(item.status) && ageMinutes >= 5;
 
     return (
       <Box
@@ -202,8 +208,9 @@ const ConversationListItem = React.memo(
             borderRadius="sm"
             flexShrink={0}
           >
-            {statusLabels[item.status]}
-          </Badge>
+              {statusLabels[item.status]}
+            </Badge>
+            {overdue && <Badge colorScheme="red" fontSize="9px">超时 {ageMinutes} 分钟</Badge>}
         </Flex>
       </Box>
     );
@@ -226,10 +233,18 @@ const ConversationDetail = React.memo(
     const initialContent = (item.draft_content || item.reply_content).slice(0, 300);
     const [content, setContent] = useState(initialContent);
     const [isWorking, setIsWorking] = useState(false);
+    const [evidence, setEvidence] = useState<RetrievalEvidenceItem[]>([]);
     const { onCopy, hasCopied } = useClipboard(content);
     const activeItemRef = React.useRef(item);
     const contentRef = React.useRef(initialContent);
     const lastPersistedRef = React.useRef({ id: item.id, content: initialContent });
+
+    React.useEffect(() => {
+      setEvidence([]);
+      if (item.retrieval_status && item.retrieval_status !== 'disabled') {
+        void getSuggestionEvidence(item.id).then(setEvidence).catch(() => setEvidence([]));
+      }
+    }, [item.id, item.retrieval_status]);
 
     contentRef.current = content;
 
@@ -403,6 +418,13 @@ const ConversationDetail = React.memo(
             <Text fontSize="11px" color="gray.400">
               {formatTime(item.created_at)}
             </Text>
+            <HStack mt={1} spacing={1} wrap="wrap">
+              {item.store_id && <Badge variant="outline" fontSize="9px">店铺 {item.store_id}</Badge>}
+              {item.product_title && <Badge variant="outline" fontSize="9px">{item.product_title}</Badge>}
+              {item.retrieval_status && <Badge colorScheme={item.retrieval_status === 'hit' ? 'green' : 'orange'} fontSize="9px">检索 {item.retrieval_status}</Badge>}
+              {item.risk_level && <Badge colorScheme={item.risk_level === 'high' ? 'red' : 'gray'} fontSize="9px">风险 {item.risk_level}</Badge>}
+              {item.ocr_confidence != null && <Badge variant="outline" fontSize="9px">OCR {Math.round(item.ocr_confidence * 100)}%</Badge>}
+            </HStack>
           </Box>
         </Flex>
 
@@ -450,6 +472,17 @@ const ConversationDetail = React.memo(
               </Box>
             </Box>
           </Flex>
+          {item.retrieval_status && item.retrieval_status !== 'disabled' && (
+            <Box borderWidth="1px" borderColor="blue.100" bg="blue.50" borderRadius="lg" p={3} mb={4}>
+              <Flex justify="space-between"><Text fontSize="11px" fontWeight="800" color="blue.700">回复依据</Text><Badge colorScheme={item.retrieval_status === 'hit' ? 'green' : 'orange'}>{item.retrieval_status}</Badge></Flex>
+              {evidence.length === 0 ? <Text mt={2} fontSize="xs" color="gray.500">没有可引用的知识片段，建议人工核对后再发送。</Text> : evidence.map((entry) => (
+                <Box key={entry.id} mt={2} pt={2} borderTopWidth="1px" borderColor="blue.100">
+                  <Flex gap={2} justify="space-between"><Text fontSize="xs" fontWeight="700">#{entry.rank} {entry.source}</Text><Button size="xs" variant="link" colorScheme="red" isDisabled={entry.relevance_feedback === 'irrelevant'} onClick={async () => { await markSuggestionEvidence(entry.id, false); setEvidence((rows) => rows.map((row) => row.id === entry.id ? { ...row, relevance_feedback: 'irrelevant' } : row)); }}>不相关</Button></Flex>
+                  <Text fontSize="xs" color="gray.600" mt={1} noOfLines={3}>{entry.content_excerpt}</Text>
+                </Box>
+              ))}
+            </Box>
+          )}
         </Box>
 
         {/* 底部：编辑区 + 操作按钮 */}
@@ -621,14 +654,33 @@ const ReplyWorkbench = () => {
 
   // 当前 tab 决定显示的列表数据
   const [tabKey, setTabKey] = useState<'all' | 'pending' | 'handled'>('all');
+  const [sortMode, setSortMode] = useState<'priority' | 'newest' | 'oldest'>('priority');
 
   const listData = useMemo(() => {
+    let source: ReplySuggestion[];
     switch (tabKey) {
-      case 'pending': return pending;
-      case 'handled': return handled;
-      default: return suggestions;
+      case 'pending': source = pending; break;
+      case 'handled': source = handled; break;
+      default: source = suggestions;
     }
-  }, [tabKey, suggestions, pending, handled]);
+    return sortReplies(source, sortMode);
+  }, [tabKey, suggestions, pending, handled, sortMode]);
+
+  React.useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || !listData.length) return;
+      if (!['j', 'k'].includes(event.key.toLowerCase())) return;
+      event.preventDefault();
+      const current = Math.max(0, listData.findIndex((item) => item.id === activeItemId));
+      const next = event.key.toLowerCase() === 'j'
+        ? Math.min(listData.length - 1, current + 1)
+        : Math.max(0, current - 1);
+      setActiveItemId(listData[next].id);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeItemId, listData]);
 
   // 自动选中第一条（当列表变化且当前选中不在列表中时）
   React.useEffect(() => {
@@ -855,6 +907,10 @@ const ReplyWorkbench = () => {
             </Button>
           );
         })}
+        <Select ml="auto" size="xs" w="130px" value={sortMode} onChange={(event) => setSortMode(event.target.value as typeof sortMode)} aria-label="回复排序">
+          <option value="priority">优先级排序</option><option value="newest">最新优先</option><option value="oldest">最早优先</option>
+        </Select>
+        <Text fontSize="10px" color="gray.400" alignSelf="center">J/K 切换</Text>
       </Flex>
 
       {/* 双栏布局：左列表 + 右详情 */}
