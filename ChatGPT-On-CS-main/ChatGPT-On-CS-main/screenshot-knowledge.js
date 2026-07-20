@@ -218,7 +218,15 @@ app.whenReady().then(async () => {
     if (!await win.webContents.executeJavaScript("document.querySelector('[role=alertdialog]')?.innerText.includes('清空已处理记录')")) throw new Error('clear handled confirmation not shown');
     await shot(win, 'ui-workbench-clear-confirm.png');
     if (!await clickByText(win, '取消')) throw new Error('clear handled confirmation cancel not found');
+    await wait(500);
+    if (await win.webContents.executeJavaScript("Boolean(document.querySelector('[role=alertdialog]'))")) throw new Error('clear handled confirmation did not close');
     console.log('✅ workbench confirmations');
+
+    const notificationClicked = await win.webContents.executeJavaScript("(function() { const el = document.querySelector('[aria-label=\"查看通知与待办\"]'); if (!el) return false; el.click(); return true; })()");
+    await wait(1000);
+    if (!notificationClicked || !await win.webContents.executeJavaScript("document.body.innerText.includes('今日待办') && !document.body.innerText.includes('回复工作台')")) throw new Error('notification shortcut did not open dashboard tasks');
+    await shot(win, 'ui-notification-tasks.png');
+    console.log('✅ notification shortcut');
 
     // 商品问答库 → 「添加商品」弹窗
     await nav(win, 'knowledge', 'product-qa');

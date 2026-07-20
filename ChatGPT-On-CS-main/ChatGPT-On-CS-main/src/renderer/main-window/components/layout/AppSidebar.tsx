@@ -6,10 +6,7 @@ import {
   FiBookOpen,
   FiShield,
   FiBarChart2,
-  FiStar,
-  FiBook,
   FiBell,
-  FiHelpCircle,
 } from 'react-icons/fi';
 
 /* ── 导航项定义 ── */
@@ -49,18 +46,8 @@ const MAIN_NAV: NavItem[] = [
   { key: 'dataview', label: '数据与统计', icon: <FiBarChart2 size={19} /> },
 ];
 
-/* 底部工具栏 */
-type BottomNavKey = 'favorites' | 'docs' | 'notifications' | 'help';
-
-const BOTTOM_NAV: Array<Omit<NavItem, 'key'> & { key: BottomNavKey }> = [
-  { key: 'favorites', label: '收藏', icon: <FiStar size={18} /> },
-  { key: 'docs', label: '文档', icon: <FiBook size={18} /> },
-  { key: 'notifications', label: '通知', icon: <FiBell size={18} /> },
-  { key: 'help', label: '帮助', icon: <FiHelpCircle size={18} /> },
-];
-
 interface AppSidebarProps {
-  activeSection: NavSection | null;       // null = 未选中任何（或选中底部工具项）
+  activeSection: NavSection | null;
   onNavigate: (section: NavSection) => void;
   /** 是否显示知识管理子侧栏 */
   showKnowledgeSub?: boolean;
@@ -181,67 +168,29 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
 
       {/* ── 底部工具栏 ── */}
       <Flex direction="column" pb={3} pt={2} gap={1}>
-        {BOTTOM_NAV.map((item) => (
-          <Tooltip
-            key={item.key}
-            label={item.label}
-            placement="right"
-            hasArrow
-            offset={[0, 8]}
-            openDelay={300}
+        <Tooltip label="通知与待办" placement="right" hasArrow offset={[0, 8]} openDelay={300}>
+          <Box
+            as="button"
+            aria-label="查看通知与待办"
+            display="flex"
+            alignItems="center"
+            justifyContent="center"
+            w="40px"
+            h="36px"
+            mx="auto"
+            borderRadius="lg"
+            transition="all 0.15s"
+            cursor="pointer"
+            outline="none"
+            bg="transparent"
+            color="gray.400"
+            _hover={{ bg: 'gray.100', color: 'gray.600' }}
+            _focusVisible={{ boxShadow: '0 0 0 2px rgba(66, 99, 235, 0.4)' }}
+            onClick={() => onNavigate('dashboard')}
           >
-            <Box
-              as="button"
-              display="flex"
-              alignItems="center"
-              justifyContent="center"
-              w="40px"
-              h="36px"
-              mx="auto"
-              borderRadius="lg"
-              transition="all 0.15s"
-              cursor="pointer"
-              outline="none"
-              bg="transparent"
-              color="gray.400"
-              _hover={{ bg: 'gray.100', color: 'gray.600' }}
-              _focusVisible={{
-                boxShadow: '0 0 0 2px rgba(66, 99, 235, 0.4)',
-              }}
-              onClick={() => {
-                if (item.key === 'notifications') {
-                  // TODO: 打开通知面板
-                }
-              }}
-            >
-              <Icon position="relative">
-                {item.icon}
-                {item.key === 'notifications' && (
-                  <Box
-                    position="absolute"
-                    top="-4px"
-                    right="-6px"
-                    bg="red.500"
-                    color="white"
-                    borderRadius="full"
-                    px={1}
-                    minW="16px"
-                    h="16px"
-                    fontSize="9px"
-                    fontWeight={800}
-                    display="flex"
-                    alignItems="center"
-                    justifyContent="center"
-                    lineHeight={1}
-                    boxShadow="0 1px 3px rgba(220, 38, 38, 0.4)"
-                  >
-                    99
-                  </Box>
-                )}
-              </Icon>
-            </Box>
-          </Tooltip>
-        ))}
+            <Icon><FiBell size={18} /></Icon>
+          </Box>
+        </Tooltip>
 
         {/* 用户头像 */}
         <Tooltip label="用户" placement="right" hasArrow offset={[0, 8]}>
