@@ -37,6 +37,7 @@ import {
   deleteEvaluationCase,
   EvaluationCaseItem,
   fetchEvaluationCases,
+  compareEvaluationVariants,
 } from '../../../common/services/knowledge/corpusTest';
 
 const SUGGESTED = [
@@ -120,6 +121,7 @@ const CorpusTest: React.FC = () => {
   const [summary, setSummary] = useState<EvaluationSummary | null>(null);
   const [savedCases, setSavedCases] = useState<EvaluationCaseItem[]>([]);
   const [editingCaseId, setEditingCaseId] = useState<string | undefined>();
+  const [comparison, setComparison] = useState<{ winner: string; variants: Array<{ name: string; hitRate: number; averageLatencyMs: number }> } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -227,6 +229,8 @@ const CorpusTest: React.FC = () => {
               <Button size="xs" flex="1" variant="outline" onClick={saveCase} isDisabled={!query.trim()}>保存为测试用例</Button>
               <Button size="xs" flex="1" variant="outline" onClick={runRegression}>运行回归集</Button>
             </Flex>
+            <Button mt={2} size="xs" w="full" variant="outline" colorScheme="purple" onClick={async () => setComparison(await compareEvaluationVariants())}>对比 Top3 / Top5 方案</Button>
+            {comparison && <Box mt={2} bg="purple.50" borderRadius="md" p={2}><Text fontSize="11px" fontWeight="700">建议：{comparison.winner}</Text>{comparison.variants.map((variant) => <Text key={variant.name} fontSize="10px">{variant.name}：命中 {variant.hitRate}% · {variant.averageLatencyMs}ms</Text>)}</Box>}
             {summary && (
               <Box mt={3} bg="green.50" borderRadius="md" p={2}>
                 <Text fontSize="11px" fontWeight="700">回归集 {summary.total} 条 · Hit@1 {summary.hitAt1}% · Hit@5 {summary.hitAt5}%</Text>

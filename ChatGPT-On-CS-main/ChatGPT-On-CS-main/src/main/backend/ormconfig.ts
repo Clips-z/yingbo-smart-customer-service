@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as crypto from 'crypto';
 
 // https://github.com/sql-js/sql.js/issues/183
 import sqlite from 'sqlite3';
@@ -34,11 +35,13 @@ import {
 import { TransferKeyword, initTransfer } from './entities/transfer';
 import { ReplaceKeyword, initReplace } from './entities/replace';
 import { initProductKnowledge } from './entities/productKnowledge';
-import { initStoreKnowledge } from './entities/storeKnowledge';
+import { initStoreKnowledge, checkAndAddFields as checkStoreKnowledgeFields } from './entities/storeKnowledge';
 import { initKnowledgeCandidate } from './entities/knowledgeCandidate';
 import { initReplyFeedback } from './entities/replyFeedback';
 import { initRetrievalEvidence } from './entities/retrievalEvidence';
 import { initEvaluationCase } from './entities/evaluationCase';
+import { initKnowledgeVersion } from './entities/knowledgeVersion';
+import { initAuditEvent } from './entities/auditEvent';
 
 // Get user's documents directory path
 // 支持通过环境变量重定向数据库目录（用于沙箱/CI 环境）
@@ -55,6 +58,24 @@ const LOGS_DIR = path.join(TEMP_DIR, 'logs');
 fs.mkdirSync(LOGS_DIR, { recursive: true });
 
 const DB_FILE_PATH = path.join(APP_DIR, 'msg.db');
+
+// 恢复在数据库连接建立前执行，避免覆盖正在使用的 SQLite 文件。
+const restoreMarker = path.join(APP_DIR, 'restore-pending.json');
+if (fs.existsSync(restoreMarker)) {
+  const request = JSON.parse(fs.readFileSync(restoreMarker, 'utf8'));
+  const backupDir = path.join(APP_DIR, 'backups');
+  const source = path.resolve(backupDir, path.basename(String(request.database || '')));
+  if (source.startsWith(`${path.resolve(backupDir)}${path.sep}`) && fs.existsSync(source)) {
+    const actual = crypto.createHash('sha256').update(fs.readFileSync(source)).digest('hex');
+    if (actual === request.sha256) {
+      if (fs.existsSync(DB_FILE_PATH)) {
+        fs.copyFileSync(DB_FILE_PATH, path.join(backupDir, `pre-restore-${Date.now()}.db`));
+      }
+      fs.copyFileSync(source, DB_FILE_PATH);
+    }
+  }
+  fs.unlinkSync(restoreMarker);
+}
 
 export const sequelize = new Sequelize({
   dialect: 'sqlite',
@@ -109,6 +130,8 @@ initKnowledgeCandidate(sequelize);
 initReplyFeedback(sequelize);
 initRetrievalEvidence(sequelize);
 initEvaluationCase(sequelize);
+initKnowledgeVersion(sequelize);
+initAuditEvent(sequelize);
 
 // 异步初始化和数据填充函数
 async function initDb(): Promise<void> {
@@ -332,6 +355,7 @@ export const databaseReady = (async () => {
       checkKeywordFields(sequelize),
       checkPluginFields(sequelize),
       checkReplySuggestionFields(sequelize),
+      checkStoreKnowledgeFields(sequelize),
     ]);
     await initDb();
     // 解密之前被 safeStorage 加密的 API key（一次性迁移）

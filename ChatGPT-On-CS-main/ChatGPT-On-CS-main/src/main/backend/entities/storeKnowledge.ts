@@ -13,6 +13,8 @@ export class StoreKnowledge extends Model {
   declare enabled: boolean;
   declare sync_status: 'pending' | 'synced' | 'failed';
   declare sync_error: string | null;
+  declare effective_at: Date | null;
+  declare expires_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -32,6 +34,8 @@ export function initStoreKnowledge(sequelize: Sequelize) {
       enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
       sync_status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pending' },
       sync_error: { type: DataTypes.STRING(500), allowNull: true },
+      effective_at: { type: DataTypes.DATE, allowNull: true },
+      expires_at: { type: DataTypes.DATE, allowNull: true },
       created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
       updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     },
@@ -47,4 +51,16 @@ export function initStoreKnowledge(sequelize: Sequelize) {
       ],
     },
   );
+}
+
+export async function checkAndAddFields(sequelize: Sequelize) {
+  const table = await StoreKnowledge.describe();
+  for (const name of ['effective_at', 'expires_at']) {
+    if (!table[name]) {
+      await sequelize.getQueryInterface().addColumn('n_store_knowledge', name, {
+        type: DataTypes.DATE,
+        allowNull: true,
+      });
+    }
+  }
 }

@@ -7,6 +7,8 @@ import {
   validateStoreKnowledgeInput,
 } from './knowledgeValidation';
 import { KnowledgeExportRecord } from './knowledgeExportService';
+import { KnowledgeVersion } from '../entities/knowledgeVersion';
+import { appendAuditEvent } from './auditService';
 
 const paging = (pageValue: unknown, pageSizeValue: unknown) => {
   const page = Math.max(1, Number(pageValue) || 1);
@@ -45,6 +47,8 @@ const storeJson = (item: StoreKnowledge) => ({
   enabled: item.enabled,
   syncStatus: item.sync_status,
   syncError: item.sync_error || undefined,
+  effectiveAt: item.effective_at?.toISOString() || undefined,
+  expiresAt: item.expires_at?.toISOString() || undefined,
   createdAt: item.created_at.toISOString(),
 });
 
@@ -55,6 +59,29 @@ export class KnowledgeService {
 
   setIndexer(indexer: (text: string, filename: string) => Promise<void>) {
     this.indexer = indexer;
+  }
+
+  private async recordVersion(
+    kind: 'store' | 'product',
+    item: StoreKnowledge | ProductKnowledge,
+    action: string,
+  ) {
+    const version = await KnowledgeVersion.count({
+      where: { knowledge_type: kind, knowledge_id: item.id },
+    }) + 1;
+    const snapshot = kind === 'store'
+      ? storeJson(item as StoreKnowledge)
+      : productJson(item as ProductKnowledge);
+    await KnowledgeVersion.create({
+      id: crypto.randomUUID(), knowledge_type: kind, knowledge_id: item.id,
+      version, action, snapshot, actor: 'local-admin', created_at: new Date(),
+    });
+    await appendAuditEvent({
+      action: `knowledge.${action}`,
+      entityType: `${kind}-knowledge`,
+      entityId: item.id,
+      payload: { version },
+    });
   }
 
   private async runSync(
@@ -126,6 +153,7 @@ export class KnowledgeService {
       updated_at: new Date(),
     });
     if (sync && item.on_sale) await this.syncProduct(item);
+    await this.recordVersion('product', item, 'create');
     return productJson(item);
   }
 
@@ -146,6 +174,7 @@ export class KnowledgeService {
       updated_at: new Date(),
     });
     if (item.on_sale) await this.syncProduct(item);
+    await this.recordVersion('product', item, 'update');
     return productJson(item);
   }
 
@@ -154,10 +183,14 @@ export class KnowledgeService {
       { on_sale: onSale, sync_status: 'pending', updated_at: new Date() },
       { where: { id: ids } },
     );
+    const items = await ProductKnowledge.findAll({ where: { id: ids } });
+    for (const item of items) await this.recordVersion('product', item, onSale ? 'enable' : 'disable');
     return updated;
   }
 
   async deleteProducts(ids: string[]) {
+    const items = await ProductKnowledge.findAll({ where: { id: ids } });
+    for (const item of items) await this.recordVersion('product', item, 'delete');
     return ProductKnowledge.destroy({ where: { id: ids } });
   }
 
@@ -194,10 +227,13 @@ export class KnowledgeService {
       shop_id: input.shopId,
       enabled: input.enabled,
       sync_status: 'pending',
+      effective_at: input.effectiveAt,
+      expires_at: input.expiresAt,
       created_at: new Date(),
       updated_at: new Date(),
     });
     if (sync && item.enabled) await this.syncStore(item);
+    await this.recordVersion('store', item, 'create');
     return storeJson(item);
   }
 
@@ -216,14 +252,92 @@ export class KnowledgeService {
       enabled: input.enabled,
       sync_status: 'pending',
       sync_error: null,
+      effective_at: input.effectiveAt,
+      expires_at: input.expiresAt,
       updated_at: new Date(),
     });
-    await this.syncStore(item);
+    if (item.enabled) await this.syncStore(item);
+    await this.recordVersion('store', item, 'update');
     return storeJson(item);
   }
 
   async deleteStoreKnowledge(id: string) {
+    const item = await StoreKnowledge.findByPk(id);
+    if (item) await this.recordVersion('store', item, 'delete');
     return StoreKnowledge.destroy({ where: { id } });
+  }
+
+  async listVersions(kind: 'store' | 'product', id: string) {
+    return KnowledgeVersion.findAll({
+      where: { knowledge_type: kind, knowledge_id: id },
+      order: [['version', 'DESC']],
+    });
+  }
+
+  async rollback(kind: 'store' | 'product', id: string, version: number) {
+    const saved = await KnowledgeVersion.findOne({
+      where: { knowledge_type: kind, knowledge_id: id, version },
+    });
+    if (!saved) throw new Error('知识版本不存在');
+    const snapshot: any = saved.snapshot;
+    if (kind === 'store') {
+      const item = await StoreKnowledge.findByPk(id);
+      if (!item) throw new Error('知识条目不存在');
+      const input = validateStoreKnowledgeInput(snapshot);
+      await item.update({
+        question: input.question, answer: input.answer,
+        related_questions: input.relatedQuestions, tags: input.tags,
+        stage: input.stage, match_type: input.matchType, shop_id: input.shopId,
+        enabled: input.enabled, sync_status: 'pending', sync_error: null, updated_at: new Date(),
+        effective_at: input.effectiveAt, expires_at: input.expiresAt,
+      });
+      if (item.enabled) await this.syncStore(item);
+      await this.recordVersion('store', item, `rollback-v${version}`);
+      return storeJson(item);
+    }
+    const item = await ProductKnowledge.findByPk(id);
+    if (!item) throw new Error('商品知识不存在');
+    const input = validateProductKnowledgeInput(snapshot);
+    await item.update({
+      name: input.name, platform_product_id: input.platformProductId,
+      barcode: input.barcode, shop_id: input.shopId, shop_name: input.shopName,
+      tags: input.tags, on_sale: input.onSale, sync_status: 'pending', sync_error: null,
+      updated_at: new Date(),
+    });
+    if (item.on_sale) await this.syncProduct(item);
+    await this.recordVersion('product', item, `rollback-v${version}`);
+    return productJson(item);
+  }
+
+  async previewStoreMerge(targetId: string, sourceId: string) {
+    const [target, source] = await Promise.all([
+      StoreKnowledge.findByPk(targetId), StoreKnowledge.findByPk(sourceId),
+    ]);
+    if (!target || !source || target.id === source.id) throw new Error('请选择两个不同的知识条目');
+    return {
+      target: storeJson(target), source: storeJson(source),
+      merged: {
+        ...storeJson(target),
+        relatedQuestions: [...new Set([...(target.related_questions || []), source.question, ...(source.related_questions || [])])],
+        tags: [...new Set([...(target.tags || []), ...(source.tags || [])])],
+      },
+    };
+  }
+
+  async mergeStoreKnowledge(targetId: string, sourceId: string) {
+    const preview = await this.previewStoreMerge(targetId, sourceId);
+    const target = await StoreKnowledge.findByPk(targetId) as StoreKnowledge;
+    const source = await StoreKnowledge.findByPk(sourceId) as StoreKnowledge;
+    await target.update({
+      related_questions: preview.merged.relatedQuestions,
+      tags: preview.merged.tags,
+      updated_at: new Date(),
+    });
+    await source.update({ enabled: false, updated_at: new Date() });
+    await this.syncStore(target);
+    await this.recordVersion('store', target, `merge-from-${sourceId}`);
+    await this.recordVersion('store', source, `merged-into-${targetId}`);
+    return { target: storeJson(target), source: storeJson(source) };
   }
 
   async retrySync(kind: 'product' | 'store', id: string) {

@@ -77,3 +77,11 @@ export async function runSavedEvaluation() {
   const response = await POST<{ data: EvaluationSummary }>('/api/v1/quality/evaluation/run', {});
   return response.data;
 }
+
+export async function compareEvaluationVariants() {
+  const response = await POST<{ data: { winner: string; variants: Array<{ name: string; topK: number; hitRate: number; averageLatencyMs: number }> } }>(
+    '/api/v1/quality/evaluation/compare',
+    { variantA: { name: '精确 Top3', topK: 3 }, variantB: { name: '召回 Top5', topK: 5 } },
+  );
+  return response.data;
+}

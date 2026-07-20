@@ -7,6 +7,8 @@ import { initStoreKnowledge } from '../../main/backend/entities/storeKnowledge';
 import { initProductKnowledge } from '../../main/backend/entities/productKnowledge';
 import { KnowledgeService } from '../../main/backend/services/knowledgeService';
 import { KnowledgeCandidateService } from '../../main/backend/services/knowledgeCandidateService';
+import { initKnowledgeVersion } from '../../main/backend/entities/knowledgeVersion';
+import { initAuditEvent } from '../../main/backend/entities/auditEvent';
 
 describe('KnowledgeCandidateService', () => {
   let database: Sequelize;
@@ -20,6 +22,8 @@ describe('KnowledgeCandidateService', () => {
     initKnowledgeCandidate(database);
     initStoreKnowledge(database);
     initProductKnowledge(database);
+    initKnowledgeVersion(database);
+    initAuditEvent(database);
     await database.sync();
     knowledge = new KnowledgeService(database);
     knowledge.setIndexer(async () => undefined);

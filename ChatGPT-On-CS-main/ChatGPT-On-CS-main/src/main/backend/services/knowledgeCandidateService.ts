@@ -4,6 +4,7 @@ import { KnowledgeCandidate } from '../entities/knowledgeCandidate';
 import { ReplyFeedback } from '../entities/replyFeedback';
 import { ReplySuggestion } from '../entities/replySuggestion';
 import { KnowledgeService } from './knowledgeService';
+import { appendAuditEvent } from './auditService';
 
 const clean = (value: unknown, max: number) =>
   String(value ?? '')
@@ -117,6 +118,7 @@ export class KnowledgeCandidateService {
       reviewed_at: new Date(),
       updated_at: new Date(),
     });
+    await appendAuditEvent({ action: 'candidate.approve', entityType: 'knowledge-candidate', entityId: item.id, payload: { approvedKnowledgeId: knowledge.id } });
     return { candidate: json(item), knowledge };
   }
 
@@ -129,6 +131,7 @@ export class KnowledgeCandidateService {
       reviewed_at: new Date(),
       updated_at: new Date(),
     });
+    await appendAuditEvent({ action: 'candidate.reject', entityType: 'knowledge-candidate', entityId: item.id, payload: { reason: item.rejection_reason } });
     return json(item);
   }
 }

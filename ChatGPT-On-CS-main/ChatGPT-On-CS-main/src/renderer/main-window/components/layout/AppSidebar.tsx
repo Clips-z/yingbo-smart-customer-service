@@ -28,7 +28,8 @@ export type KnowledgeSubKey =
   | 'store-kb'
   | 'industry-config'
   | 'validity'
-  | 'corpus-test';
+  | 'corpus-test'
+  | 'governance';
 
 export const KNOWLEDGE_SUB_ITEMS: { key: KnowledgeSubKey; label: string }[] = [
   { key: 'knowledge-candidates', label: '对话知识候选' },
@@ -37,6 +38,7 @@ export const KNOWLEDGE_SUB_ITEMS: { key: KnowledgeSubKey; label: string }[] = [
   { key: 'industry-config', label: '行业相关配置' },
   { key: 'validity', label: '时效管理' },
   { key: 'corpus-test', label: '问答语料测试' },
+  { key: 'governance', label: '治理与备份' },
 ];
 
 const MAIN_NAV: NavItem[] = [

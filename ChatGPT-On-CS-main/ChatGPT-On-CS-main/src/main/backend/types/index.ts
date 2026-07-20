@@ -29,7 +29,7 @@ export interface ReplyDTO {
   type: MessageType;
   source?: 'keyword' | 'llm' | 'default' | 'plugin' | 'error';
   safeToAutoSend?: boolean;
-  retrievalStatus?: 'disabled' | 'hit' | 'weak_hit' | 'no_hit' | 'fallback' | 'error';
+  retrievalStatus?: 'disabled' | 'hit' | 'weak_hit' | 'stale' | 'no_hit' | 'fallback' | 'error';
   retrievalEvidence?: Array<{
     knowledgeId?: string;
     source: string;

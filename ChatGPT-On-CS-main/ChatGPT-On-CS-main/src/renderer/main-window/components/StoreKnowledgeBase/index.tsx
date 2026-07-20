@@ -68,6 +68,11 @@ import {
   formatRelativeTime,
   retryStoreKnowledgeSync,
   bulkImportStoreKnowledge,
+  fetchStoreKnowledgeVersions,
+  rollbackStoreKnowledge,
+  KnowledgeVersionItem,
+  previewStoreKnowledgeMerge,
+  mergeStoreKnowledge,
 } from '../../../common/services/knowledge/storeKB';
 import {
   parseStoreImport,
@@ -85,6 +90,7 @@ const QAEditModal: React.FC<{
   onSubmit: (data: {
     question: string; answer: string; relatedQuestions: string[];
     stage: QAStage; tags: string[]; matchType: QAMatchType; enabled: boolean;
+    effectiveAt?: string; expiresAt?: string;
   }) => void;
 }> = ({ isOpen, editing, onClose, onSubmit }) => {
   const [question, setQuestion] = useState('');
@@ -94,6 +100,8 @@ const QAEditModal: React.FC<{
   const [tags, setTags] = useState('');
   const [matchType, setMatchType] = useState<QAMatchType>('exact');
   const [enabled, setEnabled] = useState(true);
+  const [effectiveAt, setEffectiveAt] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
 
   useEffect(() => {
     if (isOpen) {
@@ -104,6 +112,8 @@ const QAEditModal: React.FC<{
       setTags((editing?.tags ?? []).join('、'));
       setMatchType(editing?.matchType ?? 'exact');
       setEnabled(editing?.enabled !== false);
+      setEffectiveAt(editing?.effectiveAt?.slice(0, 16) ?? '');
+      setExpiresAt(editing?.expiresAt?.slice(0, 16) ?? '');
     }
   }, [isOpen, editing]);
 
@@ -157,6 +167,10 @@ const QAEditModal: React.FC<{
               <FormLabel fontSize="12px" color="gray.600" mb={1}>标签（顿号分隔，选填）</FormLabel>
               <Input size="sm" borderRadius="lg" placeholder="如：物流、退换" value={tags} onChange={(e) => setTags(e.target.value)} bg="gray.50" borderColor="gray.200" />
             </FormControl>
+            <Flex gap={3}>
+              <FormControl><FormLabel fontSize="12px" color="gray.600" mb={1}>生效时间（选填）</FormLabel><Input size="sm" type="datetime-local" value={effectiveAt} onChange={(e) => setEffectiveAt(e.target.value)} /></FormControl>
+              <FormControl><FormLabel fontSize="12px" color="gray.600" mb={1}>失效时间（选填）</FormLabel><Input size="sm" type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} /></FormControl>
+            </Flex>
           </VStack>
         </ModalBody>
         <ModalFooter>
@@ -166,6 +180,8 @@ const QAEditModal: React.FC<{
               question: question.trim(), answer: answer.trim(),
               relatedQuestions: relatedQuestions.split('\n').map((s) => s.trim()).filter(Boolean),
               stage, tags: tags.split('、').map((s) => s.trim()).filter(Boolean), matchType, enabled,
+              effectiveAt: effectiveAt ? new Date(effectiveAt).toISOString() : undefined,
+              expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
             })}
             borderRadius="lg"
             bgGradient="linear-gradient(135deg, #4A5BB3, #3866D4)"
@@ -187,9 +203,11 @@ const QAListItem: React.FC<{
   onEdit: (item: QAItem) => void;
   onRequestDelete: (item: QAItem) => void;
   onRetrySync: (id: string) => void;
-}> = ({ item, selected, defaultExpanded = false, onToggleSelect, onEdit, onRequestDelete, onRetrySync }) => {
+  onRollback: (id: string, version: number) => void;
+}> = ({ item, selected, defaultExpanded = false, onToggleSelect, onEdit, onRequestDelete, onRetrySync, onRollback }) => {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [checked, setChecked] = useState(false);
+  const [versions, setVersions] = useState<KnowledgeVersionItem[] | null>(null);
 
   return (
     <Box border="1px solid" borderColor={selected ? 'brand.300' : 'gray.150'} bg={selected ? 'brand.50' : 'white'} borderRadius="lg" mb={2} overflow="hidden" transition="all 0.15s" _hover={{ borderColor: 'brand.200' }}>
@@ -238,6 +256,9 @@ const QAListItem: React.FC<{
               {item.relatedQuestions.map((rq, i) => (<Text key={i} fontSize="12px" color="brand.600" _hover={{ textDecoration: 'underline', cursor: 'pointer' }} mb={0.5}>· {rq}</Text>))}
             </Box>
           )}
+          {(item.effectiveAt || item.expiresAt) && <Text mt={2} fontSize="11px" color="orange.600">有效期：{item.effectiveAt ? new Date(item.effectiveAt).toLocaleString('zh-CN') : '立即'} ～ {item.expiresAt ? new Date(item.expiresAt).toLocaleString('zh-CN') : '长期'}</Text>}
+          <Button mt={2} size="xs" variant="outline" onClick={async () => setVersions(versions ? null : await fetchStoreKnowledgeVersions(item.id))}>{versions ? '收起版本' : '查看版本历史'}</Button>
+          {versions && <VStack mt={2} align="stretch" spacing={1}>{versions.map((version) => <Flex key={version.id} bg="gray.50" p={2} borderRadius="md" align="center" gap={2}><Text fontSize="xs" flex="1">v{version.version} · {version.action} · {new Date(version.created_at).toLocaleString('zh-CN')}</Text><Button size="xs" variant="link" onClick={() => onRollback(item.id, version.version)}>回滚</Button></Flex>)}</VStack>}
         </Box>
       </Collapse>
     </Box>
@@ -366,7 +387,7 @@ const StoreKnowledgeBase: React.FC = () => {
   const openAdd = () => { setEditing(null); modalOnOpen(); };
   const openEdit = (item: QAItem) => { setEditing(item); modalOnOpen(); };
 
-  const handleSubmit = async (data: { question: string; answer: string; relatedQuestions: string[]; stage: QAStage; tags: string[]; matchType: QAMatchType; enabled: boolean }) => {
+  const handleSubmit = async (data: { question: string; answer: string; relatedQuestions: string[]; stage: QAStage; tags: string[]; matchType: QAMatchType; enabled: boolean; effectiveAt?: string; expiresAt?: string }) => {
     if (editing) {
       await updateQA(editing.id, data);
       toast({ title: '已保存修改', status: 'success', duration: 1800, isClosest: true });
@@ -377,6 +398,24 @@ const StoreKnowledgeBase: React.FC = () => {
     modalOnClose();
     setPage(1);
     await loadData();
+  };
+
+  const handleRollback = async (id: string, version: number) => {
+    if (!window.confirm(`确定回滚到 v${version}？当前内容仍会保留为新版本。`)) return;
+    await rollbackStoreKnowledge(id, version);
+    await loadData();
+    toast({ title: `已回滚到 v${version}`, status: 'success' });
+  };
+
+  const handleMerge = async () => {
+    const [targetId, sourceId] = [...selectedIds];
+    if (!targetId || !sourceId) return;
+    const preview = await previewStoreKnowledgeMerge(targetId, sourceId);
+    if (!window.confirm(`将「${preview.source.question}」合并到「${preview.target.question}」？来源条目会停用，可通过版本历史追溯。`)) return;
+    await mergeStoreKnowledge(targetId, sourceId);
+    setSelectedIds(new Set());
+    await loadData();
+    toast({ title: '知识条目已合并', status: 'success' });
   };
 
   const confirmDelete = async () => {
@@ -436,7 +475,7 @@ const StoreKnowledgeBase: React.FC = () => {
             <Text fontSize="18px" fontWeight={800} color="gray.800" letterSpacing="-0.01em">店铺知识库</Text>
             <Text fontSize="12.5px" color="gray.400" mt={0.5}>管理店铺级问答知识，自动学习客服历史对话</Text>
           </Box>
-          {selectedIds.size > 0 && <Badge colorScheme="brand" borderRadius="full" px={2}>已选 {selectedIds.size} 项</Badge>}
+          <HStack>{selectedIds.size > 0 && <Badge colorScheme="brand" borderRadius="full" px={2}>已选 {selectedIds.size} 项</Badge>}{selectedIds.size === 2 && <Button size="xs" colorScheme="purple" onClick={handleMerge}>预览并合并</Button>}</HStack>
         </Flex>
 
         <Box flex="1" minH="0" overflowY="auto" pr={1}>
@@ -450,7 +489,7 @@ const StoreKnowledgeBase: React.FC = () => {
           ) : (
             <VStack spacing={0} align="stretch">
               {items.map((it) => (
-                <QAListItem key={it.id} item={it} selected={selectedIds.has(it.id)} onToggleSelect={(id, checked) => setSelectedIds((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; })} onEdit={openEdit} onRequestDelete={(item) => { setPendingDelete(item); delOnOpen(); }} onRetrySync={retrySync} />
+                <QAListItem key={it.id} item={it} selected={selectedIds.has(it.id)} onToggleSelect={(id, checked) => setSelectedIds((prev) => { const n = new Set(prev); checked ? n.add(id) : n.delete(id); return n; })} onEdit={openEdit} onRequestDelete={(item) => { setPendingDelete(item); delOnOpen(); }} onRetrySync={retrySync} onRollback={handleRollback} />
               ))}
             </VStack>
           )}

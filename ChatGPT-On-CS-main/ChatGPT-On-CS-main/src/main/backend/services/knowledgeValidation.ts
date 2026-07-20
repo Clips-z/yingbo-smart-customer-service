@@ -37,6 +37,11 @@ export function validateStoreKnowledgeInput(input: any) {
     throw new KnowledgeValidationError('无效的业务阶段');
   if (!['exact', 'fuzzy'].includes(matchType))
     throw new KnowledgeValidationError('无效的匹配方式');
+  const effectiveAt = text(input.effectiveAt) ? new Date(input.effectiveAt) : null;
+  const expiresAt = text(input.expiresAt) ? new Date(input.expiresAt) : null;
+  if (effectiveAt && Number.isNaN(effectiveAt.getTime())) throw new KnowledgeValidationError('生效时间无效');
+  if (expiresAt && Number.isNaN(expiresAt.getTime())) throw new KnowledgeValidationError('失效时间无效');
+  if (effectiveAt && expiresAt && expiresAt <= effectiveAt) throw new KnowledgeValidationError('失效时间必须晚于生效时间');
   return {
     question: required(input.question, '问题', 1000),
     answer: required(input.answer, '回复', 5000),
@@ -46,5 +51,7 @@ export function validateStoreKnowledgeInput(input: any) {
     matchType: matchType as 'exact' | 'fuzzy',
     shopId: required(input.shopId, '店铺', 100),
     enabled: input.enabled !== false,
+    effectiveAt,
+    expiresAt,
   };
 }

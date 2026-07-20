@@ -15,6 +15,7 @@ import CorpusTest from '../CorpusTest';
 import ContentSecurity from '../ContentSecurity';
 import KnowledgeCandidates from '../KnowledgeCandidates';
 import DashboardQualityOverview from '../DashboardQualityOverview';
+import KnowledgeGovernance from '../KnowledgeGovernance';
 
 /* ── 工作台内容（保持不变）── */
 const DashboardContent = () => (
@@ -162,6 +163,8 @@ const MainLayout = () => {
                     return <ValidityManagement />;
                   case 'corpus-test':
                     return <CorpusTest />;
+                  case 'governance':
+                    return <KnowledgeGovernance />;
                   default:
                     return (
                       <PlaceholderView
@@ -193,6 +196,7 @@ const KNOWLEDGE_SUB_LABELS: Record<KnowledgeSubKey, string> = {
   'industry-config': '行业相关配置',
   validity: '时效管理',
   'corpus-test': '问答语料测试',
+  governance: '治理与备份',
 };
 
 export default MainLayout;

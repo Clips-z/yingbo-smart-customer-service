@@ -17,7 +17,10 @@ export interface QAItem {
   enabled?: boolean;
   syncStatus?: 'pending' | 'synced' | 'failed';
   syncError?: string;
+  effectiveAt?: string;
+  expiresAt?: string;
 }
+export interface KnowledgeVersionItem { id: string; version: number; action: string; actor: string; snapshot: QAItem; created_at: string }
 export interface QAListParams {
   keyword?: string;
   stage?: QAStage | 'all';
@@ -59,6 +62,25 @@ export async function retryStoreKnowledgeSync(id: string) {
     id,
   });
   return response.data;
+}
+
+export async function fetchStoreKnowledgeVersions(id: string) {
+  const response = await GET<{ data: KnowledgeVersionItem[] }>(`/api/v1/knowledge/store/${id}/versions`);
+  return response.data;
+}
+
+export async function rollbackStoreKnowledge(id: string, version: number) {
+  const response = await POST<{ data: QAItem }>('/api/v1/knowledge/versions/rollback', { kind: 'store', id, version });
+  return response.data;
+}
+
+export async function previewStoreKnowledgeMerge(targetId: string, sourceId: string) {
+  const response = await POST<{ data: { target: QAItem; source: QAItem; merged: QAItem } }>('/api/v1/knowledge/store-qa/merge/preview', { targetId, sourceId });
+  return response.data;
+}
+
+export async function mergeStoreKnowledge(targetId: string, sourceId: string) {
+  await POST('/api/v1/knowledge/store-qa/merge', { targetId, sourceId });
 }
 
 export async function bulkImportStoreKnowledge(rows: Array<Record<string, unknown>>) {

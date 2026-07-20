@@ -6,6 +6,8 @@ import { Sequelize } from 'sequelize';
 import { initProductKnowledge } from '../../main/backend/entities/productKnowledge';
 import { initStoreKnowledge } from '../../main/backend/entities/storeKnowledge';
 import { KnowledgeService } from '../../main/backend/services/knowledgeService';
+import { initKnowledgeVersion } from '../../main/backend/entities/knowledgeVersion';
+import { initAuditEvent } from '../../main/backend/entities/auditEvent';
 
 describe('KnowledgeService persistence', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'yingbo-kb-test-'));
@@ -15,6 +17,8 @@ describe('KnowledgeService persistence', () => {
     const sequelize = new Sequelize({ dialect: 'sqlite', dialectModule: sqlite, storage, logging: false });
     initProductKnowledge(sequelize);
     initStoreKnowledge(sequelize);
+    initKnowledgeVersion(sequelize);
+    initAuditEvent(sequelize);
     await sequelize.sync();
     return sequelize;
   };

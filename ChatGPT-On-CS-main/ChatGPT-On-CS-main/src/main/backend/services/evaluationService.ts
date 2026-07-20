@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { EvaluationCase } from '../entities/evaluationCase';
 import { StoreKnowledge } from '../entities/storeKnowledge';
 import { RagSearchItem } from './ragService';
+import { appendAuditEvent } from './auditService';
 
 type Searcher = (query: string, topK?: number) => Promise<RagSearchItem[]>;
 
@@ -102,5 +103,35 @@ export class EvaluationService {
       p95LatencyMs: percentile95(rows.map((row) => row.latencyMs)),
       rows,
     };
+  }
+
+  async compareVariants(body: any = {}) {
+    const cases = await EvaluationCase.findAll({ where: { enabled: true } });
+    const variants = [
+      { name: String(body.variantA?.name || '当前方案'), topK: Math.min(20, Math.max(1, Number(body.variantA?.topK) || 3)) },
+      { name: String(body.variantB?.name || '候选方案'), topK: Math.min(20, Math.max(1, Number(body.variantB?.topK) || 5)) },
+    ];
+    const results = [];
+    for (const variant of variants) {
+      let hits = 0;
+      let latency = 0;
+      for (const item of cases) {
+        const started = Date.now();
+        const found = await this.searcher(item.question, variant.topK);
+        latency += Date.now() - started;
+        const expected = item.expected_knowledge_ids || [];
+        const ids = found.map((row) => row.knowledgeId).filter(Boolean) as string[];
+        if (expected.length ? ids.some((id) => expected.includes(id)) : ids.length > 0) hits += 1;
+      }
+      results.push({
+        ...variant,
+        total: cases.length,
+        hitRate: cases.length ? Math.round(hits / cases.length * 1000) / 10 : 0,
+        averageLatencyMs: cases.length ? Math.round(latency / cases.length) : 0,
+      });
+    }
+    const winner = results[1].hitRate > results[0].hitRate ? results[1].name : results[0].name;
+    await appendAuditEvent({ action: 'evaluation.compare', entityType: 'evaluation', entityId: new Date().toISOString(), payload: { results, winner } });
+    return { variants: results, winner };
   }
 }

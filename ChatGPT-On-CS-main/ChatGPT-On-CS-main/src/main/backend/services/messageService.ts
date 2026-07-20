@@ -9,6 +9,7 @@ import {
   LLMConfig,
 } from '../types';
 import { Config } from '../entities/config';
+import { StoreKnowledge } from '../entities/storeKnowledge';
 
 import {
   CTX_APP_ID,
@@ -779,7 +780,7 @@ export class MessageService {
     messages: MessageDTO[],
   ): Promise<{
     content: string;
-    status: 'hit' | 'weak_hit' | 'no_hit' | 'error';
+    status: 'hit' | 'weak_hit' | 'stale' | 'no_hit' | 'error';
     evidence: NonNullable<ReplyDTO['retrievalEvidence']>;
   }> {
     try {
@@ -797,7 +798,23 @@ export class MessageService {
         timeout: 10000,
       });
 
-      const results = response.data?.results || [];
+      const rawResults = response.data?.results || [];
+      const storeIds = rawResults.map((item: any) =>
+        String(item.source || item.metadata?.source || '').match(/store-qa-([\w-]+)\.txt$/)?.[1],
+      ).filter(Boolean);
+      const currentKnowledge = storeIds.length
+        ? await StoreKnowledge.findAll({ where: { id: storeIds } })
+        : [];
+      const validIds = new Set(currentKnowledge.filter((item) => {
+        const now = Date.now();
+        return item.enabled && (!item.effective_at || item.effective_at.getTime() <= now)
+          && (!item.expires_at || item.expires_at.getTime() > now);
+      }).map((item) => item.id));
+      const results = rawResults.filter((item: any) => {
+        const id = String(item.source || item.metadata?.source || '').match(/store-qa-([\w-]+)\.txt$/)?.[1];
+        return !id || validIds.has(id);
+      });
+      if (rawResults.length && !results.length) return { content: '', status: 'stale', evidence: [] };
       if (!results.length) return { content: '', status: 'no_hit', evidence: [] };
 
       // 使用完整内容（full_content 优先，回退到 content）

@@ -53,6 +53,9 @@ import {
 import { ReplySuggestion } from './entities/replySuggestion';
 import { KnowledgeCandidateService } from './services/knowledgeCandidateService';
 import { EvaluationService } from './services/evaluationService';
+import { BackupService } from './services/backupService';
+import { listAuditEvents } from './services/auditService';
+import { replaySanitizedFixtures } from './services/replayService';
 import { CompanionContextRegistry } from './services/companionContextRegistry';
 import {
   CTX_APP_ID,
@@ -96,6 +99,8 @@ class BKServer {
 
   private evaluationService: EvaluationService;
 
+  private backupService: BackupService;
+
   private qianniuCompatService: QianniuCompatService;
 
   private wechatSidecarService: WechatSidecarService;
@@ -131,6 +136,18 @@ class BKServer {
         origin: true,
       }),
     );
+    this.app.use((req, res, next) => {
+      const role = String(req.get('x-local-role') || 'admin');
+      if (
+        role === 'viewer' &&
+        req.method !== 'GET' &&
+        /^\/api\/v1\/(knowledge|quality|governance)\//.test(req.path)
+      ) {
+        res.status(403).json({ success: false, message: '当前为只读角色，不能修改知识或治理数据' });
+        return;
+      }
+      next();
+    });
     this.port = port;
 
     this.server = http.createServer(this.app);
@@ -202,6 +219,7 @@ class BKServer {
     this.evaluationService = new EvaluationService((query, topK) =>
       this.ragService.search(query, topK),
     );
+    this.backupService = new BackupService(sequelize);
     this.knowledgeService.setIndexer((text, filename) =>
       this.ragService.uploadText(text, filename),
     );
@@ -388,6 +406,58 @@ class BKServer {
         res.json({ success: true, data: await this.evaluationService.runCases() });
       }),
     );
+    this.app.post(
+      '/api/v1/quality/evaluation/compare',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.evaluationService.compareVariants(req.body) });
+      }),
+    );
+    this.app.post('/api/v1/quality/replay', (req, res) => {
+      const rows = replaySanitizedFixtures(req.body.fixtures);
+      res.json({ success: true, data: { rows, passed: rows.filter((row) => row.passed).length, total: rows.length } });
+    });
+    this.app.get(
+      '/api/v1/governance/audit',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await listAuditEvents(Number(req.query.limit) || 200) });
+      }),
+    );
+    this.app.get(
+      '/api/v1/knowledge/:kind/:id/versions',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.listVersions(req.params.kind as 'store' | 'product', req.params.id) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/versions/rollback',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.rollback(req.body.kind, String(req.body.id || ''), Number(req.body.version)) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/store-qa/merge/preview',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.previewStoreMerge(String(req.body.targetId || ''), String(req.body.sourceId || '')) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/store-qa/merge',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.mergeStoreKnowledge(String(req.body.targetId || ''), String(req.body.sourceId || '')) });
+      }),
+    );
+    this.app.post('/api/v1/governance/backups/create', asyncHandler(async (_req, res) => {
+      res.json({ success: true, data: await this.backupService.create() });
+    }));
+    this.app.get('/api/v1/governance/backups', asyncHandler(async (_req, res) => {
+      res.json({ success: true, data: await this.backupService.list() });
+    }));
+    this.app.post('/api/v1/governance/backups/verify', asyncHandler(async (req, res) => {
+      res.json({ success: true, data: await this.backupService.verify(String(req.body.id || '')) });
+    }));
+    this.app.post('/api/v1/governance/backups/restore', asyncHandler(async (req, res) => {
+      res.json({ success: true, data: await this.backupService.scheduleRestore(String(req.body.id || '')) });
+    }));
 
     this.app.get('/', (req, res) => {
       res.type('html').send(`
