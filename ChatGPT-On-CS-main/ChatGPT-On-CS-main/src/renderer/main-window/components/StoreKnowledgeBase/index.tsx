@@ -350,7 +350,6 @@ const ActionTile: React.FC<{ icon: React.ElementType; label: string; onClick: ()
 const StoreKnowledgeBase: React.FC = () => {
   const toast = useToast();
   const { isOpen: modalOpen, onOpen: modalOnOpen, onClose: modalOnClose } = useDisclosure();
-  const { isOpen: delOpen, onOpen: delOnOpen, onClose: delOnClose } = useDisclosure();
   const cancelRef = React.useRef<HTMLButtonElement>(null);
   const [keyword, setKeyword] = useState('');
   const [shop, setShop] = useState('all');
@@ -359,7 +358,12 @@ const StoreKnowledgeBase: React.FC = () => {
   const [pageSize] = useState(20);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<QAItem | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<QAItem | null>(null);
+  const [confirmation, setConfirmation] = useState<{
+    title: string;
+    description: string;
+    confirmLabel: string;
+    action: () => Promise<void>;
+  } | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<QAItem[]>([]);
@@ -401,31 +405,53 @@ const StoreKnowledgeBase: React.FC = () => {
     await loadData();
   };
 
-  const handleRollback = async (id: string, version: number) => {
-    if (!window.confirm(`确定回滚到 v${version}？当前内容仍会保留为新版本。`)) return;
-    await rollbackStoreKnowledge(id, version);
-    await loadData();
-    toast({ title: `已回滚到 v${version}`, status: 'success' });
+  const handleRollback = (id: string, version: number) => {
+    setConfirmation({
+      title: `回滚到 v${version}？`,
+      description: '当前内容仍会保留为新版本，可继续通过版本历史追溯。',
+      confirmLabel: '确认回滚',
+      action: async () => {
+        await rollbackStoreKnowledge(id, version);
+        await loadData();
+        toast({ title: `已回滚到 v${version}`, status: 'success' });
+      },
+    });
   };
 
   const handleMerge = async () => {
     const [targetId, sourceId] = [...selectedIds];
     if (!targetId || !sourceId) return;
     const preview = await previewStoreKnowledgeMerge(targetId, sourceId);
-    if (!window.confirm(`将「${preview.source.question}」合并到「${preview.target.question}」？来源条目会停用，可通过版本历史追溯。`)) return;
-    await mergeStoreKnowledge(targetId, sourceId);
-    setSelectedIds(new Set());
-    await loadData();
-    toast({ title: '知识条目已合并', status: 'success' });
+    setConfirmation({
+      title: '合并这两条知识？',
+      description: `将「${preview.source.question}」合并到「${preview.target.question}」。来源条目会停用，可通过版本历史追溯。`,
+      confirmLabel: '确认合并',
+      action: async () => {
+        await mergeStoreKnowledge(targetId, sourceId);
+        setSelectedIds(new Set());
+        await loadData();
+        toast({ title: '知识条目已合并', status: 'success' });
+      },
+    });
   };
 
-  const confirmDelete = async () => {
-    if (!pendingDelete) return;
-    await deleteQA(pendingDelete.id);
-    delOnClose();
-    setPendingDelete(null);
-    await loadData();
-    toast({ title: '已删除该问答', status: 'warning', duration: 1800, isClosable: true });
+  const requestDelete = (item: QAItem) => {
+    setConfirmation({
+      title: '确认删除？',
+      description: `将删除问答「${item.question.slice(0, 20)}…」及其关联配置，此操作不可撤销。`,
+      confirmLabel: '确认删除',
+      action: async () => {
+        await deleteQA(item.id);
+        await loadData();
+        toast({ title: '已删除该问答', status: 'warning', duration: 1800, isClosable: true });
+      },
+    });
+  };
+
+  const runConfirmedAction = async () => {
+    const action = confirmation?.action;
+    setConfirmation(null);
+    await action?.();
   };
 
   const retrySync = async (id: string) => {
@@ -490,7 +516,7 @@ const StoreKnowledgeBase: React.FC = () => {
           ) : (
             <VStack spacing={0} align="stretch">
               {items.map((it) => (
-                <QAListItem key={it.id} item={it} selected={selectedIds.has(it.id)} onToggleSelect={(id, checked) => setSelectedIds((prev) => { const n = new Set(prev); if (checked) n.add(id); else n.delete(id); return n; })} onEdit={openEdit} onRequestDelete={(item) => { setPendingDelete(item); delOnOpen(); }} onRetrySync={retrySync} onRollback={handleRollback} />
+                <QAListItem key={it.id} item={it} selected={selectedIds.has(it.id)} onToggleSelect={(id, checked) => setSelectedIds((prev) => { const n = new Set(prev); if (checked) n.add(id); else n.delete(id); return n; })} onEdit={openEdit} onRequestDelete={requestDelete} onRetrySync={retrySync} onRollback={handleRollback} />
               ))}
             </VStack>
           )}
@@ -535,16 +561,16 @@ const StoreKnowledgeBase: React.FC = () => {
         </ModalContent>
       </Modal>
 
-      <AlertDialog isOpen={delOpen} leastDestructiveRef={cancelRef} onClose={delOnClose} isCentered>
+      <AlertDialog isOpen={Boolean(confirmation)} leastDestructiveRef={cancelRef} onClose={() => setConfirmation(null)} isCentered>
         <AlertDialogOverlay bg="blackAlpha.300" />
         <AlertDialogContent borderRadius="xl">
-          <AlertDialogHeader fontSize="15px" fontWeight={800}>确认删除</AlertDialogHeader>
+          <AlertDialogHeader fontSize="15px" fontWeight={800}>{confirmation?.title}</AlertDialogHeader>
           <AlertDialogBody fontSize="13px" color="gray.600">
-            将删除问答「{pendingDelete?.question.slice(0, 20)}…」及其关联配置，此操作不可撤销。
+            {confirmation?.description}
           </AlertDialogBody>
           <AlertDialogFooter>
-            <Button ref={cancelRef} size="sm" variant="ghost" onClick={delOnClose} borderRadius="lg">取消</Button>
-            <Button size="sm" colorScheme="red" ml={2} onClick={confirmDelete} borderRadius="lg">确认删除</Button>
+            <Button ref={cancelRef} size="sm" variant="ghost" onClick={() => setConfirmation(null)} borderRadius="lg">取消</Button>
+            <Button size="sm" colorScheme="red" ml={2} onClick={runConfirmedAction} borderRadius="lg">{confirmation?.confirmLabel}</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

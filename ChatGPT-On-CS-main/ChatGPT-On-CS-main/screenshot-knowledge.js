@@ -61,6 +61,14 @@ const server = http.createServer((req, res) => {
     hasMouseClose: true, hasEscClose: true, hasTransfer: true, hasReplace: true,
   }};
   else if (url.includes('/api/v1/knowledge/products')) mockData = MOCK_RESPONSES['/api/v1/knowledge/products'];
+  else if (url.includes('/api/v1/knowledge/store/q1/versions')) mockData = { success: true, data: [
+    { id: 'version-1', version: 2, action: 'update', created_at: new Date().toISOString() },
+  ] };
+  else if (url.includes('/api/v1/knowledge/store-qa/merge/preview')) mockData = { success: true, data: {
+    target: MOCK_RESPONSES['/api/v1/knowledge/store-qa'].data.list[0],
+    source: MOCK_RESPONSES['/api/v1/knowledge/store-qa'].data.list[1],
+    merged: MOCK_RESPONSES['/api/v1/knowledge/store-qa'].data.list[0],
+  } };
   else if (url.includes('/api/v1/knowledge/store-qa')) mockData = MOCK_RESPONSES['/api/v1/knowledge/store-qa'];
   else if (url.includes('/api/v1/knowledge/candidates')) mockData = MOCK_RESPONSES['/api/v1/knowledge/candidates'];
   else if (url.includes('/api/v1/governance/backups')) mockData = MOCK_RESPONSES['/api/v1/governance/backups'];
@@ -223,6 +231,33 @@ app.whenReady().then(async () => {
     // 店铺知识库 → 「新增问答」弹窗
     await nav(win, 'knowledge', 'store-kb');
     await wait(2000);
+
+    await win.webContents.executeJavaScript("document.querySelector('[aria-label=删除]')?.click()");
+    await wait(300);
+    if (!await win.webContents.executeJavaScript("document.querySelector('[role=alertdialog]')?.innerText.includes('确认删除')")) throw new Error('store delete confirmation not shown');
+    if (!await clickByText(win, '取消')) throw new Error('store delete confirmation cancel not found');
+    await wait(500);
+
+    await win.webContents.executeJavaScript("Array.from(document.querySelectorAll('input[type=checkbox]')).slice(0, 2).forEach(function(el) { el.click(); })");
+    await wait(300);
+    if (!await clickByText(win, '预览并合并')) throw new Error('store merge button not found');
+    await wait(500);
+    if (!await win.webContents.executeJavaScript("document.querySelector('[role=alertdialog]')?.innerText.includes('合并这两条知识')")) throw new Error('store merge confirmation not shown');
+    await shot(win, 'ui-store-merge-confirm.png');
+    if (!await clickByText(win, '取消')) throw new Error('store merge confirmation cancel not found');
+    await wait(500);
+
+    await win.webContents.executeJavaScript("Array.from(document.querySelectorAll('*')).find(function(el) { return el.children.length === 0 && el.textContent === '产品支持几天无理由退换？'; })?.click()");
+    await wait(300);
+    if (!await clickByText(win, '查看版本历史')) throw new Error('store version history button not found');
+    await wait(500);
+    if (!await clickByText(win, '回滚')) throw new Error('store rollback button not found');
+    await wait(300);
+    if (!await win.webContents.executeJavaScript("document.querySelector('[role=alertdialog]')?.innerText.includes('回滚到 v2')")) throw new Error('store rollback confirmation not shown');
+    await shot(win, 'ui-store-rollback-confirm.png');
+    if (!await clickByText(win, '取消')) throw new Error('store rollback confirmation cancel not found');
+    await wait(500);
+
     await clickByText(win, '新增问答');
     await wait(1500);
     await shot(win, 'ui-store-add.png');
