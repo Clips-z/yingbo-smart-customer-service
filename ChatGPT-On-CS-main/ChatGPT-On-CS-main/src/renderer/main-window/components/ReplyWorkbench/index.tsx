@@ -1,6 +1,12 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useRef, useState, useCallback } from 'react';
 import {
   Alert,
+  AlertDialog,
+  AlertDialogBody,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogOverlay,
   AlertIcon,
   Badge,
   Box,
@@ -652,6 +658,56 @@ const ReplyWorkbench = () => {
     emergencyStop,
   } = useReplyWorkbench();
 
+  const cancelConfirmationRef = useRef<HTMLButtonElement>(null);
+  const [confirmation, setConfirmation] = useState<{
+    title: string;
+    description: string;
+    confirmLabel: string;
+    action: () => Promise<void>;
+  } | null>(null);
+
+  const confirmBatchDelete = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    setConfirmation({
+      title: '删除选中记录？',
+      description: `确定要删除选中的 ${selectedIds.size} 条记录吗？删除后无法恢复。`,
+      confirmLabel: '确认删除',
+      action: handleBatchDelete,
+    });
+  }, [handleBatchDelete, selectedIds.size]);
+
+  const confirmClearHandled = useCallback(() => {
+    if (handled.length === 0) {
+      handleClearHandled();
+      return;
+    }
+    setConfirmation({
+      title: '清空已处理记录？',
+      description: `确定要清空所有 ${handled.length} 条已处理记录吗？清空后无法恢复。`,
+      confirmLabel: '确认清空',
+      action: handleClearHandled,
+    });
+  }, [handleClearHandled, handled.length]);
+
+  const requestModeChange = useCallback((nextMode: QianniuReplyMode) => {
+    if (nextMode !== 'unattended') {
+      changeMode(nextMode);
+      return;
+    }
+    setConfirmation({
+      title: '确认开启无人值守？',
+      description: '开启后，AI 会自动向买家发送回复。请先确认知识库和回复规则已经检查完毕。',
+      confirmLabel: '确认开启',
+      action: () => changeMode(nextMode),
+    });
+  }, [changeMode]);
+
+  const runConfirmedAction = useCallback(async () => {
+    const action = confirmation?.action;
+    setConfirmation(null);
+    await action?.();
+  }, [confirmation]);
+
   // 当前选中的会话（右侧详情）
   const [activeItemId, setActiveItemId] = useState<number | null>(null);
 
@@ -836,7 +892,7 @@ const ReplyWorkbench = () => {
                   size="sm"
                   bg={isActive ? `${colorScheme}.500` : 'transparent'}
                   color={isActive ? 'white' : 'gray.500'}
-                  onClick={() => changeMode(value)}
+                  onClick={() => requestModeChange(value)}
                   isDisabled={changingMode}
                   borderRadius="lg"
                   fontSize="12px"
@@ -892,8 +948,8 @@ const ReplyWorkbench = () => {
         onClearSelection={clearSelection}
         onSelectPendingOnly={selectPendingOnly}
         onBatchDismissed={handleBatchDismissed}
-        onBatchDelete={handleBatchDelete}
-        onClearHandled={handleClearHandled}
+        onBatchDelete={confirmBatchDelete}
+        onClearHandled={confirmClearHandled}
       />
 
       {/* ── Tab 切换 + 双栏布局 ── */}
@@ -989,6 +1045,29 @@ const ReplyWorkbench = () => {
           </Box>
         </Flex>
       )}
+
+      <AlertDialog
+        isOpen={Boolean(confirmation)}
+        leastDestructiveRef={cancelConfirmationRef}
+        onClose={() => setConfirmation(null)}
+        isCentered
+      >
+        <AlertDialogOverlay bg="blackAlpha.400" />
+        <AlertDialogContent borderRadius="xl">
+          <AlertDialogHeader fontSize="lg" fontWeight="bold">
+            {confirmation?.title}
+          </AlertDialogHeader>
+          <AlertDialogBody>{confirmation?.description}</AlertDialogBody>
+          <AlertDialogFooter>
+            <Button ref={cancelConfirmationRef} onClick={() => setConfirmation(null)}>
+              取消
+            </Button>
+            <Button colorScheme="red" onClick={runConfirmedAction} ml={3}>
+              {confirmation?.confirmLabel}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Box>
   );
 };

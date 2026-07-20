@@ -191,8 +191,6 @@ export function useReplyWorkbench() {
 
   const handleBatchDelete = useCallback(async () => {
     if (selectedIds.size === 0) return;
-    if (!window.confirm(`确定要删除选中的 ${selectedIds.size} 条记录吗？`))
-      return;
     setBatchWorking(true);
     try {
       await batchDeleteSuggestions(Array.from(selectedIds));
@@ -223,7 +221,6 @@ export function useReplyWorkbench() {
       toast({ title: '没有可清理的已处理消息', status: 'info', duration: 2000 });
       return;
     }
-    if (!window.confirm(`确定要清空所有 ${count} 条已处理的记录吗？`)) return;
     setBatchWorking(true);
     try {
       await clearSuggestions('handled', targetPlatform);
@@ -247,12 +244,6 @@ export function useReplyWorkbench() {
 
   const changeMode = useCallback(
     async (nextMode: QianniuReplyMode) => {
-      if (
-        nextMode === 'unattended' &&
-        !window.confirm('无人值守模式会自动向买家发送回复，确认开启吗？')
-      ) {
-        return;
-      }
       setChangingMode(true);
       try {
         if (!activePlatformId) return;

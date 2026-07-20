@@ -66,7 +66,10 @@ const server = http.createServer((req, res) => {
   else if (url.includes('/api/v1/governance/backups')) mockData = MOCK_RESPONSES['/api/v1/governance/backups'];
   else if (url.includes('/api/v1/governance/audit')) mockData = { success: true, data: [] };
   else if (url.includes('reply-mode') || url.includes('/mode')) mockData = { success: true, data: { mode: 'assist' } };
-  else if (url.includes('suggestions')) mockData = { success: true, data: [] };
+  else if (url.includes('suggestions')) mockData = { success: true, data: [
+    { id: 101, sender: '买家小明', incoming_content: '这个衣服会缩水吗？', reply_content: '正常洗涤不会缩水哦。', status: 'pending', platform_id: 'win_qianniu', created_at: new Date().toISOString() },
+    { id: 102, sender: '老客户王哥', incoming_content: '礼盒已经收到了', reply_content: '感谢您的支持！', status: 'sent', platform_id: 'win_qianniu', created_at: new Date(Date.now() - 60000).toISOString() },
+  ] };
   else if (url.includes('health') || url.includes('collector')) mockData = { success: true, data: { state: 'running', processRunning: true, lastError: null, restartAttempts: 0 } };
   else if (url.includes('/api/v1/')) mockData = { success: true, data: null };
   if (mockData) { res.end(JSON.stringify(mockData)); } else { res.statusCode = 404; res.end(JSON.stringify({ code: 404, message: 'not found' })); }
@@ -179,8 +182,35 @@ app.whenReady().then(async () => {
 
     // 客服中心
     await nav(win, 'service');
+    await wait(1000);
+    for (let i = 0; i < 3; i++) {
+      await win.webContents.executeJavaScript(`window.__globalStore?.setState({ activePlatformId: 'win_qianniu', activePlatformIds: ['win_qianniu'] })`);
+      await wait(500);
+    }
     await wait(2000);
     await shot(win, 'ui-service2.png');
+
+    if (!await clickByText(win, '无人值守')) throw new Error('unattended mode button not found');
+    await wait(300);
+    if (!await win.webContents.executeJavaScript("document.querySelector('[role=alertdialog]')?.innerText.includes('确认开启无人值守')")) throw new Error('unattended confirmation not shown');
+    await shot(win, 'ui-unattended-confirm.png');
+    if (!await clickByText(win, '取消')) throw new Error('unattended confirmation cancel not found');
+    await wait(500);
+
+    if (!await clickByText(win, '全选')) throw new Error('select all button not found');
+    await wait(200);
+    if (!await clickByText(win, '删除选中')) throw new Error('batch delete button not found');
+    await wait(300);
+    if (!await win.webContents.executeJavaScript("document.querySelector('[role=alertdialog]')?.innerText.includes('删除选中记录')")) throw new Error('batch delete confirmation not shown');
+    if (!await clickByText(win, '取消')) throw new Error('batch delete confirmation cancel not found');
+    await wait(500);
+
+    if (!await clickByText(win, '清空已处理')) throw new Error('clear handled button not found');
+    await wait(300);
+    if (!await win.webContents.executeJavaScript("document.querySelector('[role=alertdialog]')?.innerText.includes('清空已处理记录')")) throw new Error('clear handled confirmation not shown');
+    await shot(win, 'ui-workbench-clear-confirm.png');
+    if (!await clickByText(win, '取消')) throw new Error('clear handled confirmation cancel not found');
+    console.log('✅ workbench confirmations');
 
     // 商品问答库 → 「添加商品」弹窗
     await nav(win, 'knowledge', 'product-qa');
