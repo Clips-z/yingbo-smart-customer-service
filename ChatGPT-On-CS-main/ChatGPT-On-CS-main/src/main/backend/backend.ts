@@ -59,7 +59,7 @@ import {
 import { KnowledgeCandidateService } from './services/knowledgeCandidateService';
 import { EvaluationService } from './services/evaluationService';
 import { BackupService } from './services/backupService';
-import { listAuditEvents } from './services/auditService';
+import { AuditExportFormat, listAuditEvents, serializeAuditExport } from './services/auditService';
 import { replaySanitizedFixtures } from './services/replayService';
 import { CompanionContextRegistry } from './services/companionContextRegistry';
 import {
@@ -419,7 +419,20 @@ class BKServer {
     this.app.get(
       '/api/v1/governance/audit',
       asyncHandler(async (req, res) => {
-        res.json({ success: true, data: await listAuditEvents(Number(req.query.limit) || 200) });
+        res.json({ success: true, data: await listAuditEvents(req.query) });
+      }),
+    );
+    this.app.get(
+      '/api/v1/governance/audit/export',
+      asyncHandler(async (req, res) => {
+        const format = String(req.query.format || 'csv') as AuditExportFormat;
+        if (!['csv', 'json'].includes(format)) throw new Error('不支持的导出格式');
+        const { items } = await listAuditEvents({ ...req.query, page: 1, pageSize: 200 });
+        const exported = serializeAuditExport(format, items);
+        const date = new Date().toISOString().slice(0, 10);
+        res.setHeader('Content-Type', exported.contentType);
+        res.setHeader('Content-Disposition', `attachment; filename="yingbo-audit-${date}.${exported.extension}"`);
+        res.send(exported.body);
       }),
     );
     this.app.get(

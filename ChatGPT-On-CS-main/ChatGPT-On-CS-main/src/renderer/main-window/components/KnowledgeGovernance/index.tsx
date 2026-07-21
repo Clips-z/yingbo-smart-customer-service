@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { AlertDialog, AlertDialogBody, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogOverlay, Badge, Box, Button, Flex, Heading, SimpleGrid, Table, Tbody, Td, Text, Textarea, Th, Thead, Tr, useToast, VStack } from '@chakra-ui/react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AlertDialog, AlertDialogBody, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogOverlay, Badge, Box, Button, Flex, Heading, Input, Select, SimpleGrid, Table, Tbody, Td, Text, Textarea, Th, Thead, Tr, useToast, VStack } from '@chakra-ui/react';
 import {
-  AuditItem, BackupManifest, createBackup, fetchAudit, fetchBackups,
+  AuditItem, BackupManifest, createBackup, downloadAuditExport, fetchAudit, fetchBackups,
   rebuildKnowledgeRag, replayFixtures, scheduleBackupRestore, verifyBackup,
 } from '../../../common/services/knowledge/governance';
 
@@ -9,17 +9,21 @@ const KnowledgeGovernance: React.FC = () => {
   const toast = useToast();
   const [backups, setBackups] = useState<BackupManifest[]>([]);
   const [audit, setAudit] = useState<AuditItem[]>([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditKeyword, setAuditKeyword] = useState('');
+  const [auditAction, setAuditAction] = useState('');
   const [fixtures, setFixtures] = useState('[\n  {"platformId":"win_qianniu","source":"llm","retrievalStatus":"hit","ocrConfidence":0.95,"expectedAllowed":true}\n]');
   const [restoreBackup, setRestoreBackup] = useState<BackupManifest | null>(null);
   const [confirmRebuild, setConfirmRebuild] = useState(false);
   const cancelRestoreRef = useRef<HTMLButtonElement>(null);
   const cancelRebuildRef = useRef<HTMLButtonElement>(null);
 
-  const load = async () => {
-    const [backupRows, auditRows] = await Promise.all([fetchBackups(), fetchAudit()]);
-    setBackups(backupRows); setAudit(auditRows);
-  };
-  useEffect(() => { void load(); }, []);
+  const load = useCallback(async (page = auditPage, keyword = auditKeyword, action = auditAction) => {
+    const [backupRows, auditRows] = await Promise.all([fetchBackups(), fetchAudit({ page, pageSize: 20, keyword, action })]);
+    setBackups(backupRows); setAudit(auditRows.items); setAuditTotal(auditRows.total); setAuditPage(auditRows.page);
+  }, [auditAction, auditKeyword, auditPage]);
+  useEffect(() => { load().catch(() => undefined); }, [load]);
 
   const confirmRestore = async () => {
     if (!restoreBackup) return;
@@ -54,8 +58,9 @@ const KnowledgeGovernance: React.FC = () => {
         </Box>
       </SimpleGrid>
       <Box bg="white" borderRadius="xl" borderWidth="1px" borderColor="gray.100" overflow="hidden">
-        <Flex p={4} justify="space-between"><Text fontWeight="800">审计记录</Text><Badge>{audit.length} 条</Badge></Flex>
+        <Flex p={4} justify="space-between" gap={3} wrap="wrap"><Text fontWeight="800">审计记录</Text><Flex gap={2} wrap="wrap"><Input size="sm" w="180px" placeholder="搜索操作或对象" value={auditKeyword} onChange={(event) => setAuditKeyword(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') load(1).catch(() => undefined); }} /><Select size="sm" w="130px" value={auditAction} onChange={(event) => { setAuditAction(event.target.value); load(1, auditKeyword, event.target.value).catch(() => undefined); }}><option value="">全部操作</option><option value="knowledge.">知识库</option><option value="candidate.">候选知识</option><option value="backup.">备份</option><option value="evaluation.">评测</option></Select><Button size="sm" onClick={() => load(1).catch(() => undefined)}>筛选</Button><Button size="sm" variant="outline" onClick={() => downloadAuditExport('csv', { keyword: auditKeyword, action: auditAction }).catch((error) => toast({ title: '导出失败', description: String(error), status: 'error' }))}>导出 CSV</Button><Button size="sm" variant="outline" onClick={() => downloadAuditExport('json', { keyword: auditKeyword, action: auditAction }).catch((error) => toast({ title: '导出失败', description: String(error), status: 'error' }))}>导出 JSON</Button><Badge>{auditTotal} 条</Badge></Flex></Flex>
         <Box overflowX="auto"><Table size="sm"><Thead><Tr><Th>时间</Th><Th>动作</Th><Th>对象</Th><Th>操作者</Th><Th>校验摘要</Th></Tr></Thead><Tbody>{audit.map((item) => <Tr key={item.id}><Td whiteSpace="nowrap">{new Date(item.created_at).toLocaleString('zh-CN')}</Td><Td>{item.action}</Td><Td>{item.entity_type} · {item.entity_id.slice(0, 12)}</Td><Td>{item.actor}</Td><Td fontFamily="mono">{item.event_hash.slice(0, 12)}…</Td></Tr>)}</Tbody></Table></Box>
+        <Flex p={3} justify="flex-end" gap={2}><Button size="sm" isDisabled={auditPage <= 1} onClick={() => load(auditPage - 1).catch(() => undefined)}>上一页</Button><Text fontSize="sm" alignSelf="center">第 {auditPage} 页</Text><Button size="sm" isDisabled={auditPage * 20 >= auditTotal} onClick={() => load(auditPage + 1).catch(() => undefined)}>下一页</Button></Flex>
       </Box>
       <AlertDialog isOpen={Boolean(restoreBackup)} leastDestructiveRef={cancelRestoreRef} onClose={() => setRestoreBackup(null)} isCentered>
         <AlertDialogOverlay bg="blackAlpha.400" />
