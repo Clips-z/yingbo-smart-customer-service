@@ -30,6 +30,7 @@ export interface QAListParams {
 }
 export interface QAStats { total: number; presale: number; mid: number; aftersale: number }
 export interface QAListResult { list: QAItem[]; total: number; stats: QAStats; page: number; pageSize: number }
+export interface KnowledgeConflict { type: 'duplicate' | 'conflict'; items: QAItem[] }
 
 export const SHOP_OPTIONS = [
   { id: 'shop_lixixi', name: '李西西旗舰店' },
@@ -40,6 +41,11 @@ export const SHOP_OPTIONS = [
 
 export async function fetchStoreQAList(params: QAListParams) {
   const response = await GET<{ data: QAListResult }>('/api/v1/knowledge/store-qa', params);
+  return response.data;
+}
+
+export async function fetchStoreKnowledgeConflicts() {
+  const response = await GET<{ data: KnowledgeConflict[] }>('/api/v1/knowledge/store-qa/conflicts');
   return response.data;
 }
 

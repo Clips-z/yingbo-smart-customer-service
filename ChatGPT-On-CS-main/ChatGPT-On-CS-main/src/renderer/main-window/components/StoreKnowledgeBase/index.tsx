@@ -66,12 +66,14 @@ import {
   SHOP_OPTIONS,
   formatRelativeTime,
   retryStoreKnowledgeSync,
+  fetchStoreKnowledgeConflicts,
   bulkImportStoreKnowledge,
   fetchStoreKnowledgeVersions,
   rollbackStoreKnowledge,
   KnowledgeVersionItem,
   previewStoreKnowledgeMerge,
   mergeStoreKnowledge,
+  KnowledgeConflict,
 } from '../../../common/services/knowledge/storeKB';
 import {
   parseStoreImport,
@@ -273,7 +275,9 @@ const StatsPanel: React.FC<{
   onAdd: () => void;
   onImport: () => void;
   onExport: (format: 'csv' | 'json', all: boolean) => void;
-}> = ({ stats, keyword, onKeyword, shop, onShop, stage, onStage, onAdd, onImport, onExport }) => {
+  conflicts: KnowledgeConflict[];
+  onMergeConflict: (targetId: string, sourceId: string) => void;
+}> = ({ stats, keyword, onKeyword, shop, onShop, stage, onStage, onAdd, onImport, onExport, conflicts, onMergeConflict }) => {
   const [showProductFilter, setShowProductFilter] = useState(false);
   const statCards = [
     { key: 'all' as const, label: '全部', value: stats.total, color: 'gray.600' },
@@ -336,6 +340,7 @@ const StatsPanel: React.FC<{
           </Box>
         </Collapse>
       </VStack>
+      {conflicts.length > 0 && <><Divider borderColor="gray.100" /><Box bg="orange.50" borderRadius="lg" p={3}><Flex align="center" justify="space-between" mb={2}><Text fontSize="12px" fontWeight={700} color="orange.700">重复与冲突</Text><Badge colorScheme="orange">{conflicts.length}</Badge></Flex><VStack align="stretch" spacing={2}>{conflicts.slice(0, 3).map((conflict) => <Box key={conflict.items.map((item) => item.id).join('-')}><Text fontSize="11px" color="orange.700">{conflict.type === 'conflict' ? '答案冲突' : '重复问答'} · {conflict.items[0]?.question}</Text><Button mt={1} size="xs" variant="link" colorScheme="orange" onClick={() => onMergeConflict(conflict.items[0]!.id, conflict.items[1]!.id)}>预览并合并</Button></Box>)}</VStack></Box></>}
     </VStack>
   );
 };
@@ -370,6 +375,7 @@ const StoreKnowledgeBase: React.FC = () => {
   const [items, setItems] = useState<QAItem[]>([]);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState({ total: 0, presale: 0, mid: 0, aftersale: 0 });
+  const [conflicts, setConflicts] = useState<KnowledgeConflict[]>([]);
   const importDisclosure = useDisclosure();
   const [importPreview, setImportPreview] = useState<StoreImportPreview | null>(null);
   const [importing, setImporting] = useState(false);
@@ -377,8 +383,11 @@ const StoreKnowledgeBase: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetchStoreQAList({ keyword, shop, stage, page, pageSize });
-      setItems(res.list); setTotal(res.total); setStats(res.stats);
+      const [res, conflictRows] = await Promise.all([
+        fetchStoreQAList({ keyword, shop, stage, page, pageSize }),
+        fetchStoreKnowledgeConflicts(),
+      ]);
+      setItems(res.list); setTotal(res.total); setStats(res.stats); setConflicts(conflictRows);
     } catch {
       toast({ title: '加载失败', status: 'error', duration: 2000, isClosable: true });
     } finally { setLoading(false); }
@@ -419,8 +428,7 @@ const StoreKnowledgeBase: React.FC = () => {
     });
   };
 
-  const handleMerge = async () => {
-    const [targetId, sourceId] = [...selectedIds];
+  const requestMerge = async (targetId: string, sourceId: string) => {
     if (!targetId || !sourceId) return;
     const preview = await previewStoreKnowledgeMerge(targetId, sourceId);
     setConfirmation({
@@ -434,6 +442,11 @@ const StoreKnowledgeBase: React.FC = () => {
         toast({ title: '知识条目已合并', status: 'success' });
       },
     });
+  };
+
+  const handleMerge = async () => {
+    const [targetId, sourceId] = [...selectedIds];
+    await requestMerge(targetId, sourceId);
   };
 
   const requestDelete = (item: QAItem) => {
@@ -536,7 +549,7 @@ const StoreKnowledgeBase: React.FC = () => {
       </Box>
 
       <Box w="300px" flexShrink={0} bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="sm" p={4} overflowY="auto">
-        <StatsPanel stats={stats} keyword={keyword} onKeyword={(v) => { setKeyword(v); setPage(1); }} shop={shop} onShop={(v) => { setShop(v); setPage(1); }} stage={stage} onStage={(v) => { setStage(v); setPage(1); }} onAdd={openAdd} onImport={importDisclosure.onOpen} onExport={handleExport} />
+        <StatsPanel stats={stats} keyword={keyword} onKeyword={(v) => { setKeyword(v); setPage(1); }} shop={shop} onShop={(v) => { setShop(v); setPage(1); }} stage={stage} onStage={(v) => { setStage(v); setPage(1); }} onAdd={openAdd} onImport={importDisclosure.onOpen} onExport={handleExport} conflicts={conflicts} onMergeConflict={requestMerge} />
       </Box>
 
       <QAEditModal isOpen={modalOpen} editing={editing} onClose={modalOnClose} onSubmit={handleSubmit} />
@@ -562,7 +575,7 @@ const StoreKnowledgeBase: React.FC = () => {
         </ModalContent>
       </Modal>
 
-      <AlertDialog isOpen={Boolean(confirmation)} leastDestructiveRef={cancelRef} onClose={() => setConfirmation(null)} isCentered>
+      <AlertDialog isOpen={Boolean(confirmation)} leastDestructiveRef={cancelRef} onClose={() => setConfirmation(null)} isCentered motionPreset="none">
         <AlertDialogOverlay bg="blackAlpha.300" />
         <AlertDialogContent borderRadius="xl">
           <AlertDialogHeader fontSize="15px" fontWeight={800}>{confirmation?.title}</AlertDialogHeader>

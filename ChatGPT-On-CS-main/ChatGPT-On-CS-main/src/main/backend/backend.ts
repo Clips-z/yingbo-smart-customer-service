@@ -2188,6 +2188,12 @@ class BKServer {
         res.json({ success: true, data: { deleted } });
       }),
     );
+    this.app.get(
+      '/api/v1/knowledge/store-qa/conflicts',
+      asyncHandler(async (_req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.listStoreKnowledgeConflicts() });
+      }),
+    );
     this.app.post(
       '/api/v1/knowledge/store-qa/import',
       asyncHandler(async (req, res) => {

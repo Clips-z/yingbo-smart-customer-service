@@ -60,4 +60,15 @@ describe('knowledge governance', () => {
     expect(indexed).toHaveLength(2);
     expect(indexed).toEqual(expect.arrayContaining([expect.stringMatching(/^product-/), expect.stringMatching(/^store-qa-/)]));
   });
+
+  it('finds duplicate and conflicting active questions within one shop and stage', async () => {
+    await service.createStoreKnowledge({ question: '多久发货？', answer: '当天发货', shopId: 'shop-1', stage: 'mid' });
+    await service.createStoreKnowledge({ question: '多久 发货', answer: '当天发货', shopId: 'shop-1', stage: 'mid' });
+    await service.createStoreKnowledge({ question: '多久发货！', answer: '48 小时内发货', shopId: 'shop-1', stage: 'mid' });
+    await service.createStoreKnowledge({ question: '多久发货', answer: '不同阶段不比较', shopId: 'shop-1', stage: 'aftersale' });
+
+    await expect(service.listStoreKnowledgeConflicts()).resolves.toEqual([
+      expect.objectContaining({ type: 'conflict', items: expect.arrayContaining([expect.objectContaining({ answer: '当天发货' }), expect.objectContaining({ answer: '48 小时内发货' })]) }),
+    ]);
+  });
 });

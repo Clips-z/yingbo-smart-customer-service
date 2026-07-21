@@ -16,6 +16,8 @@ const paging = (pageValue: unknown, pageSizeValue: unknown) => {
   return { page, pageSize, offset: (page - 1) * pageSize };
 };
 
+const comparableText = (value: string) => value.toLowerCase().replace(/[\s，。！？、；：,.!?;:'"“”‘’（）()【】《》]/g, '');
+
 const productJson = (item: ProductKnowledge) => ({
   id: item.id,
   name: item.name,
@@ -218,6 +220,26 @@ export class KnowledgeService {
       page,
       pageSize,
     };
+  }
+
+  async listStoreKnowledgeConflicts() {
+    const now = new Date();
+    const items = (await StoreKnowledge.findAll({ where: { enabled: true }, order: [['updated_at', 'DESC']] }))
+      .filter((item) => (!item.effective_at || item.effective_at <= now) && (!item.expires_at || item.expires_at > now));
+    const groups = new Map<string, StoreKnowledge[]>();
+    items.forEach((item) => {
+      const question = comparableText(item.question);
+      if (!question) return;
+      const key = `${item.shop_id}\u0000${item.stage}\u0000${question}`;
+      groups.set(key, [...(groups.get(key) || []), item]);
+    });
+    return [...groups.values()]
+      .filter((group) => group.length > 1)
+      .slice(0, 100)
+      .map((group) => ({
+        type: new Set(group.map((item) => comparableText(item.answer))).size > 1 ? 'conflict' : 'duplicate',
+        items: group.map(storeJson),
+      }));
   }
 
   async createStoreKnowledge(body: any, sync = true) {

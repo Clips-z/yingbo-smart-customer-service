@@ -75,6 +75,12 @@ const server = http.createServer((req, res) => {
     source: MOCK_RESPONSES['/api/v1/knowledge/store-qa'].data.list[1],
     merged: MOCK_RESPONSES['/api/v1/knowledge/store-qa'].data.list[0],
   } };
+  else if (url.includes('/api/v1/knowledge/store-qa/conflicts')) mockData = { success: true, data: [{
+    type: 'conflict', items: [
+      MOCK_RESPONSES['/api/v1/knowledge/store-qa'].data.list[0],
+      { ...MOCK_RESPONSES['/api/v1/knowledge/store-qa'].data.list[0], id: 'q-conflict', answer: '活动商品需在 48 小时内发货。' },
+    ],
+  }] };
   else if (url.includes('/api/v1/knowledge/store-qa')) mockData = MOCK_RESPONSES['/api/v1/knowledge/store-qa'];
   else if (url.includes('/api/v1/knowledge/candidates')) mockData = MOCK_RESPONSES['/api/v1/knowledge/candidates'];
   else if (url.includes('/api/v1/governance/backups')) mockData = MOCK_RESPONSES['/api/v1/governance/backups'];
@@ -290,6 +296,13 @@ app.whenReady().then(async () => {
     // 店铺知识库 → 「新增问答」弹窗
     await nav(win, 'knowledge', 'store-kb');
     await wait(2000);
+
+    if (!await clickByText(win, '预览并合并')) throw new Error('store conflict merge action not found');
+    await wait(500);
+    if (!await win.webContents.executeJavaScript("(function(){var el=document.querySelector('[role=alertdialog]');if(!el||!el.innerText.includes('合并这两条知识'))return false;var rect=el.getBoundingClientRect();return rect.width>0&&rect.height>0&&Number(getComputedStyle(el).opacity)>0;})()")) throw new Error('store conflict preview confirmation not visibly shown');
+    await shot(win, 'ui-store-conflict-confirm.png');
+    if (!await clickByText(win, '取消')) throw new Error('store conflict merge cancel not found');
+    await wait(300);
 
     lastExportUrl = '';
     if (!await clickByText(win, '手动导出')) throw new Error('store export menu not found');
