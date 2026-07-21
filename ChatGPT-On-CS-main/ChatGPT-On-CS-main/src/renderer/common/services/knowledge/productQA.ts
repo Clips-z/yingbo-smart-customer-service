@@ -17,6 +17,15 @@ export interface ProductQA {
   updatedAt?: string;
 }
 
+export interface ProductKnowledgeVersion {
+  id: string;
+  version: number;
+  action: string;
+  actor: string;
+  snapshot: ProductQA;
+  created_at: string;
+}
+
 export interface ProductQAListParams {
   keyword?: string;
   shop?: string;
@@ -99,6 +108,16 @@ export async function retryProductSync(id: string) {
     kind: 'product',
     id,
   });
+  return response.data;
+}
+
+export async function fetchProductKnowledgeVersions(id: string) {
+  const response = await GET<{ data: ProductKnowledgeVersion[] }>(`/api/v1/knowledge/product/${id}/versions`);
+  return response.data;
+}
+
+export async function rollbackProductKnowledge(id: string, version: number) {
+  const response = await POST<{ data: ProductQA }>('/api/v1/knowledge/versions/rollback', { kind: 'product', id, version });
   return response.data;
 }
 

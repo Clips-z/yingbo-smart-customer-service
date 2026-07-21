@@ -62,6 +62,10 @@ const server = http.createServer((req, res) => {
     hasMouseClose: true, hasEscClose: true, hasTransfer: true, hasReplace: true,
   }};
   else if (url.includes('/api/v1/knowledge/export')) { lastExportUrl = url; mockData = { success: true }; }
+  else if (url.includes('/api/v1/knowledge/product/p1/versions')) mockData = { success: true, data: [
+    { id: 'product-version-1', version: 2, action: 'update', created_at: new Date().toISOString() },
+    { id: 'product-version-0', version: 1, action: 'create', created_at: new Date(Date.now() - 60000).toISOString() },
+  ] };
   else if (url.includes('/api/v1/knowledge/products')) mockData = MOCK_RESPONSES['/api/v1/knowledge/products'];
   else if (url.includes('/api/v1/knowledge/store/q1/versions')) mockData = { success: true, data: [
     { id: 'version-1', version: 2, action: 'update', created_at: new Date().toISOString() },
@@ -195,6 +199,16 @@ app.whenReady().then(async () => {
     if (!failureToast) throw new Error('product ID copy failure feedback failed');
     await shot(win, 'ui-product-copy-failed.png');
     console.log('✅ ui-product-copy-failed.png');
+
+    if (!await clickByText(win, '查看版本历史')) throw new Error('product version history button not found');
+    await wait(400);
+    if (!await clickByText(win, '回滚')) throw new Error('product version rollback button not found');
+    await wait(300);
+    if (!await win.webContents.executeJavaScript("document.querySelector('[role=alertdialog]')?.innerText.includes('确认回滚商品知识')")) throw new Error('product rollback confirmation not shown');
+    await shot(win, 'ui-product-rollback-confirm.png');
+    if (!await clickByText(win, '取消')) throw new Error('product rollback cancel not found');
+    await wait(300);
+    console.log('✅ product version history');
 
     lastExportUrl = '';
     await win.webContents.executeJavaScript("document.querySelector('[aria-label=\"导出知识\"]')?.click()");

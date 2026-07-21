@@ -65,6 +65,9 @@ import {
   retryProductSync,
   bulkImportProducts,
   updateProductQA,
+  fetchProductKnowledgeVersions,
+  rollbackProductKnowledge,
+  ProductKnowledgeVersion,
 } from '../../../common/services/knowledge/productQA';
 import {
   ImportPreview,
@@ -181,7 +184,23 @@ const ProductCard: React.FC<{
   onCopyId: (id: string) => void;
   onRetrySync: (id: string) => void;
   onEdit: (product: ProductQA) => void;
-}> = ({ product, batchMode, checked, toggling, onCheck, onToggle, onCopyId, onRetrySync, onEdit }) => {
+  onRollback: (id: string, version: number) => void;
+}> = ({ product, batchMode, checked, toggling, onCheck, onToggle, onCopyId, onRetrySync, onEdit, onRollback }) => {
+  const toast = useToast();
+  const [versions, setVersions] = useState<ProductKnowledgeVersion[] | null>(null);
+
+  const toggleVersions = async () => {
+    if (versions) {
+      setVersions(null);
+      return;
+    }
+    try {
+      setVersions(await fetchProductKnowledgeVersions(product.id));
+    } catch {
+      toast({ title: '版本历史加载失败', status: 'error', duration: 1800, isClosable: true });
+    }
+  };
+
   return (
     <Box
       bg="white"
@@ -254,9 +273,15 @@ const ProductCard: React.FC<{
           )}
         </HStack>
         {!batchMode && (
-          <Button mt={2} size="xs" w="full" variant="ghost" colorScheme="brand" leftIcon={<FiEdit2 />} onClick={() => onEdit(product)}>
-            查看完整内容并编辑
-          </Button>
+          <>
+            <Button mt={2} size="xs" w="full" variant="ghost" colorScheme="brand" leftIcon={<FiEdit2 />} onClick={() => onEdit(product)}>
+              查看完整内容并编辑
+            </Button>
+            <Button mt={1} size="xs" w="full" variant="outline" onClick={toggleVersions}>
+              {versions ? '收起版本历史' : '查看版本历史'}
+            </Button>
+            {versions && <VStack mt={2} align="stretch" spacing={1}>{versions.map((version) => <Flex key={version.id} bg="gray.50" p={2} borderRadius="md" align="center" gap={2}><Text fontSize="xs" flex="1">v{version.version} · {version.action} · {new Date(version.created_at).toLocaleString('zh-CN')}</Text><Button size="xs" variant="link" onClick={() => onRollback(product.id, version.version)}>回滚</Button></Flex>)}</VStack>}
+          </>
         )}
       </Box>
     </Box>
@@ -307,6 +332,8 @@ const ProductQALibrary: React.FC = () => {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
   const cancelRef = React.useRef<HTMLButtonElement>(null);
+  const [rollbackTarget, setRollbackTarget] = useState<{ id: string; version: number } | null>(null);
+  const rollbackCancelRef = React.useRef<HTMLButtonElement>(null);
 
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<ProductQA[]>([]);
@@ -398,6 +425,18 @@ const ProductQALibrary: React.FC = () => {
     await retryProductSync(id);
     await loadData();
     toast({ title: '已重试同步', status: 'info', duration: 1600 });
+  };
+
+  const handleRollback = (id: string, version: number) => {
+    setRollbackTarget({ id, version });
+  };
+
+  const confirmRollback = async () => {
+    if (!rollbackTarget) return;
+    await rollbackProductKnowledge(rollbackTarget.id, rollbackTarget.version);
+    setRollbackTarget(null);
+    await loadData();
+    toast({ title: `已回滚到 v${rollbackTarget.version}`, status: 'success', duration: 1800, isClosable: true });
   };
 
   const handleImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -517,7 +556,7 @@ const ProductQALibrary: React.FC = () => {
             {products.map((p) => (
               <ProductCard key={p.id} product={p} batchMode={batchMode} checked={selected.has(p.id)} toggling={togglingIds.has(p.id)}
                 onCheck={(id, c) => setSelected((prev) => { const n = new Set(prev); if (c) n.add(id); else n.delete(id); return n; })}
-                onToggle={handleToggle} onCopyId={handleCopyId} onRetrySync={handleRetrySync} onEdit={openEdit} />
+                onToggle={handleToggle} onCopyId={handleCopyId} onRetrySync={handleRetrySync} onEdit={openEdit} onRollback={handleRollback} />
             ))}
           </SimpleGrid>
         )}
@@ -570,6 +609,18 @@ const ProductQALibrary: React.FC = () => {
           <AlertDialogFooter>
             <Button ref={cancelRef} size="sm" variant="ghost" onClick={() => setConfirmDelete(false)} borderRadius="lg">取消</Button>
             <Button size="sm" colorScheme="red" ml={2} onClick={handleBatchDelete} borderRadius="lg">确认删除</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog isOpen={Boolean(rollbackTarget)} leastDestructiveRef={rollbackCancelRef} onClose={() => setRollbackTarget(null)} isCentered>
+        <AlertDialogOverlay bg="blackAlpha.300" />
+        <AlertDialogContent borderRadius="xl">
+          <AlertDialogHeader fontSize="15px" fontWeight={800}>确认回滚商品知识</AlertDialogHeader>
+          <AlertDialogBody fontSize="13px" color="gray.600">将恢复到 v{rollbackTarget?.version}，当前内容仍会保留为新版本。</AlertDialogBody>
+          <AlertDialogFooter>
+            <Button ref={rollbackCancelRef} size="sm" variant="ghost" onClick={() => setRollbackTarget(null)} borderRadius="lg">取消</Button>
+            <Button size="sm" colorScheme="orange" ml={2} onClick={confirmRollback} borderRadius="lg">确认回滚</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -36,4 +36,11 @@ describe('knowledge governance', () => {
     expect(result.target.tags).toEqual(expect.arrayContaining(['物流', '时效']));
     expect(result.source.enabled).toBe(false);
   });
+
+  it('versions and rolls back product knowledge', async () => {
+    const created = await service.createProduct({ name: '旧名称', platformProductId: 'SKU-1', shopId: 'shop-1', shopName: '店铺' });
+    await service.updateProduct(created.id, { ...created, name: '新名称' });
+    await expect(service.listVersions('product', created.id)).resolves.toHaveLength(2);
+    await expect(service.rollback('product', created.id, 1)).resolves.toMatchObject({ name: '旧名称' });
+  });
 });
