@@ -228,6 +228,7 @@ class BKServer {
     this.knowledgeService.setIndexer((text, filename) =>
       this.ragService.uploadText(text, filename),
     );
+    this.knowledgeService.setRagRebuilder(() => this.ragService.clearKnowledgeSources());
 
     this.wecomSidecarService = new WecomSidecarService(
       this.port,
@@ -431,6 +432,12 @@ class BKServer {
       '/api/v1/knowledge/versions/rollback',
       asyncHandler(async (req, res) => {
         res.json({ success: true, data: await this.knowledgeService.rollback(req.body.kind, String(req.body.id || ''), Number(req.body.version)) });
+      }),
+    );
+    this.app.post(
+      '/api/v1/knowledge/rebuild-rag',
+      asyncHandler(async (_req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.rebuildRag() });
       }),
     );
     this.app.post(

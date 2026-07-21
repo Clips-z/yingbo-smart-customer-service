@@ -1003,16 +1003,29 @@ async def get_stats():
 
 
 @app.post("/api/clear")
-async def clear_knowledge_base():
-    """清空知识库（删除所有文档）"""
+async def clear_knowledge_base(request: Request):
+    """清空全部知识库，或仅删除指定来源前缀的派生知识。"""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="请求体必须是 JSON 对象")
+    prefixes = body.get("prefixes")
+    if prefixes is not None and (not isinstance(prefixes, list) or not all(isinstance(prefix, str) and prefix for prefix in prefixes)):
+        raise HTTPException(status_code=400, detail="prefixes 必须是非空字符串数组")
     all_data = collection.get(include=["metadatas"])
     all_ids = all_data.get("ids", [])
-    if all_ids:
-        collection.delete(ids=all_ids)
-    # 清理上传的文件
-    for f in UPLOAD_DIR.glob("*"):
-        f.unlink()
-    return {"success": True, "deleted_chunks": len(all_ids)}
+    ids_to_delete = all_ids if prefixes is None else [
+        all_ids[index] for index, meta in enumerate(all_data.get("metadatas", []))
+        if str(meta.get("source", "")).startswith(tuple(prefixes))
+    ]
+    if ids_to_delete:
+        collection.delete(ids=ids_to_delete)
+    if prefixes is None:
+        for f in UPLOAD_DIR.glob("*"):
+            f.unlink()
+    return {"success": True, "deleted_chunks": len(ids_to_delete)}
 
 
 # ============================================================

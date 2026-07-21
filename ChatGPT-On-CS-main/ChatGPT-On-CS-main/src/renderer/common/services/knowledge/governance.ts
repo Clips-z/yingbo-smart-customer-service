@@ -26,3 +26,7 @@ export async function replayFixtures(fixtures: unknown[]) {
   const response = await POST<{ data: { total: number; passed: number; rows: any[] } }>('/api/v1/quality/replay', { fixtures });
   return response.data;
 }
+export async function rebuildKnowledgeRag() {
+  const response = await POST<{ data: { products: number; stores: number; failed: number } }>('/api/v1/knowledge/rebuild-rag', {});
+  return response.data;
+}

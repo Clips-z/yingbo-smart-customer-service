@@ -174,6 +174,12 @@ app.whenReady().then(async () => {
 
     await nav(win, 'knowledge', 'governance');
     await wait(1500);
+    if (!await clickByText(win, '重建 RAG 索引')) throw new Error('RAG rebuild button not found');
+    await wait(500);
+    if (!await win.webContents.executeJavaScript("document.querySelector('[role=alertdialog]')?.innerText.includes('确认重建 RAG 索引')")) throw new Error('RAG rebuild confirmation not shown');
+    await shot(win, 'ui-rag-rebuild-confirm.png');
+    if (!await clickByText(win, '取消')) throw new Error('RAG rebuild cancel not found');
+    await wait(300);
     if (!await clickByText(win, '恢复')) throw new Error('backup restore button not found');
     await wait(500);
     await shot(win, 'ui-backup-restore.png');

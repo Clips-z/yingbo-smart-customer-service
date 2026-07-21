@@ -119,6 +119,15 @@ export class RagService {
     );
   }
 
+  public async clearKnowledgeSources(): Promise<void> {
+    const axios = (await import('axios')).default;
+    await axios.post(
+      `http://127.0.0.1:${RAG_PORT}/api/clear`,
+      { prefixes: ['product-', 'store-qa-'] },
+      { timeout: 60_000 },
+    );
+  }
+
   public async search(query: string, topK = 5): Promise<RagSearchItem[]> {
     const text = String(query || '').trim();
     if (!text) return [];

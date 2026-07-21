@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertDialog, AlertDialogBody, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogOverlay, Badge, Box, Button, Flex, Heading, SimpleGrid, Table, Tbody, Td, Text, Textarea, Th, Thead, Tr, useToast, VStack } from '@chakra-ui/react';
 import {
   AuditItem, BackupManifest, createBackup, fetchAudit, fetchBackups,
-  replayFixtures, scheduleBackupRestore, verifyBackup,
+  rebuildKnowledgeRag, replayFixtures, scheduleBackupRestore, verifyBackup,
 } from '../../../common/services/knowledge/governance';
 
 const KnowledgeGovernance: React.FC = () => {
@@ -11,7 +11,9 @@ const KnowledgeGovernance: React.FC = () => {
   const [audit, setAudit] = useState<AuditItem[]>([]);
   const [fixtures, setFixtures] = useState('[\n  {"platformId":"win_qianniu","source":"llm","retrievalStatus":"hit","ocrConfidence":0.95,"expectedAllowed":true}\n]');
   const [restoreBackup, setRestoreBackup] = useState<BackupManifest | null>(null);
+  const [confirmRebuild, setConfirmRebuild] = useState(false);
   const cancelRestoreRef = useRef<HTMLButtonElement>(null);
+  const cancelRebuildRef = useRef<HTMLButtonElement>(null);
 
   const load = async () => {
     const [backupRows, auditRows] = await Promise.all([fetchBackups(), fetchAudit()]);
@@ -26,6 +28,13 @@ const KnowledgeGovernance: React.FC = () => {
     toast({ title: '恢复已安排，请重启应用', status: 'warning' });
   };
 
+  const confirmRagRebuild = async () => {
+    const result = await rebuildKnowledgeRag();
+    setConfirmRebuild(false);
+    await load();
+    toast({ title: `知识索引已重建：商品 ${result.products}，问答 ${result.stores}${result.failed ? `，失败 ${result.failed}` : ''}`, status: result.failed ? 'warning' : 'success' });
+  };
+
   return (
     <VStack align="stretch" spacing={4} py={5}>
       <Box><Heading size="md">知识治理与恢复</Heading><Text fontSize="sm" color="gray.500" mt={1}>版本审计、平台回放和 SQLite 备份均保存在本机。</Text></Box>
@@ -33,6 +42,10 @@ const KnowledgeGovernance: React.FC = () => {
         <Box bg="white" borderRadius="xl" borderWidth="1px" borderColor="gray.100" p={4}>
           <Flex justify="space-between" align="center" mb={3}><Text fontWeight="800">备份与恢复</Text><Button size="sm" colorScheme="blue" onClick={async () => { await createBackup(); await load(); toast({ title: '备份已创建并校验', status: 'success' }); }}>立即备份</Button></Flex>
           <VStack align="stretch" spacing={2}>{backups.length === 0 ? <Text fontSize="sm" color="gray.500">暂无备份</Text> : backups.map((item) => <Flex key={item.id} bg="gray.50" p={3} borderRadius="lg" gap={2} align="center"><Box flex="1"><Text fontSize="sm" fontWeight="700">{new Date(item.createdAt).toLocaleString('zh-CN')}</Text><Text fontSize="xs" color="gray.500">{Math.round(item.size / 1024)} KB · {item.sha256.slice(0, 12)}…</Text></Box><Button size="xs" onClick={async () => { const result = await verifyBackup(item.id); toast({ title: result.valid ? '备份校验通过' : '备份损坏', status: result.valid ? 'success' : 'error' }); }}>校验</Button><Button size="xs" colorScheme="orange" onClick={() => setRestoreBackup(item)}>恢复</Button></Flex>)}</VStack>
+        </Box>
+        <Box bg="white" borderRadius="xl" borderWidth="1px" borderColor="gray.100" p={4}>
+          <Text fontWeight="800" mb={1}>从 SQLite 重建知识索引</Text><Text fontSize="xs" color="gray.500" mb={3}>仅重建商品和店铺知识的派生 RAG 块，不会删除手动导入的其他文档。</Text>
+          <Button size="sm" colorScheme="purple" onClick={() => setConfirmRebuild(true)}>重建 RAG 索引</Button>
         </Box>
         <Box bg="white" borderRadius="xl" borderWidth="1px" borderColor="gray.100" p={4}>
           <Text fontWeight="800" mb={1}>脱敏平台回放</Text><Text fontSize="xs" color="gray.500" mb={3}>粘贴不含截图和个人信息的 JSON 用例，验证升级后的安全门槛。</Text>
@@ -54,6 +67,17 @@ const KnowledgeGovernance: React.FC = () => {
           <AlertDialogFooter gap={2}>
             <Button ref={cancelRestoreRef} variant="ghost" onClick={() => setRestoreBackup(null)}>取消</Button>
             <Button colorScheme="orange" onClick={confirmRestore}>安排恢复</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog isOpen={confirmRebuild} leastDestructiveRef={cancelRebuildRef} onClose={() => setConfirmRebuild(false)} isCentered>
+        <AlertDialogOverlay bg="blackAlpha.400" />
+        <AlertDialogContent borderRadius="xl">
+          <AlertDialogHeader fontSize="16px">确认重建 RAG 索引</AlertDialogHeader>
+          <AlertDialogBody fontSize="sm" color="gray.600">系统将清理商品与店铺知识的派生索引，并根据当前 SQLite 数据重新写入。手动导入的其他文档不会受影响。</AlertDialogBody>
+          <AlertDialogFooter gap={2}>
+            <Button ref={cancelRebuildRef} variant="ghost" onClick={() => setConfirmRebuild(false)}>取消</Button>
+            <Button colorScheme="purple" onClick={confirmRagRebuild}>确认重建</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

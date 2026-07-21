@@ -43,4 +43,21 @@ describe('knowledge governance', () => {
     await expect(service.listVersions('product', created.id)).resolves.toHaveLength(2);
     await expect(service.rollback('product', created.id, 1)).resolves.toMatchObject({ name: '旧名称' });
   });
+
+  it('rebuilds only active SQLite knowledge after clearing derived RAG data', async () => {
+    const indexed: string[] = [];
+    let cleared = 0;
+    service.setIndexer(async (_text, filename) => { indexed.push(filename); });
+    service.setRagRebuilder(async () => { cleared += 1; });
+    await service.createProduct({ name: '上架商品', platformProductId: 'SKU-1', shopId: 'shop-1', shopName: '店铺', onSale: true });
+    await service.createProduct({ name: '下架商品', platformProductId: 'SKU-2', shopId: 'shop-1', shopName: '店铺', onSale: false });
+    await service.createStoreKnowledge({ question: '有效问题', answer: '有效答案', shopId: 'shop-1' });
+    await service.createStoreKnowledge({ question: '过期问题', answer: '过期答案', shopId: 'shop-1', expiresAt: new Date(Date.now() - 1000).toISOString() });
+    indexed.length = 0;
+
+    await expect(service.rebuildRag()).resolves.toMatchObject({ products: 1, stores: 1, failed: 0 });
+    expect(cleared).toBe(1);
+    expect(indexed).toHaveLength(2);
+    expect(indexed).toEqual(expect.arrayContaining([expect.stringMatching(/^product-/), expect.stringMatching(/^store-qa-/)]));
+  });
 });

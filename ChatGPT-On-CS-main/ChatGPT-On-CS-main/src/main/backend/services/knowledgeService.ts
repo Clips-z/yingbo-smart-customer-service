@@ -55,10 +55,16 @@ const storeJson = (item: StoreKnowledge) => ({
 export class KnowledgeService {
   private indexer?: (text: string, filename: string) => Promise<void>;
 
+  private clearIndexer?: () => Promise<void>;
+
   constructor(private sequelize: Sequelize) {}
 
   setIndexer(indexer: (text: string, filename: string) => Promise<void>) {
     this.indexer = indexer;
+  }
+
+  setRagRebuilder(clearIndexer: () => Promise<void>) {
+    this.clearIndexer = clearIndexer;
   }
 
   private async recordVersion(
@@ -353,6 +359,37 @@ export class KnowledgeService {
     await item.update({ sync_status: 'pending', sync_error: null });
     await this.syncStore(item);
     return storeJson(item);
+  }
+
+  async rebuildRag() {
+    if (!this.clearIndexer || !this.indexer) throw new Error('RAG 同步服务未就绪');
+    await this.clearIndexer();
+    const now = new Date();
+    const [products, stores] = await Promise.all([
+      ProductKnowledge.findAll({ where: { on_sale: true } }),
+      StoreKnowledge.findAll({ where: { enabled: true } }),
+    ]);
+    const activeStores = stores.filter((item) =>
+      (!item.effective_at || item.effective_at <= now)
+      && (!item.expires_at || item.expires_at > now),
+    );
+    // Keep uploads serial so a large local knowledge base does not overwhelm the embedding service.
+    // eslint-disable-next-line no-restricted-syntax
+    for (const item of products) {
+      // eslint-disable-next-line no-await-in-loop
+      await this.syncProduct(item);
+    }
+    // eslint-disable-next-line no-restricted-syntax
+    for (const item of activeStores) {
+      // eslint-disable-next-line no-await-in-loop
+      await this.syncStore(item);
+    }
+    const failed = [...products, ...activeStores].filter((item) => item.sync_status === 'failed').length;
+    await appendAuditEvent({
+      action: 'knowledge.rag_rebuild', entityType: 'knowledge', entityId: 'current',
+      payload: { products: products.length, stores: activeStores.length, failed },
+    });
+    return { products: products.length, stores: activeStores.length, failed };
   }
 
   async importProducts(rows: any[]) {
