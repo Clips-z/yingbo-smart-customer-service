@@ -1,9 +1,10 @@
 import crypto from 'crypto';
 import { Op } from 'sequelize';
 import { AuditEvent } from '../entities/auditEvent';
+import { redactAuditPayload } from './privacyService';
 
-const safePayload = (payload: Record<string, unknown>) => Object.fromEntries(
-  Object.entries(payload).filter(([key]) => !/key|token|secret|password/i.test(key)).slice(0, 50),
+const safePayload = (payload: Record<string, unknown>) => redactAuditPayload(
+  Object.fromEntries(Object.entries(payload).filter(([key]) => !/key|token|secret|password/i.test(key)).slice(0, 50)),
 );
 
 export async function appendAuditEvent(input: {

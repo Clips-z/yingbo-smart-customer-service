@@ -5,12 +5,10 @@ import { ReplyFeedback } from '../entities/replyFeedback';
 import { ReplySuggestion } from '../entities/replySuggestion';
 import { KnowledgeService } from './knowledgeService';
 import { appendAuditEvent } from './auditService';
+import { redactPersonalData } from './privacyService';
 
 const clean = (value: unknown, max: number) =>
-  String(value ?? '')
-    .replace(/\b1[3-9]\d{9}\b/g, '[手机号]')
-    .replace(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi, '[邮箱]')
-    .replace(/\b(?:\d[ -]?){15,19}\b/g, '[账号]')
+  redactPersonalData(value)
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, max);

@@ -1,3 +1,5 @@
+import { redactPersonalData } from './privacyService';
+
 export interface QianniuRecentMessage {
   direction: 'incoming' | 'outgoing';
   content: string;
@@ -15,7 +17,7 @@ const METADATA_PATTERNS = [
 ];
 
 function normalizeContent(content: string): string {
-  return content.replace(/\s+/gu, ' ').trim().slice(0, 300);
+  return redactPersonalData(content).replace(/\s+/gu, ' ').trim().slice(0, 300);
 }
 
 export function sanitizeQianniuRecentMessages(
