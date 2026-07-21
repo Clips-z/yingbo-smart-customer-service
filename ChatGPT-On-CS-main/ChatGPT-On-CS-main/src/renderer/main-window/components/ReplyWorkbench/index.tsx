@@ -54,7 +54,7 @@ import {
 import BatchActionBar from './BatchActionBar';
 import { useReplyWorkbench } from './useReplyWorkbench';
 import { useToast } from '../../hooks/useToast';
-import { replyAgeMinutes, sortReplies } from './replyPriority';
+import { filterReplies, replyAgeMinutes, ReplyFocus, sortReplies } from './replyPriority';
 
 // ── 常量 ──────────────────────────────────────────
 const platformEmoji: Record<string, string> = {
@@ -619,7 +619,11 @@ const EmptyState = ({ tabKey }: { tabKey: string }) => {
 
 // ── 主组件 ─────────────────────────────────────────
 
-const ReplyWorkbench = () => {
+const focusLabels: Record<ReplyFocus, string> = {
+  all: '全部', pending: '待回复', overdue: '超时', failed: '发送失败',
+};
+
+const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus = 'all' }) => {
   const {
     activePlatformId,
     activePlatformIds,
@@ -714,6 +718,12 @@ const ReplyWorkbench = () => {
   // 当前 tab 决定显示的列表数据
   const [tabKey, setTabKey] = useState<'all' | 'pending' | 'handled'>('all');
   const [sortMode, setSortMode] = useState<'priority' | 'newest' | 'oldest'>('priority');
+  const [focus, setFocus] = useState<ReplyFocus>(initialFocus);
+
+  React.useEffect(() => {
+    setFocus(initialFocus);
+    if (initialFocus !== 'all') setTabKey('all');
+  }, [initialFocus]);
 
   const listData = useMemo(() => {
     let source: ReplySuggestion[];
@@ -722,8 +732,8 @@ const ReplyWorkbench = () => {
       case 'handled': source = handled; break;
       default: source = suggestions;
     }
-    return sortReplies(source, sortMode);
-  }, [tabKey, suggestions, pending, handled, sortMode]);
+    return sortReplies(filterReplies(source, focus), sortMode);
+  }, [tabKey, suggestions, pending, handled, sortMode, focus]);
 
   React.useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -953,6 +963,12 @@ const ReplyWorkbench = () => {
       />
 
       {/* ── Tab 切换 + 双栏布局 ── */}
+      {focus !== 'all' && (
+        <Flex mb={3} px={3} py={2} bg="blue.50" borderRadius="lg" align="center" gap={2}>
+          <Text fontSize="12px" color="blue.700" flex="1">当前仅显示：{focusLabels[focus]}</Text>
+          <Button size="xs" variant="ghost" colorScheme="blue" onClick={() => setFocus('all')}>清除筛选</Button>
+        </Flex>
+      )}
       <Flex gap={1} mb={3}>
         {(['all', 'pending', 'handled'] as const).map((key) => {
           const count = key === 'all' ? suggestions.length : key === 'pending' ? pending.length : handled.length;
@@ -962,7 +978,7 @@ const ReplyWorkbench = () => {
               size="xs"
               variant={tabKey === key ? 'solid' : 'ghost'}
               colorScheme={tabKey === key ? 'brand' : 'gray'}
-              onClick={() => setTabKey(key)}
+              onClick={() => { setFocus('all'); setTabKey(key); }}
               borderRadius="lg"
               fontSize="11px"
               fontWeight={tabKey === key ? 600 : 500}

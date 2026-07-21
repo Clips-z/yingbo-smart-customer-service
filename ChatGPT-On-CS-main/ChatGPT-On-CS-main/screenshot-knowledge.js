@@ -245,6 +245,20 @@ app.whenReady().then(async () => {
     await shot(win, 'ui-notification-tasks.png');
     console.log('✅ notification shortcut');
 
+    win.setSize(760, 760);
+    await wait(500);
+    if (!await win.webContents.executeJavaScript("document.body.innerText.includes('今日待办') && document.body.innerText.includes('开始使用')")) throw new Error('narrow dashboard lost actionable content');
+    await shot(win, 'ui-dashboard-narrow.png');
+    win.setSize(1280, 760);
+    await wait(500);
+    console.log('✅ narrow dashboard');
+
+    if (!await clickByText(win, '发送失败')) throw new Error('failed dashboard card not found');
+    await wait(1000);
+    if (!await win.webContents.executeJavaScript("document.body.innerText.includes('当前仅显示：发送失败')")) throw new Error('failed dashboard card did not apply workbench filter');
+    await shot(win, 'ui-workbench-failed-filter.png');
+    console.log('✅ dashboard recovery filter');
+
     // 商品问答库 → 「添加商品」弹窗
     await nav(win, 'knowledge', 'product-qa');
     await wait(2000);

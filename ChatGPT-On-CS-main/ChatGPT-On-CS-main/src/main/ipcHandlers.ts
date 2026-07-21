@@ -119,7 +119,7 @@ const setupIpcHandlers = (
 
   ipcMain.on(
     'open-settings-window',
-    async (event, { appId, instanceId } = {}) => {
+    async (event, { appId, instanceId, tab } = {}) => {
       const args = [];
 
       if (appId) {
@@ -128,6 +128,10 @@ const setupIpcHandlers = (
 
       if (instanceId) {
         args.push(`settings-instance-id-${instanceId}`);
+      }
+
+      if (['general', 'ai', 'plugin', 'about'].includes(tab)) {
+        args.push(`settings-tab-${tab}`);
       }
 
       createSettingsWindow(args);

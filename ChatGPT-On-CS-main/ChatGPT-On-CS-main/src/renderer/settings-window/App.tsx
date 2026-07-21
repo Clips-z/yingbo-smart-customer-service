@@ -144,12 +144,15 @@ const App = () => {
     const { electron } = window;
     const handleParams = (receivedArgs: string[]) => {
       const settingsArgs = receivedArgs.reduce(
-        (acc: { appId?: string; instanceId?: string }, arg: string) => {
+        (acc: { appId?: string; instanceId?: string; tab?: string }, arg: string) => {
           if (arg.startsWith('settings-app-id-')) {
             acc.appId = arg.replace('settings-app-id-', '');
           }
           if (arg.startsWith('settings-instance-id-')) {
             acc.instanceId = arg.replace('settings-instance-id-', '');
+          }
+          if (arg.startsWith('settings-tab-')) {
+            acc.tab = arg.replace('settings-tab-', '');
           }
           return acc;
         },
@@ -157,6 +160,8 @@ const App = () => {
       );
 
       setSettings(settingsArgs);
+      const requestedTab = NAV_ITEMS.findIndex((item) => item.key === settingsArgs.tab);
+      if (requestedTab >= 0) setTabIndex(requestedTab);
 
       if (settingsArgs.appId) {
         fetchConfigActive(settingsArgs.appId, settingsArgs.instanceId);

@@ -16,6 +16,7 @@ import ContentSecurity from '../ContentSecurity';
 import KnowledgeCandidates from '../KnowledgeCandidates';
 import DashboardQualityOverview from '../DashboardQualityOverview';
 import KnowledgeGovernance from '../KnowledgeGovernance';
+import { ReplyFocus } from '../ReplyWorkbench/replyPriority';
 
 /* ── 工作台内容（保持不变）── */
 const DashboardContent = () => (
@@ -48,7 +49,7 @@ const DashboardContent = () => (
     <DashboardQualityOverview />
 
     {/* 平台卡片 */}
-    <AppManager />
+    <Box id="platform-manager"><AppManager /></Box>
 
     {/* 控制面板 + 日志：窄窗口纵向堆叠，窗口变宽后左右并排 */}
     <Flex direction={{ base: 'column', lg: 'row' }} gap={4} align="stretch">
@@ -99,13 +100,15 @@ const MainLayout = () => {
   const [activeSection, setActiveSection] = useState<NavSection>('dashboard');
   const [activeKnowledgeSub, setActiveKnowledgeSub] =
     useState<KnowledgeSubKey>('product-qa');
+  const [replyFocus, setReplyFocus] = useState<ReplyFocus>('all');
 
   // 暴露全局导航函数（供截图脚本 / 调试用）
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      (window as any).__navigateTo = (section: NavSection, sub?: KnowledgeSubKey) => {
+      (window as any).__navigateTo = (section: NavSection, sub?: KnowledgeSubKey, focus?: ReplyFocus) => {
         setActiveSection(section);
         if (sub) setActiveKnowledgeSub(sub);
+        if (section === 'service') setReplyFocus(focus || 'all');
       };
     }
     return () => { if ((window as any).__navigateTo) delete (window as any).__navigateTo; };
@@ -146,7 +149,7 @@ const MainLayout = () => {
                 return <DashboardContent />;
 
               case 'service':
-                return <ReplyWorkbench />;
+                return <ReplyWorkbench initialFocus={replyFocus} />;
 
               case 'knowledge':
                 // 根据知识管理子项渲染不同视图（后续 Task #14/#15 实现）
