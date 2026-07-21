@@ -332,6 +332,12 @@ class BKServer {
       }),
     );
     this.app.get(
+      '/api/v1/quality/feedback/variants',
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.replyFeedbackService.getVariantMetrics(Number(req.query.days) || 30) });
+      }),
+    );
+    this.app.get(
       '/api/v1/quality/suggestions/:id/evidence',
       asyncHandler(async (req, res) => {
         res.json({

@@ -36,6 +36,7 @@ import {
   EvaluationCaseItem,
   fetchEvaluationCases,
   compareEvaluationVariants,
+  fetchVariantFeedback,
 } from '../../../common/services/knowledge/corpusTest';
 
 const SUGGESTED = [
@@ -122,6 +123,7 @@ const CorpusTest: React.FC = () => {
   const [comparison, setComparison] = useState<{ winner: string; variants: Array<{ name: string; hitRate: number; averageLatencyMs: number }> } | null>(null);
   const [variantA, setVariantA] = useState({ name: '精确 Top3', topK: 3 });
   const [variantB, setVariantB] = useState({ name: '召回 Top5', topK: 5 });
+  const [variantFeedback, setVariantFeedback] = useState<Array<{ variant: string; totalActions: number; acceptanceRate: number; averageEditRatio: number }>>([]);
 
   useEffect(() => {
     (async () => {
@@ -232,6 +234,8 @@ const CorpusTest: React.FC = () => {
             <Flex mt={2} gap={2}><Input size="xs" value={variantA.name} onChange={(event) => setVariantA({ ...variantA, name: event.target.value })} /><Input size="xs" w="70px" type="number" min="1" max="20" value={variantA.topK} onChange={(event) => setVariantA({ ...variantA, topK: Number(event.target.value) || 1 })} /><Text fontSize="xs" alignSelf="center">vs</Text><Input size="xs" value={variantB.name} onChange={(event) => setVariantB({ ...variantB, name: event.target.value })} /><Input size="xs" w="70px" type="number" min="1" max="20" value={variantB.topK} onChange={(event) => setVariantB({ ...variantB, topK: Number(event.target.value) || 1 })} /></Flex>
             <Button mt={2} size="xs" w="full" variant="outline" colorScheme="purple" onClick={async () => setComparison(await compareEvaluationVariants(variantA, variantB))}>对比两套方案</Button>
             {comparison && <Box mt={2} bg="purple.50" borderRadius="md" p={2}><Text fontSize="11px" fontWeight="700">建议：{comparison.winner}</Text>{comparison.variants.map((variant) => <Text key={variant.name} fontSize="10px">{variant.name}：命中 {variant.hitRate}% · {variant.averageLatencyMs}ms</Text>)}</Box>}
+            <Button mt={2} size="xs" w="full" variant="outline" onClick={async () => setVariantFeedback(await fetchVariantFeedback())}>查看近 30 天人工反馈</Button>
+            {variantFeedback.map((item) => <Text key={item.variant} mt={1} fontSize="10px" color="gray.600">{item.variant}：{item.totalActions} 次反馈 · 采纳 {item.acceptanceRate}% · 平均改写 {Math.round(item.averageEditRatio * 100)}%</Text>)}
             {summary && (
               <Box mt={3} bg="green.50" borderRadius="md" p={2}>
                 <Text fontSize="11px" fontWeight="700">回归集 {summary.total} 条 · Hit@1 {summary.hitAt1}% · Hit@5 {summary.hitAt5}%</Text>

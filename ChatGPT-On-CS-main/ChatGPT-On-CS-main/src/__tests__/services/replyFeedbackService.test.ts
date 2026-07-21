@@ -29,7 +29,7 @@ describe('ReplyFeedbackService', () => {
 
   afterEach(async () => database.close());
 
-  const createSuggestion = () =>
+  const createSuggestion = (modelName?: string, promptVersion?: string) =>
     ReplySuggestion.create({
       platform_id: 'win_qianniu',
       store: '测试店',
@@ -38,6 +38,8 @@ describe('ReplyFeedbackService', () => {
       reply_content: '今天发',
       original_reply_content: '今天发',
       status: 'pending',
+      model_name: modelName || null,
+      prompt_version: promptVersion || null,
     });
 
   it('records the final content and a normalized edit ratio', async () => {
@@ -91,5 +93,16 @@ describe('ReplyFeedbackService', () => {
       dismissed: 1,
       failed: 1,
     });
+  });
+
+  it('groups real feedback by recorded model and prompt versions', async () => {
+    const current = await createSuggestion('gpt-current', 'v1');
+    const candidate = await createSuggestion('gpt-candidate', 'v2');
+    await service.record({ suggestionId: current.id, eventKey: 'current-filled', action: 'filled', finalContent: '今天发' });
+    await service.record({ suggestionId: candidate.id, eventKey: 'candidate-dismissed', action: 'dismissed' });
+    await expect(service.getVariantMetrics(30)).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ variant: 'gpt-current / v1', totalActions: 1, acceptanceRate: 100 }),
+      expect.objectContaining({ variant: 'gpt-candidate / v2', totalActions: 1, acceptanceRate: 0 }),
+    ]));
   });
 });

@@ -85,3 +85,8 @@ export async function compareEvaluationVariants(variantA = { name: '精确 Top3'
   );
   return response.data;
 }
+
+export async function fetchVariantFeedback() {
+  const response = await GET<{ data: Array<{ variant: string; totalActions: number; acceptanceRate: number; averageEditRatio: number }> }>('/api/v1/quality/feedback/variants', { days: 30 });
+  return response.data;
+}

@@ -119,4 +119,29 @@ export class ReplyFeedbackService {
         : 0,
     };
   }
+
+  async getVariantMetrics(days = 30) {
+    const since = new Date(Date.now() - Math.min(365, Math.max(1, Number(days) || 30)) * 24 * 60 * 60 * 1000);
+    const rows = await ReplyFeedback.findAll({ where: { created_at: { [Op.gte]: since } } });
+    const suggestions = await ReplySuggestion.findAll({
+      where: { id: { [Op.in]: [...new Set(rows.map((row) => row.suggestion_id))] } },
+      attributes: ['id', 'model_name', 'prompt_version'],
+    });
+    const byId = new Map(suggestions.map((item) => [item.id, item]));
+    const groups = new Map<string, { variant: string; totalActions: number; accepted: number; edited: number; editTotal: number }>();
+    rows.forEach((row) => {
+      const suggestion = byId.get(row.suggestion_id);
+      const variant = `${suggestion?.model_name || '未知模型'} / ${suggestion?.prompt_version || '默认提示词'}`;
+      const group = groups.get(variant) || { variant, totalActions: 0, accepted: 0, edited: 0, editTotal: 0 };
+      group.totalActions += 1;
+      if (['filled', 'sent'].includes(row.action)) group.accepted += 1;
+      if (Number(row.edit_ratio || 0) > 0.05) { group.edited += 1; group.editTotal += Number(row.edit_ratio); }
+      groups.set(variant, group);
+    });
+    return [...groups.values()].map((group) => ({
+      ...group,
+      acceptanceRate: group.totalActions ? Math.round(group.accepted / group.totalActions * 1000) / 10 : 0,
+      averageEditRatio: group.edited ? Math.round(group.editTotal / group.edited * 10000) / 10000 : 0,
+    })).sort((left, right) => right.totalActions - left.totalActions);
+  }
 }
