@@ -13,6 +13,7 @@ import {
   HStack,
   Divider,
   Progress,
+  Input,
 } from '@chakra-ui/react';
 import {
   FiSend,
@@ -119,6 +120,8 @@ const CorpusTest: React.FC = () => {
   const [savedCases, setSavedCases] = useState<EvaluationCaseItem[]>([]);
   const [editingCaseId, setEditingCaseId] = useState<string | undefined>();
   const [comparison, setComparison] = useState<{ winner: string; variants: Array<{ name: string; hitRate: number; averageLatencyMs: number }> } | null>(null);
+  const [variantA, setVariantA] = useState({ name: '精确 Top3', topK: 3 });
+  const [variantB, setVariantB] = useState({ name: '召回 Top5', topK: 5 });
 
   useEffect(() => {
     (async () => {
@@ -226,7 +229,8 @@ const CorpusTest: React.FC = () => {
               <Button size="xs" flex="1" variant="outline" onClick={saveCase} isDisabled={!query.trim()}>保存为测试用例</Button>
               <Button size="xs" flex="1" variant="outline" onClick={runRegression}>运行回归集</Button>
             </Flex>
-            <Button mt={2} size="xs" w="full" variant="outline" colorScheme="purple" onClick={async () => setComparison(await compareEvaluationVariants())}>对比 Top3 / Top5 方案</Button>
+            <Flex mt={2} gap={2}><Input size="xs" value={variantA.name} onChange={(event) => setVariantA({ ...variantA, name: event.target.value })} /><Input size="xs" w="70px" type="number" min="1" max="20" value={variantA.topK} onChange={(event) => setVariantA({ ...variantA, topK: Number(event.target.value) || 1 })} /><Text fontSize="xs" alignSelf="center">vs</Text><Input size="xs" value={variantB.name} onChange={(event) => setVariantB({ ...variantB, name: event.target.value })} /><Input size="xs" w="70px" type="number" min="1" max="20" value={variantB.topK} onChange={(event) => setVariantB({ ...variantB, topK: Number(event.target.value) || 1 })} /></Flex>
+            <Button mt={2} size="xs" w="full" variant="outline" colorScheme="purple" onClick={async () => setComparison(await compareEvaluationVariants(variantA, variantB))}>对比两套方案</Button>
             {comparison && <Box mt={2} bg="purple.50" borderRadius="md" p={2}><Text fontSize="11px" fontWeight="700">建议：{comparison.winner}</Text>{comparison.variants.map((variant) => <Text key={variant.name} fontSize="10px">{variant.name}：命中 {variant.hitRate}% · {variant.averageLatencyMs}ms</Text>)}</Box>}
             {summary && (
               <Box mt={3} bg="green.50" borderRadius="md" p={2}>

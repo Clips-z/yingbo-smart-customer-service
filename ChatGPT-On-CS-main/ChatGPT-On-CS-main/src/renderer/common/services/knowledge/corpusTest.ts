@@ -78,10 +78,10 @@ export async function runSavedEvaluation() {
   return response.data;
 }
 
-export async function compareEvaluationVariants() {
+export async function compareEvaluationVariants(variantA = { name: '精确 Top3', topK: 3 }, variantB = { name: '召回 Top5', topK: 5 }) {
   const response = await POST<{ data: { winner: string; variants: Array<{ name: string; topK: number; hitRate: number; averageLatencyMs: number }> } }>(
     '/api/v1/quality/evaluation/compare',
-    { variantA: { name: '精确 Top3', topK: 3 }, variantB: { name: '召回 Top5', topK: 5 } },
+    { variantA, variantB },
   );
   return response.data;
 }
