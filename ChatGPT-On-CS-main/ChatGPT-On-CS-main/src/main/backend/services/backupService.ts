@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
+import sqlite from 'sqlite3';
 import { Sequelize } from 'sequelize';
 import { appendAuditEvent } from './auditService';
 
@@ -9,6 +10,16 @@ const hashFile = async (filename: string) =>
     .createHash('sha256')
     .update((await fs.readFile(filename)) as crypto.BinaryLike)
     .digest('hex');
+
+const sqliteIntegrity = (filename: string) => new Promise<boolean>((resolve) => {
+  const database = new sqlite.Database(filename, sqlite.OPEN_READONLY, (error) => {
+    if (error) { resolve(false); return; }
+    database.get('PRAGMA integrity_check', (queryError, row: { integrity_check?: string } | undefined) => {
+      database.close();
+      resolve(!queryError && row?.integrity_check === 'ok');
+    });
+  });
+});
 
 export class BackupService {
   private databaseFile: string;
@@ -61,10 +72,12 @@ export class BackupService {
     const database = path.join(this.backupDir, path.basename(manifest.database));
     const actualHash = await hashFile(database);
     const header = (await fs.readFile(database)).subarray(0, 16).toString('utf8');
+    const integrityValid = await sqliteIntegrity(database);
     const valid = actualHash === manifest.sha256
       && header === 'SQLite format 3\u0000'
-      && manifest.schemaVersion === 1;
-    return { ...manifest, valid, actualHash, sqliteHeaderValid: header === 'SQLite format 3\u0000' };
+      && manifest.schemaVersion === 1
+      && integrityValid;
+    return { ...manifest, valid, actualHash, sqliteHeaderValid: header === 'SQLite format 3\u0000', integrityValid };
   }
 
   async scheduleRestore(id: string) {
