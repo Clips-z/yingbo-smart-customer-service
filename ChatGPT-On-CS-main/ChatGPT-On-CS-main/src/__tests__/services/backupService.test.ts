@@ -26,4 +26,12 @@ describe('BackupService', () => {
     await expect(service.scheduleRestore(backup.id)).resolves.toMatchObject({ scheduled: true, restartRequired: true });
     expect(fs.existsSync(path.join(directory, 'restore-pending.json'))).toBe(true);
   });
+
+  it('rejects a damaged backup before scheduling restore', async () => {
+    const service = new BackupService(database);
+    const backup = await service.create();
+    fs.appendFileSync(path.join(directory, 'backups', `${backup.id}.db`), 'damaged');
+    await expect(service.verify(backup.id)).resolves.toMatchObject({ valid: false });
+    await expect(service.scheduleRestore(backup.id)).rejects.toThrow('备份校验失败');
+  });
 });
