@@ -463,6 +463,7 @@ export class KnowledgeService {
         ];
       }
       if (query.shop && query.shop !== 'all') where.shop_id = String(query.shop);
+      if (query.platform && query.platform !== 'all') where.platform_id = String(query.platform);
       if (query.status === 'on') where.on_sale = true;
       if (query.status === 'off') where.on_sale = false;
       const rows = await ProductKnowledge.findAll({ where, order: [['updated_at', 'DESC']] });
@@ -492,6 +493,7 @@ export class KnowledgeService {
       ];
     }
     if (query.shop && query.shop !== 'all') where.shop_id = String(query.shop);
+    if (query.platform && query.platform !== 'all') where.platform_id = String(query.platform);
     if (query.stage && query.stage !== 'all') where.stage = String(query.stage);
     const rows = await StoreKnowledge.findAll({ where, order: [['updated_at', 'DESC']] });
     return rows.map((item) => ({
