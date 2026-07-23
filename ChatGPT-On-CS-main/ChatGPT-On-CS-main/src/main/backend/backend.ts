@@ -65,7 +65,7 @@ import { KnowledgeCandidateService } from './services/knowledgeCandidateService'
 import { EvaluationService } from './services/evaluationService';
 import { BackupService } from './services/backupService';
 import { appendAuditEvent, AuditExportFormat, listAuditEvents, serializeAuditExport } from './services/auditService';
-import { replaySanitizedFixtures } from './services/replayService';
+import { deleteReplayFixture, listReplayFixtures, replaySanitizedFixtures, saveReplayFixture } from './services/replayService';
 import { CompanionContextRegistry } from './services/companionContextRegistry';
 import {
   CTX_APP_ID,
@@ -433,6 +433,15 @@ class BKServer {
       const rows = replaySanitizedFixtures(req.body.fixtures);
       res.json({ success: true, data: { rows, passed: rows.filter((row) => row.passed).length, total: rows.length } });
     });
+    this.app.get('/api/v1/quality/replay/fixtures', asyncHandler(async (_req, res) => {
+      res.json({ success: true, data: await listReplayFixtures() });
+    }));
+    this.app.post('/api/v1/quality/replay/fixtures/save', asyncHandler(async (req, res) => {
+      res.json({ success: true, data: await saveReplayFixture(req.body) });
+    }));
+    this.app.post('/api/v1/quality/replay/fixtures/delete', asyncHandler(async (req, res) => {
+      res.json({ success: true, data: await deleteReplayFixture(String(req.body.id || '')) });
+    }));
     this.app.get(
       '/api/v1/governance/audit',
       asyncHandler(async (req, res) => {

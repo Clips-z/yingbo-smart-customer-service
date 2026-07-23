@@ -41,6 +41,7 @@ import { initReplyFeedback } from './entities/replyFeedback';
 import { initRetrievalEvidence } from './entities/retrievalEvidence';
 import { initEvaluationCase } from './entities/evaluationCase';
 import { initEvaluationRun } from './entities/evaluationRun';
+import { initReplayFixture } from './entities/replayFixture';
 import { initKnowledgeVersion } from './entities/knowledgeVersion';
 import { initAuditEvent } from './entities/auditEvent';
 
@@ -154,6 +155,7 @@ initReplyFeedback(sequelize);
 initRetrievalEvidence(sequelize);
 initEvaluationCase(sequelize);
 initEvaluationRun(sequelize);
+initReplayFixture(sequelize);
 initKnowledgeVersion(sequelize);
 initAuditEvent(sequelize);
 
