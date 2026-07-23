@@ -34,7 +34,7 @@ import {
 } from './entities/keyword';
 import { TransferKeyword, initTransfer } from './entities/transfer';
 import { ReplaceKeyword, initReplace } from './entities/replace';
-import { initProductKnowledge } from './entities/productKnowledge';
+import { checkAndAddFields as checkProductKnowledgeFields, initProductKnowledge } from './entities/productKnowledge';
 import { initStoreKnowledge, checkAndAddFields as checkStoreKnowledgeFields } from './entities/storeKnowledge';
 import { initKnowledgeCandidate } from './entities/knowledgeCandidate';
 import { initReplyFeedback } from './entities/replyFeedback';
@@ -382,6 +382,7 @@ export const databaseReady = (async () => {
       checkPluginFields(sequelize),
       checkReplySuggestionFields(sequelize),
       checkStoreKnowledgeFields(sequelize),
+      checkProductKnowledgeFields(sequelize),
     ]);
     await initDb();
     // 解密之前被 safeStorage 加密的 API key（一次性迁移）

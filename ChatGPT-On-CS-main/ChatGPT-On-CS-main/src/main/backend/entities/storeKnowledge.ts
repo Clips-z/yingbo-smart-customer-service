@@ -10,6 +10,7 @@ export class StoreKnowledge extends Model {
   declare stage: 'presale' | 'mid' | 'aftersale';
   declare match_type: 'exact' | 'fuzzy';
   declare shop_id: string;
+  declare platform_id: string;
   declare enabled: boolean;
   declare sync_status: 'pending' | 'synced' | 'failed';
   declare sync_error: string | null;
@@ -31,6 +32,7 @@ export function initStoreKnowledge(sequelize: Sequelize) {
       stage: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'presale' },
       match_type: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'fuzzy' },
       shop_id: { type: DataTypes.STRING(100), allowNull: false },
+      platform_id: { type: DataTypes.STRING(100), allowNull: false, defaultValue: 'unassigned' },
       enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
       sync_status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pending' },
       sync_error: { type: DataTypes.STRING(500), allowNull: true },
@@ -45,7 +47,7 @@ export function initStoreKnowledge(sequelize: Sequelize) {
       modelName: 'StoreKnowledge',
       timestamps: false,
       indexes: [
-        { fields: ['shop_id', 'stage'] },
+        { fields: ['platform_id', 'shop_id', 'stage'] },
         { fields: ['enabled', 'sync_status'] },
         { fields: ['updated_at'] },
       ],
@@ -55,11 +57,12 @@ export function initStoreKnowledge(sequelize: Sequelize) {
 
 export async function checkAndAddFields(sequelize: Sequelize) {
   const table = (await StoreKnowledge.describe()) as Record<string, unknown>;
-  for (const name of ['effective_at', 'expires_at']) {
+  for (const name of ['effective_at', 'expires_at', 'platform_id']) {
     if (!table[name]) {
       await sequelize.getQueryInterface().addColumn('n_store_knowledge', name, {
         type: DataTypes.DATE,
-        allowNull: true,
+        allowNull: name === 'platform_id' ? false : true,
+        defaultValue: name === 'platform_id' ? 'unassigned' : undefined,
       });
     }
   }
