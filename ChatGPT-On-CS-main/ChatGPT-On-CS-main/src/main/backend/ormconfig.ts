@@ -61,6 +61,7 @@ const DB_FILE_PATH = path.join(APP_DIR, 'msg.db');
 
 // 恢复在数据库连接建立前执行，避免覆盖正在使用的 SQLite 文件。
 const restoreMarker = path.join(APP_DIR, 'restore-pending.json');
+const restoreRagMarker = path.join(APP_DIR, 'restore-rag-pending.json');
 if (fs.existsSync(restoreMarker)) {
   const request = JSON.parse(fs.readFileSync(restoreMarker, 'utf8'));
   const backupDir = path.join(APP_DIR, 'backups');
@@ -75,10 +76,28 @@ if (fs.existsSync(restoreMarker)) {
         fs.copyFileSync(DB_FILE_PATH, path.join(backupDir, `pre-restore-${Date.now()}.db`));
       }
       fs.copyFileSync(source, DB_FILE_PATH);
+      fs.writeFileSync(restoreRagMarker, JSON.stringify({
+        id: String(request.id || ''),
+        restoredAt: new Date().toISOString(),
+      }), 'utf8');
     }
   }
   fs.unlinkSync(restoreMarker);
 }
+
+export const getPendingRestoreRagRebuild = () => {
+  if (!fs.existsSync(restoreRagMarker)) return undefined;
+  try {
+    const pending = JSON.parse(fs.readFileSync(restoreRagMarker, 'utf8'));
+    return pending?.id ? { id: String(pending.id), restoredAt: String(pending.restoredAt || '') } : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+export const clearPendingRestoreRagRebuild = () => {
+  if (fs.existsSync(restoreRagMarker)) fs.unlinkSync(restoreRagMarker);
+};
 
 export const sequelize = new Sequelize({
   dialect: 'sqlite',

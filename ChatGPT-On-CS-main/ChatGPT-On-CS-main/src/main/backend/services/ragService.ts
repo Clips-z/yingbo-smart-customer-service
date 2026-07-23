@@ -109,6 +109,15 @@ export class RagService {
     };
   }
 
+  public async waitUntilRunning(timeoutMs = 60_000): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      if (this.state === 'running') return;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    throw new Error(this.lastError || 'RAG 服务未在恢复后启动');
+  }
+
   public async uploadText(text: string, filename: string): Promise<void> {
     if (!text.trim()) throw new Error('RAG 同步文本不能为空');
     const axios = (await import('axios')).default;

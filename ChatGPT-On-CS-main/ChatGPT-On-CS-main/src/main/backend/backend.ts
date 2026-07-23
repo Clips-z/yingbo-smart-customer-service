@@ -5,7 +5,12 @@ import bodyParser from 'body-parser';
 import http from 'http';
 import { Server } from 'socket.io';
 import { BrowserWindow, shell } from 'electron';
-import { databaseReady, sequelize } from './ormconfig';
+import {
+  clearPendingRestoreRagRebuild,
+  databaseReady,
+  getPendingRestoreRagRebuild,
+  sequelize,
+} from './ormconfig';
 import { ConfigController } from './controllers/configController';
 import { MessageController } from './controllers/messageController';
 import { KeywordReplyController } from './controllers/keywordReplyController';
@@ -59,7 +64,7 @@ import {
 import { KnowledgeCandidateService } from './services/knowledgeCandidateService';
 import { EvaluationService } from './services/evaluationService';
 import { BackupService } from './services/backupService';
-import { AuditExportFormat, listAuditEvents, serializeAuditExport } from './services/auditService';
+import { appendAuditEvent, AuditExportFormat, listAuditEvents, serializeAuditExport } from './services/auditService';
 import { replaySanitizedFixtures } from './services/replayService';
 import { CompanionContextRegistry } from './services/companionContextRegistry';
 import {
@@ -2366,6 +2371,27 @@ class BKServer {
     });
   }
 
+  private async rebuildRagAfterRestore(): Promise<void> {
+    const pending = getPendingRestoreRagRebuild();
+    if (!pending) return;
+    try {
+      await this.ragService.waitUntilRunning();
+      const result = await this.knowledgeService.rebuildRag();
+      clearPendingRestoreRagRebuild();
+      await appendAuditEvent({
+        action: 'backup.restore_completed', entityType: 'backup', entityId: pending.id,
+        payload: { restoredAt: pending.restoredAt, ragRebuild: result },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.loggerService.error(`恢复后重建 RAG 失败: ${message}`);
+      await appendAuditEvent({
+        action: 'backup.restore_rag_failed', entityType: 'backup', entityId: pending.id,
+        payload: { restoredAt: pending.restoredAt, message },
+      });
+    }
+  }
+
   // 启动服务器的方法
   start() {
     return new Promise((resolve, reject) => {
@@ -2382,6 +2408,7 @@ class BKServer {
             this.pddSidecarService.start();
             this.douyinSidecarService.start();
             this.ragService.start();
+            void this.rebuildRagAfterRestore();
             resolve(true);
           } catch (error) {
             reject(error);
