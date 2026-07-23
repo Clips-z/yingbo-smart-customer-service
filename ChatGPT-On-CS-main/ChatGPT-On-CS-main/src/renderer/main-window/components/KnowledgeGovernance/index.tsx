@@ -13,6 +13,7 @@ const KnowledgeGovernance: React.FC = () => {
   const [auditPage, setAuditPage] = useState(1);
   const [auditKeyword, setAuditKeyword] = useState('');
   const [auditAction, setAuditAction] = useState('');
+  const [restoreResult, setRestoreResult] = useState<AuditItem | undefined>();
   const [fixtures, setFixtures] = useState('[\n  {"platformId":"win_qianniu","source":"llm","retrievalStatus":"hit","ocrConfidence":0.95,"expectedAllowed":true}\n]');
   const [restoreBackup, setRestoreBackup] = useState<BackupManifest | null>(null);
   const [confirmRebuild, setConfirmRebuild] = useState(false);
@@ -20,8 +21,8 @@ const KnowledgeGovernance: React.FC = () => {
   const cancelRebuildRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async (page = auditPage, keyword = auditKeyword, action = auditAction) => {
-    const [backupRows, auditRows] = await Promise.all([fetchBackups(), fetchAudit({ page, pageSize: 20, keyword, action })]);
-    setBackups(backupRows); setAudit(auditRows.items); setAuditTotal(auditRows.total); setAuditPage(auditRows.page);
+    const [backupRows, auditRows, restoreRows] = await Promise.all([fetchBackups(), fetchAudit({ page, pageSize: 20, keyword, action }), fetchAudit({ page: 1, pageSize: 1, action: 'backup.restore_' })]);
+    setBackups(backupRows); setAudit(auditRows.items); setAuditTotal(auditRows.total); setAuditPage(auditRows.page); setRestoreResult(restoreRows.items[0]);
   }, [auditAction, auditKeyword, auditPage]);
   useEffect(() => { load().catch(() => undefined); }, [load]);
 
@@ -45,6 +46,7 @@ const KnowledgeGovernance: React.FC = () => {
       <SimpleGrid columns={{ base: 1, xl: 2 }} spacing={4}>
         <Box bg="white" borderRadius="xl" borderWidth="1px" borderColor="gray.100" p={4}>
           <Flex justify="space-between" align="center" mb={3}><Text fontWeight="800">备份与恢复</Text><Button size="sm" colorScheme="blue" onClick={async () => { await createBackup(); await load(); toast({ title: '备份已创建并校验', status: 'success' }); }}>立即备份</Button></Flex>
+          {restoreResult && <Box mb={3} p={2} borderRadius="md" bg={restoreResult.action === 'backup.restore_completed' ? 'green.50' : 'red.50'}><Text fontSize="xs" fontWeight="700">{restoreResult.action === 'backup.restore_completed' ? '最近恢复已完成，RAG 已重建' : '最近恢复后的 RAG 重建失败'}</Text><Text fontSize="xs" color="gray.600">{new Date(restoreResult.created_at).toLocaleString('zh-CN')} · {restoreResult.payload?.ragRebuild ? `商品 ${restoreResult.payload.ragRebuild.products}，问答 ${restoreResult.payload.ragRebuild.stores}，失败 ${restoreResult.payload.ragRebuild.failed}` : String(restoreResult.payload?.message || '请查看审计记录后重试')}</Text></Box>}
           <VStack align="stretch" spacing={2}>{backups.length === 0 ? <Text fontSize="sm" color="gray.500">暂无备份</Text> : backups.map((item) => <Flex key={item.id} bg="gray.50" p={3} borderRadius="lg" gap={2} align="center"><Box flex="1"><Text fontSize="sm" fontWeight="700">{new Date(item.createdAt).toLocaleString('zh-CN')}</Text><Text fontSize="xs" color="gray.500">{Math.round(item.size / 1024)} KB · {item.sha256.slice(0, 12)}…</Text></Box><Button size="xs" onClick={async () => { const result = await verifyBackup(item.id); toast({ title: result.valid ? '备份校验通过' : '备份损坏', status: result.valid ? 'success' : 'error' }); }}>校验</Button><Button size="xs" colorScheme="orange" onClick={() => setRestoreBackup(item)}>恢复</Button></Flex>)}</VStack>
         </Box>
         <Box bg="white" borderRadius="xl" borderWidth="1px" borderColor="gray.100" p={4}>

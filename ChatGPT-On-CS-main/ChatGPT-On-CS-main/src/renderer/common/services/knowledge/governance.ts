@@ -1,7 +1,7 @@
 import { GET, POST } from '../common/api/request';
 
 export interface BackupManifest { id: string; size: number; sha256: string; createdAt: string; valid?: boolean }
-export interface AuditItem { id: string; action: string; entity_type: string; entity_id: string; actor: string; event_hash: string; created_at: string }
+export interface AuditItem { id: string; action: string; entity_type: string; entity_id: string; actor: string; event_hash: string; created_at: string; payload?: Record<string, any> }
 export interface AuditPage { items: AuditItem[]; total: number; page: number; pageSize: number }
 export interface AuditFilters { keyword?: string; action?: string; page?: number; pageSize?: number }
 
