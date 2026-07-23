@@ -15,6 +15,12 @@ const paging = (pageValue: unknown, pageSizeValue: unknown) => {
   const pageSize = Math.min(100, Math.max(1, Number(pageSizeValue) || 20));
   return { page, pageSize, offset: (page - 1) * pageSize };
 };
+const assertScope = (item: { platform_id: string; shop_id: string; stage?: string }, scope?: any) => {
+  if (!scope) return;
+  if (scope.platformId && scope.platformId !== 'all' && item.platform_id !== scope.platformId) throw new Error('知识不在当前平台范围内');
+  if (scope.shopId && scope.shopId !== 'all' && item.shop_id !== scope.shopId) throw new Error('知识不在当前店铺范围内');
+  if (scope.stage && scope.stage !== 'all' && item.stage !== scope.stage) throw new Error('知识不在当前阶段范围内');
+};
 
 const comparableText = (value: string) => value.toLowerCase().replace(/[\s，。！？、；：,.!?;:'"“”‘’（）()【】《》]/g, '');
 
@@ -169,9 +175,10 @@ export class KnowledgeService {
     return productJson(item);
   }
 
-  async updateProduct(id: string, body: any) {
+  async updateProduct(id: string, body: any, scope?: any) {
     const item = await ProductKnowledge.findByPk(id);
     if (!item) throw new Error('商品不存在');
+    assertScope(item, scope);
     const input = validateProductKnowledgeInput(body);
     await item.update({
       name: input.name,
@@ -272,10 +279,11 @@ export class KnowledgeService {
     return storeJson(item);
   }
 
-  async updateStoreKnowledge(id: string, body: any) {
+  async updateStoreKnowledge(id: string, body: any, scope?: any) {
     const input = validateStoreKnowledgeInput(body);
     const item = await StoreKnowledge.findByPk(id);
     if (!item) throw new Error('知识条目不存在');
+    assertScope(item, scope);
     await item.update({
       question: input.question,
       answer: input.answer,

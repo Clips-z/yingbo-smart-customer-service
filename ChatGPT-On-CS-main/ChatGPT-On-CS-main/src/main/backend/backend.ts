@@ -2174,7 +2174,7 @@ class BKServer {
       asyncHandler(async (req, res) => {
         res.json({
           success: true,
-          data: await this.knowledgeService.updateProduct(String(req.body.id || ''), req.body),
+          data: await this.knowledgeService.updateProduct(String(req.body.id || ''), req.body, req.body.scope),
         });
       }),
     );
@@ -2217,7 +2217,7 @@ class BKServer {
     this.app.post(
       '/api/v1/knowledge/store-qa/update',
       asyncHandler(async (req, res) => {
-        res.json({ success: true, data: await this.knowledgeService.updateStoreKnowledge(String(req.body.id || ''), req.body) });
+        res.json({ success: true, data: await this.knowledgeService.updateStoreKnowledge(String(req.body.id || ''), req.body, req.body.scope) });
       }),
     );
     this.app.post(
