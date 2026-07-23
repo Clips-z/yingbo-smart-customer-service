@@ -1,7 +1,9 @@
 import sqlite from 'sqlite3';
 import { Sequelize } from 'sequelize';
 import { initEvaluationCase } from '../../main/backend/entities/evaluationCase';
+import { initEvaluationRun, EvaluationRun } from '../../main/backend/entities/evaluationRun';
 import { initStoreKnowledge, StoreKnowledge } from '../../main/backend/entities/storeKnowledge';
+import { initAuditEvent } from '../../main/backend/entities/auditEvent';
 import { EvaluationService } from '../../main/backend/services/evaluationService';
 
 describe('EvaluationService', () => {
@@ -10,7 +12,9 @@ describe('EvaluationService', () => {
   beforeEach(async () => {
     database = new Sequelize({ dialect: 'sqlite', dialectModule: sqlite, storage: ':memory:', logging: false });
     initEvaluationCase(database);
+    initEvaluationRun(database);
     initStoreKnowledge(database);
+    initAuditEvent(database);
     await database.sync();
     await StoreKnowledge.create({
       id: 'knowledge-1', question: '多久发货？', answer: '当天发货', related_questions: [], tags: [],
@@ -42,5 +46,18 @@ describe('EvaluationService', () => {
     await expect(service.runCases()).resolves.toMatchObject({
       total: 1, hitAt1: 100, hitAt3: 100, hitAt5: 100, noHitRate: 0,
     });
+  });
+
+  it('persists the compared variants, case revision, metrics, and winner', async () => {
+    const service = new EvaluationService(async () => [{
+      knowledgeId: 'knowledge-1', source: 'store-qa-knowledge-1.txt', content: 'chunk', rank: 1,
+    }]);
+    await service.saveCase({ question: '什么时候发货', expectedKnowledgeIds: ['knowledge-1'] });
+    await expect(service.compareVariants({ variantA: { name: 'Top1', topK: 1 }, variantB: { name: 'Top3', topK: 3 } }))
+      .resolves.toMatchObject({ winner: 'Top1', variants: [{ name: 'Top1' }, { name: 'Top3' }] });
+    await expect(EvaluationRun.count()).resolves.toBe(1);
+    await expect(service.listComparisonRuns()).resolves.toEqual([
+      expect.objectContaining({ winner: 'Top1', cases: [expect.objectContaining({ updatedAt: expect.any(String) })] }),
+    ]);
   });
 });

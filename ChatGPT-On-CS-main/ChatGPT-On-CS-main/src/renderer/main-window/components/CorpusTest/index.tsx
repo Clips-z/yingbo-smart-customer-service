@@ -36,6 +36,7 @@ import {
   EvaluationCaseItem,
   fetchEvaluationCases,
   compareEvaluationVariants,
+  fetchEvaluationRuns,
   fetchVariantFeedback,
 } from '../../../common/services/knowledge/corpusTest';
 
@@ -124,6 +125,7 @@ const CorpusTest: React.FC = () => {
   const [variantA, setVariantA] = useState({ name: '精确 Top3', topK: 3 });
   const [variantB, setVariantB] = useState({ name: '召回 Top5', topK: 5 });
   const [variantFeedback, setVariantFeedback] = useState<Array<{ variant: string; totalActions: number; acceptanceRate: number; averageEditRatio: number }>>([]);
+  const [comparisonRuns, setComparisonRuns] = useState<Array<{ id: string; winner: string; created_at: string; results: Array<{ name: string; hitRate: number }> }>>([]);
 
   useEffect(() => {
     (async () => {
@@ -131,6 +133,7 @@ const CorpusTest: React.FC = () => {
         const res = await fetchStoreQAList({ page: 1, pageSize: 100 });
         setCorpus(res.list);
         setSavedCases(await fetchEvaluationCases());
+        setComparisonRuns(await fetchEvaluationRuns());
       } catch {
         toast({ title: '知识库加载失败', status: 'error', duration: 2000, isClosable: true });
       } finally {
@@ -232,8 +235,9 @@ const CorpusTest: React.FC = () => {
               <Button size="xs" flex="1" variant="outline" onClick={runRegression}>运行回归集</Button>
             </Flex>
             <Flex mt={2} gap={2}><Input size="xs" value={variantA.name} onChange={(event) => setVariantA({ ...variantA, name: event.target.value })} /><Input size="xs" w="70px" type="number" min="1" max="20" value={variantA.topK} onChange={(event) => setVariantA({ ...variantA, topK: Number(event.target.value) || 1 })} /><Text fontSize="xs" alignSelf="center">vs</Text><Input size="xs" value={variantB.name} onChange={(event) => setVariantB({ ...variantB, name: event.target.value })} /><Input size="xs" w="70px" type="number" min="1" max="20" value={variantB.topK} onChange={(event) => setVariantB({ ...variantB, topK: Number(event.target.value) || 1 })} /></Flex>
-            <Button mt={2} size="xs" w="full" variant="outline" colorScheme="purple" onClick={async () => setComparison(await compareEvaluationVariants(variantA, variantB))}>对比两套方案</Button>
+            <Button mt={2} size="xs" w="full" variant="outline" colorScheme="purple" onClick={async () => { setComparison(await compareEvaluationVariants(variantA, variantB)); setComparisonRuns(await fetchEvaluationRuns()); }}>对比两套方案</Button>
             {comparison && <Box mt={2} bg="purple.50" borderRadius="md" p={2}><Text fontSize="11px" fontWeight="700">建议：{comparison.winner}</Text>{comparison.variants.map((variant) => <Text key={variant.name} fontSize="10px">{variant.name}：命中 {variant.hitRate}% · {variant.averageLatencyMs}ms</Text>)}</Box>}
+            {comparisonRuns.slice(0, 3).map((run) => <Text key={run.id} mt={1} fontSize="10px" color="gray.500">{new Date(run.created_at).toLocaleString()} · 胜出：{run.winner} · {run.results.map((item) => `${item.name} ${item.hitRate}%`).join(' / ')}</Text>)}
             <Button mt={2} size="xs" w="full" variant="outline" onClick={async () => setVariantFeedback(await fetchVariantFeedback())}>查看近 30 天人工反馈</Button>
             {variantFeedback.map((item) => <Text key={item.variant} mt={1} fontSize="10px" color="gray.600">{item.variant}：{item.totalActions} 次反馈 · 采纳 {item.acceptanceRate}% · 平均改写 {Math.round(item.averageEditRatio * 100)}%</Text>)}
             {summary && (

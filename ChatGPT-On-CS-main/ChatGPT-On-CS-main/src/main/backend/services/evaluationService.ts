@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { EvaluationCase } from '../entities/evaluationCase';
+import { EvaluationRun } from '../entities/evaluationRun';
 import { StoreKnowledge } from '../entities/storeKnowledge';
 import { RagSearchItem } from './ragService';
 import { appendAuditEvent } from './auditService';
@@ -105,6 +106,10 @@ export class EvaluationService {
     };
   }
 
+  async listComparisonRuns() {
+    return EvaluationRun.findAll({ order: [['created_at', 'DESC']], limit: 20 });
+  }
+
   async compareVariants(body: any = {}) {
     const cases = await EvaluationCase.findAll({ where: { enabled: true } });
     const variants = [
@@ -131,7 +136,12 @@ export class EvaluationService {
       });
     }
     const winner = results[1].hitRate > results[0].hitRate ? results[1].name : results[0].name;
-    await appendAuditEvent({ action: 'evaluation.compare', entityType: 'evaluation', entityId: new Date().toISOString(), payload: { results, winner } });
-    return { variants: results, winner };
+    const run = await EvaluationRun.create({
+      id: crypto.randomUUID(), variants, results, winner,
+      cases: cases.map((item) => ({ id: item.id, updatedAt: item.updated_at.toISOString() })),
+      created_at: new Date(),
+    });
+    await appendAuditEvent({ action: 'evaluation.compare', entityType: 'evaluation', entityId: run.id, payload: { results, winner } });
+    return { id: run.id, createdAt: run.created_at, variants: results, winner };
   }
 }

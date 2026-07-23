@@ -40,6 +40,7 @@ import { initKnowledgeCandidate } from './entities/knowledgeCandidate';
 import { initReplyFeedback } from './entities/replyFeedback';
 import { initRetrievalEvidence } from './entities/retrievalEvidence';
 import { initEvaluationCase } from './entities/evaluationCase';
+import { initEvaluationRun } from './entities/evaluationRun';
 import { initKnowledgeVersion } from './entities/knowledgeVersion';
 import { initAuditEvent } from './entities/auditEvent';
 
@@ -152,6 +153,7 @@ initKnowledgeCandidate(sequelize);
 initReplyFeedback(sequelize);
 initRetrievalEvidence(sequelize);
 initEvaluationCase(sequelize);
+initEvaluationRun(sequelize);
 initKnowledgeVersion(sequelize);
 initAuditEvent(sequelize);
 

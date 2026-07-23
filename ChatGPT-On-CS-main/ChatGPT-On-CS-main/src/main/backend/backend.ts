@@ -423,6 +423,12 @@ class BKServer {
         res.json({ success: true, data: await this.evaluationService.compareVariants(req.body) });
       }),
     );
+    this.app.get(
+      '/api/v1/quality/evaluation/runs',
+      asyncHandler(async (_req, res) => {
+        res.json({ success: true, data: await this.evaluationService.listComparisonRuns() });
+      }),
+    );
     this.app.post('/api/v1/quality/replay', (req, res) => {
       const rows = replaySanitizedFixtures(req.body.fixtures);
       res.json({ success: true, data: { rows, passed: rows.filter((row) => row.passed).length, total: rows.length } });
