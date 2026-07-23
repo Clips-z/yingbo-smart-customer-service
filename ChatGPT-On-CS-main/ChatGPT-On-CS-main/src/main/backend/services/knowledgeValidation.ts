@@ -9,6 +9,7 @@ const list = (value: unknown, max: number) =>
     .map((item) => text(item))
     .filter(Boolean)
     .slice(0, max);
+const platform = (value: unknown) => text(value).slice(0, 100) || 'unassigned';
 
 function required(value: unknown, label: string, max: number): string {
   const result = text(value);
@@ -24,6 +25,7 @@ export function validateProductKnowledgeInput(input: any) {
     platformProductId: required(input.platformProductId, '平台商品ID', 100),
     barcode: text(input.barcode).slice(0, 64) || null,
     shopId: required(input.shopId, '店铺', 100),
+    platformId: platform(input.platformId),
     shopName: text(input.shopName).slice(0, 200) || text(input.shopId),
     tags: list(input.tags, 20),
     onSale: input.onSale !== false,
@@ -50,6 +52,7 @@ export function validateStoreKnowledgeInput(input: any) {
     stage: stage as 'presale' | 'mid' | 'aftersale',
     matchType: matchType as 'exact' | 'fuzzy',
     shopId: required(input.shopId, '店铺', 100),
+    platformId: platform(input.platformId),
     enabled: input.enabled !== false,
     effectiveAt,
     expiresAt,

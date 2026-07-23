@@ -24,6 +24,7 @@ const productJson = (item: ProductKnowledge) => ({
   platformProductId: item.platform_product_id,
   barcode: item.barcode || undefined,
   shopId: item.shop_id,
+  platformId: item.platform_id,
   shopName: item.shop_name,
   tags: item.tags || [],
   onSale: item.on_sale,
@@ -46,6 +47,7 @@ const storeJson = (item: StoreKnowledge) => ({
   matchType: item.match_type,
   updatedAt: item.updated_at.toISOString(),
   shopId: item.shop_id,
+  platformId: item.platform_id,
   enabled: item.enabled,
   syncStatus: item.sync_status,
   syncError: item.sync_error || undefined,
@@ -138,6 +140,7 @@ export class KnowledgeService {
       ];
     }
     if (query.shop && query.shop !== 'all') where.shop_id = String(query.shop);
+    if (query.platform && query.platform !== 'all') where.platform_id = String(query.platform);
     if (query.status === 'on') where.on_sale = true;
     if (query.status === 'off') where.on_sale = false;
     const result = await ProductKnowledge.findAndCountAll({ where, limit: pageSize, offset, order: [['updated_at', 'DESC']] });
@@ -152,6 +155,7 @@ export class KnowledgeService {
       platform_product_id: input.platformProductId,
       barcode: input.barcode,
       shop_id: input.shopId,
+      platform_id: input.platformId,
       shop_name: input.shopName,
       tags: input.tags,
       on_sale: input.onSale,
@@ -174,6 +178,7 @@ export class KnowledgeService {
       platform_product_id: input.platformProductId,
       barcode: input.barcode,
       shop_id: input.shopId,
+      platform_id: input.platformId,
       shop_name: input.shopName,
       tags: input.tags,
       on_sale: input.onSale,
@@ -208,6 +213,7 @@ export class KnowledgeService {
     const keyword = String(query.keyword || '').trim();
     if (keyword) where[Op.or] = [{ question: { [Op.like]: `%${keyword}%` } }, { answer: { [Op.like]: `%${keyword}%` } }];
     if (query.shop && query.shop !== 'all') where.shop_id = String(query.shop);
+    if (query.platform && query.platform !== 'all') where.platform_id = String(query.platform);
     if (query.stage && query.stage !== 'all') where.stage = String(query.stage);
     const [result, counts] = await Promise.all([
       StoreKnowledge.findAndCountAll({ where, limit: pageSize, offset, order: [['updated_at', 'DESC']] }),
@@ -253,6 +259,7 @@ export class KnowledgeService {
       stage: input.stage,
       match_type: input.matchType,
       shop_id: input.shopId,
+      platform_id: input.platformId,
       enabled: input.enabled,
       sync_status: 'pending',
       effective_at: input.effectiveAt,
@@ -277,6 +284,7 @@ export class KnowledgeService {
       stage: input.stage,
       match_type: input.matchType,
       shop_id: input.shopId,
+      platform_id: input.platformId,
       enabled: input.enabled,
       sync_status: 'pending',
       sync_error: null,
