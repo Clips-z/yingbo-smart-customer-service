@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertDialog, AlertDialogBody, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogOverlay, Badge, Box, Button, Flex, Heading, Input, Select, SimpleGrid, Table, Tbody, Td, Text, Textarea, Th, Thead, Tr, useToast, VStack } from '@chakra-ui/react';
 import {
   AuditItem, BackupManifest, createBackup, downloadAuditExport, fetchAudit, fetchBackups,
-  rebuildKnowledgeRag, replayFixtures, scheduleBackupRestore, verifyBackup,
+  rebuildKnowledgeRag, replayFixtures, scheduleBackupRestore, verifyBackup, ReplayFixture,
+  deleteReplayFixture, fetchReplayFixtures, saveReplayFixture,
 } from '../../../common/services/knowledge/governance';
 
 const KnowledgeGovernance: React.FC = () => {
@@ -15,14 +16,17 @@ const KnowledgeGovernance: React.FC = () => {
   const [auditAction, setAuditAction] = useState('');
   const [restoreResult, setRestoreResult] = useState<AuditItem | undefined>();
   const [fixtures, setFixtures] = useState('[\n  {"platformId":"win_qianniu","source":"llm","retrievalStatus":"hit","ocrConfidence":0.95,"expectedAllowed":true}\n]');
+  const [replayFixtureRows, setReplayFixtureRows] = useState<ReplayFixture[]>([]);
+  const [replayName, setReplayName] = useState('安全回放');
+  const [replayFixtureId, setReplayFixtureId] = useState<string>();
   const [restoreBackup, setRestoreBackup] = useState<BackupManifest | null>(null);
   const [confirmRebuild, setConfirmRebuild] = useState(false);
   const cancelRestoreRef = useRef<HTMLButtonElement>(null);
   const cancelRebuildRef = useRef<HTMLButtonElement>(null);
 
   const load = useCallback(async (page = auditPage, keyword = auditKeyword, action = auditAction) => {
-    const [backupRows, auditRows, restoreRows] = await Promise.all([fetchBackups(), fetchAudit({ page, pageSize: 20, keyword, action }), fetchAudit({ page: 1, pageSize: 1, action: 'backup.restore_' })]);
-    setBackups(backupRows); setAudit(auditRows.items); setAuditTotal(auditRows.total); setAuditPage(auditRows.page); setRestoreResult(restoreRows.items[0]);
+    const [backupRows, auditRows, restoreRows, replayRows] = await Promise.all([fetchBackups(), fetchAudit({ page, pageSize: 20, keyword, action }), fetchAudit({ page: 1, pageSize: 1, action: 'backup.restore_' }), fetchReplayFixtures()]);
+    setBackups(backupRows); setAudit(auditRows.items); setAuditTotal(auditRows.total); setAuditPage(auditRows.page); setRestoreResult(restoreRows.items[0]); setReplayFixtureRows(replayRows);
   }, [auditAction, auditKeyword, auditPage]);
   useEffect(() => { load().catch(() => undefined); }, [load]);
 
@@ -55,8 +59,10 @@ const KnowledgeGovernance: React.FC = () => {
         </Box>
         <Box bg="white" borderRadius="xl" borderWidth="1px" borderColor="gray.100" p={4}>
           <Text fontWeight="800" mb={1}>脱敏平台回放</Text><Text fontSize="xs" color="gray.500" mb={3}>粘贴不含截图和个人信息的 JSON 用例，验证升级后的安全门槛。</Text>
+          <Flex gap={2} mb={2}><Input size="sm" value={replayName} onChange={(event) => setReplayName(event.target.value)} placeholder="回放名称" /><Button size="sm" onClick={async () => { try { await saveReplayFixture({ id: replayFixtureId, name: replayName, fixtures: JSON.parse(fixtures) }); await load(); toast({ title: '回放用例已保存', status: 'success' }); } catch (error) { toast({ title: '保存失败', description: String(error), status: 'error' }); } }}>{replayFixtureId ? '更新' : '保存'}</Button></Flex>
           <Textarea value={fixtures} onChange={(event) => setFixtures(event.target.value)} minH="150px" fontFamily="mono" fontSize="xs" />
-          <Button mt={2} size="sm" onClick={async () => { try { const result = await replayFixtures(JSON.parse(fixtures)); toast({ title: `回放通过 ${result.passed}/${result.total}`, status: result.passed === result.total ? 'success' : 'warning' }); } catch (error) { toast({ title: '回放数据无效', description: String(error), status: 'error' }); } }}>运行回放</Button>
+          <Flex mt={2} gap={2}><Button size="sm" onClick={async () => { try { const result = await replayFixtures(JSON.parse(fixtures)); toast({ title: `回放通过 ${result.passed}/${result.total}`, status: result.passed === result.total ? 'success' : 'warning' }); } catch (error) { toast({ title: '回放数据无效', description: String(error), status: 'error' }); } }}>运行回放</Button><Button size="sm" variant="outline" onClick={() => { const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([fixtures], { type: 'application/json;charset=utf-8' })); link.download = `${replayName || 'replay'}.json`; link.click(); URL.revokeObjectURL(link.href); }}>导出 JSON</Button></Flex>
+          <VStack mt={3} align="stretch" spacing={1}>{replayFixtureRows.map((item) => <Flex key={item.id} gap={2} align="center"><Text fontSize="xs" flex="1">{item.name} · {new Date(item.updated_at).toLocaleString('zh-CN')}</Text><Button size="xs" onClick={() => { setReplayFixtureId(item.id); setReplayName(item.name); setFixtures(JSON.stringify(item.fixtures, null, 2)); }}>加载</Button><Button size="xs" colorScheme="red" variant="ghost" onClick={async () => { await deleteReplayFixture(item.id); if (replayFixtureId === item.id) setReplayFixtureId(undefined); await load(); }}>删除</Button></Flex>)}</VStack>
         </Box>
       </SimpleGrid>
       <Box bg="white" borderRadius="xl" borderWidth="1px" borderColor="gray.100" overflow="hidden">

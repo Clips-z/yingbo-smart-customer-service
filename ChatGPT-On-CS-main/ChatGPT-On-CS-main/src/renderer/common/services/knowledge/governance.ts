@@ -37,6 +37,17 @@ export async function replayFixtures(fixtures: unknown[]) {
   const response = await POST<{ data: { total: number; passed: number; rows: any[] } }>('/api/v1/quality/replay', { fixtures });
   return response.data;
 }
+export interface ReplayFixture { id: string; name: string; fixtures: unknown[]; updated_at: string }
+export async function fetchReplayFixtures() {
+  const response = await GET<{ data: ReplayFixture[] }>('/api/v1/quality/replay/fixtures');
+  return response.data;
+}
+export async function saveReplayFixture(body: { id?: string; name: string; fixtures: unknown[] }) {
+  return POST('/api/v1/quality/replay/fixtures/save', body);
+}
+export async function deleteReplayFixture(id: string) {
+  return POST('/api/v1/quality/replay/fixtures/delete', { id });
+}
 export async function rebuildKnowledgeRag() {
   const response = await POST<{ data: { products: number; stores: number; failed: number } }>('/api/v1/knowledge/rebuild-rag', {});
   return response.data;
