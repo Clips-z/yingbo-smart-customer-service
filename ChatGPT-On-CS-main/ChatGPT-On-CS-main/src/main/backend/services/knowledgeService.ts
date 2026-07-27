@@ -198,18 +198,20 @@ export class KnowledgeService {
     return productJson(item);
   }
 
-  async setProductsOnSale(ids: string[], onSale: boolean) {
+  async setProductsOnSale(ids: string[], onSale: boolean, scope?: any) {
+    const items = await ProductKnowledge.findAll({ where: { id: ids } });
+    items.forEach((item) => assertScope(item, scope));
     const [updated] = await ProductKnowledge.update(
       { on_sale: onSale, sync_status: 'pending', updated_at: new Date() },
       { where: { id: ids } },
     );
-    const items = await ProductKnowledge.findAll({ where: { id: ids } });
     for (const item of items) await this.recordVersion('product', item, onSale ? 'enable' : 'disable');
     return updated;
   }
 
-  async deleteProducts(ids: string[]) {
+  async deleteProducts(ids: string[], scope?: any) {
     const items = await ProductKnowledge.findAll({ where: { id: ids } });
+    items.forEach((item) => assertScope(item, scope));
     for (const item of items) await this.recordVersion('product', item, 'delete');
     return ProductKnowledge.destroy({ where: { id: ids } });
   }
@@ -305,8 +307,9 @@ export class KnowledgeService {
     return storeJson(item);
   }
 
-  async deleteStoreKnowledge(id: string) {
+  async deleteStoreKnowledge(id: string, scope?: any) {
     const item = await StoreKnowledge.findByPk(id);
+    if (item) assertScope(item, scope);
     if (item) await this.recordVersion('store', item, 'delete');
     return StoreKnowledge.destroy({ where: { id } });
   }
@@ -368,10 +371,11 @@ export class KnowledgeService {
     };
   }
 
-  async mergeStoreKnowledge(targetId: string, sourceId: string) {
+  async mergeStoreKnowledge(targetId: string, sourceId: string, scope?: any) {
     const preview = await this.previewStoreMerge(targetId, sourceId);
     const target = await StoreKnowledge.findByPk(targetId) as StoreKnowledge;
     const source = await StoreKnowledge.findByPk(sourceId) as StoreKnowledge;
+    assertScope(target, scope); assertScope(source, scope);
     await target.update({
       related_questions: preview.merged.relatedQuestions,
       tags: preview.merged.tags,
@@ -384,16 +388,18 @@ export class KnowledgeService {
     return { target: storeJson(target), source: storeJson(source) };
   }
 
-  async retrySync(kind: 'product' | 'store', id: string) {
+  async retrySync(kind: 'product' | 'store', id: string, scope?: any) {
     if (kind === 'product') {
       const item = await ProductKnowledge.findByPk(id);
       if (!item) throw new Error('商品不存在');
+      assertScope(item, scope);
       await item.update({ sync_status: 'pending', sync_error: null });
       await this.syncProduct(item);
       return productJson(item);
     }
     const item = await StoreKnowledge.findByPk(id);
     if (!item) throw new Error('知识条目不存在');
+    assertScope(item, scope);
     await item.update({ sync_status: 'pending', sync_error: null });
     await this.syncStore(item);
     return storeJson(item);

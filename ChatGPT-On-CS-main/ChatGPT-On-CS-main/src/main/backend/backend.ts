@@ -2182,7 +2182,7 @@ class BKServer {
       '/api/v1/knowledge/products/status',
       asyncHandler(async (req, res) => {
         const ids = Array.isArray(req.body.ids) ? req.body.ids.map(String).slice(0, 500) : [];
-        const updated = await this.knowledgeService.setProductsOnSale(ids, Boolean(req.body.onSale));
+        const updated = await this.knowledgeService.setProductsOnSale(ids, Boolean(req.body.onSale), req.body.scope);
         res.json({ success: true, data: { updated } });
       }),
     );
@@ -2190,7 +2190,7 @@ class BKServer {
       '/api/v1/knowledge/products/delete',
       asyncHandler(async (req, res) => {
         const ids = Array.isArray(req.body.ids) ? req.body.ids.map(String).slice(0, 500) : [];
-        const deleted = await this.knowledgeService.deleteProducts(ids);
+        const deleted = await this.knowledgeService.deleteProducts(ids, req.body.scope);
         res.json({ success: true, data: { deleted } });
       }),
     );
@@ -2223,7 +2223,7 @@ class BKServer {
     this.app.post(
       '/api/v1/knowledge/store-qa/delete',
       asyncHandler(async (req, res) => {
-        const deleted = await this.knowledgeService.deleteStoreKnowledge(String(req.body.id || ''));
+        const deleted = await this.knowledgeService.deleteStoreKnowledge(String(req.body.id || ''), req.body.scope);
         res.json({ success: true, data: { deleted } });
       }),
     );
@@ -2249,7 +2249,7 @@ class BKServer {
           res.status(400).json({ success: false, message: '无效的知识类型' });
           return;
         }
-        const data = await this.knowledgeService.retrySync(kind, String(req.body.id || ''));
+        const data = await this.knowledgeService.retrySync(kind, String(req.body.id || ''), req.body.scope);
         res.json({ success: true, data });
       }),
     );
