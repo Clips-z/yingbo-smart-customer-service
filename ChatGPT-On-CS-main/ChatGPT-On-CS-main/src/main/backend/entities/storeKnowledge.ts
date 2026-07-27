@@ -60,7 +60,7 @@ export async function checkAndAddFields(sequelize: Sequelize) {
   for (const name of ['effective_at', 'expires_at', 'platform_id']) {
     if (!table[name]) {
       await sequelize.getQueryInterface().addColumn('n_store_knowledge', name, {
-        type: DataTypes.DATE,
+        type: name === 'platform_id' ? DataTypes.STRING(100) : DataTypes.DATE,
         allowNull: name === 'platform_id' ? false : true,
         defaultValue: name === 'platform_id' ? 'unassigned' : undefined,
       });

@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import * as crypto from 'crypto';
 
 // https://github.com/sql-js/sql.js/issues/183
 import sqlite from 'sqlite3';
@@ -44,6 +43,7 @@ import { initEvaluationRun } from './entities/evaluationRun';
 import { initReplayFixture } from './entities/replayFixture';
 import { initKnowledgeVersion } from './entities/knowledgeVersion';
 import { initAuditEvent } from './entities/auditEvent';
+import { applyPendingRestore } from './services/restoreService';
 
 // Get user's documents directory path
 // 支持通过环境变量重定向数据库目录（用于沙箱/CI 环境）
@@ -62,30 +62,8 @@ fs.mkdirSync(LOGS_DIR, { recursive: true });
 const DB_FILE_PATH = path.join(APP_DIR, 'msg.db');
 
 // 恢复在数据库连接建立前执行，避免覆盖正在使用的 SQLite 文件。
-const restoreMarker = path.join(APP_DIR, 'restore-pending.json');
 const restoreRagMarker = path.join(APP_DIR, 'restore-rag-pending.json');
-if (fs.existsSync(restoreMarker)) {
-  const request = JSON.parse(fs.readFileSync(restoreMarker, 'utf8'));
-  const backupDir = path.join(APP_DIR, 'backups');
-  const source = path.resolve(backupDir, path.basename(String(request.database || '')));
-  if (source.startsWith(`${path.resolve(backupDir)}${path.sep}`) && fs.existsSync(source)) {
-    const actual = crypto
-      .createHash('sha256')
-      .update(fs.readFileSync(source) as crypto.BinaryLike)
-      .digest('hex');
-    if (actual === request.sha256) {
-      if (fs.existsSync(DB_FILE_PATH)) {
-        fs.copyFileSync(DB_FILE_PATH, path.join(backupDir, `pre-restore-${Date.now()}.db`));
-      }
-      fs.copyFileSync(source, DB_FILE_PATH);
-      fs.writeFileSync(restoreRagMarker, JSON.stringify({
-        id: String(request.id || ''),
-        restoredAt: new Date().toISOString(),
-      }), 'utf8');
-    }
-  }
-  fs.unlinkSync(restoreMarker);
-}
+applyPendingRestore(APP_DIR);
 
 export const getPendingRestoreRagRebuild = () => {
   if (!fs.existsSync(restoreRagMarker)) return undefined;
@@ -372,6 +350,13 @@ async function initDb(): Promise<void> {
 
 export const databaseReady = (async () => {
   try {
+    // A restored legacy database can lack fields used by current indexes; add them before sync creates indexes.
+    for (const migrate of [checkStoreKnowledgeFields, checkProductKnowledgeFields]) {
+      try { await migrate(sequelize); }
+      catch (error) {
+        if (!String(error).includes('no such table')) throw error;
+      }
+    }
     await sequelize.sync();
     console.log('Database connection has been established successfully.');
     // checkAndAddFields 必须在 sync() 之后运行（表已存在才能 describe）
@@ -381,8 +366,6 @@ export const databaseReady = (async () => {
       checkKeywordFields(sequelize),
       checkPluginFields(sequelize),
       checkReplySuggestionFields(sequelize),
-      checkStoreKnowledgeFields(sequelize),
-      checkProductKnowledgeFields(sequelize),
     ]);
     await initDb();
     // 解密之前被 safeStorage 加密的 API key（一次性迁移）
