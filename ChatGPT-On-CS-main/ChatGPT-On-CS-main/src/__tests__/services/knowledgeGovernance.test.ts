@@ -71,4 +71,21 @@ describe('knowledge governance', () => {
       expect.objectContaining({ type: 'conflict', items: expect.arrayContaining([expect.objectContaining({ answer: '当天发货' }), expect.objectContaining({ answer: '48 小时内发货' })]) }),
     ]);
   });
+
+  it('rejects cross-platform updates, bulk changes, and imports before mutation', async () => {
+    const product = await service.createProduct({ name: 'Scoped', platformProductId: 'P-1', shopId: 'shop-1', shopName: 'Shop', platformId: 'platform-1' });
+    await expect(service.updateProduct(product.id, { ...product, name: 'Moved', platformId: 'platform-2' }, { platformId: 'platform-1' })).rejects.toThrow();
+    await expect(service.setProductsOnSale([product.id], false, { platformId: 'platform-2' })).rejects.toThrow();
+    await expect(service.importProducts([{ name: 'Other', platformProductId: 'P-2', shopId: 'shop-2', shopName: 'Other', platformId: 'platform-2' }], { platformId: 'platform-1' })).resolves.toEqual([
+      expect.objectContaining({ success: false }),
+    ]);
+    await expect(service.listProducts({ platform: 'platform-1' })).resolves.toMatchObject({ list: [expect.objectContaining({ id: product.id, onSale: true })] });
+  });
+
+  it('keeps platform scope when rolling back a version', async () => {
+    const item = await service.createStoreKnowledge({ question: 'Scope', answer: 'Original', shopId: 'shop-1', platformId: 'platform-1' });
+    await service.updateStoreKnowledge(item.id, { ...item, answer: 'Changed' }, { platformId: 'platform-1' });
+    await expect(service.rollback('store', item.id, 1, { platformId: 'platform-1' })).resolves.toMatchObject({ platformId: 'platform-1', answer: 'Original' });
+    await expect(service.rollback('store', item.id, 1, { platformId: 'platform-2' })).rejects.toThrow();
+  });
 });

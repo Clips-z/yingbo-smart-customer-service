@@ -470,7 +470,7 @@ class BKServer {
     this.app.post(
       '/api/v1/knowledge/versions/rollback',
       asyncHandler(async (req, res) => {
-        res.json({ success: true, data: await this.knowledgeService.rollback(req.body.kind, String(req.body.id || ''), Number(req.body.version)) });
+        res.json({ success: true, data: await this.knowledgeService.rollback(req.body.kind, String(req.body.id || ''), Number(req.body.version), req.body.scope) });
       }),
     );
     this.app.post(
@@ -482,13 +482,13 @@ class BKServer {
     this.app.post(
       '/api/v1/knowledge/store-qa/merge/preview',
       asyncHandler(async (req, res) => {
-        res.json({ success: true, data: await this.knowledgeService.previewStoreMerge(String(req.body.targetId || ''), String(req.body.sourceId || '')) });
+        res.json({ success: true, data: await this.knowledgeService.previewStoreMerge(String(req.body.targetId || ''), String(req.body.sourceId || ''), req.body.scope) });
       }),
     );
     this.app.post(
       '/api/v1/knowledge/store-qa/merge',
       asyncHandler(async (req, res) => {
-        res.json({ success: true, data: await this.knowledgeService.mergeStoreKnowledge(String(req.body.targetId || ''), String(req.body.sourceId || '')) });
+        res.json({ success: true, data: await this.knowledgeService.mergeStoreKnowledge(String(req.body.targetId || ''), String(req.body.sourceId || ''), req.body.scope) });
       }),
     );
     this.app.post('/api/v1/governance/backups/create', asyncHandler(async (_req, res) => {
@@ -2198,7 +2198,7 @@ class BKServer {
       '/api/v1/knowledge/products/import',
       asyncHandler(async (req, res) => {
         const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
-        const results = await this.knowledgeService.importProducts(rows);
+        const results = await this.knowledgeService.importProducts(rows, req.body.scope);
         res.json({ success: true, data: { results } });
       }),
     );
@@ -2229,15 +2229,15 @@ class BKServer {
     );
     this.app.get(
       '/api/v1/knowledge/store-qa/conflicts',
-      asyncHandler(async (_req, res) => {
-        res.json({ success: true, data: await this.knowledgeService.listStoreKnowledgeConflicts() });
+      asyncHandler(async (req, res) => {
+        res.json({ success: true, data: await this.knowledgeService.listStoreKnowledgeConflicts(req.query) });
       }),
     );
     this.app.post(
       '/api/v1/knowledge/store-qa/import',
       asyncHandler(async (req, res) => {
         const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
-        const results = await this.knowledgeService.importStoreKnowledge(rows);
+        const results = await this.knowledgeService.importStoreKnowledge(rows, req.body.scope);
         res.json({ success: true, data: { results } });
       }),
     );

@@ -21,6 +21,8 @@ const assertScope = (item: { platform_id: string; shop_id: string; stage?: strin
   if (scope.shopId && scope.shopId !== 'all' && item.shop_id !== scope.shopId) throw new Error('知识不在当前店铺范围内');
   if (scope.stage && scope.stage !== 'all' && item.stage !== scope.stage) throw new Error('知识不在当前阶段范围内');
 };
+const assertInputScope = (input: { platformId: string; shopId: string; stage?: string }, scope?: any) =>
+  assertScope({ platform_id: input.platformId, shop_id: input.shopId, stage: input.stage }, scope);
 
 const comparableText = (value: string) => value.toLowerCase().replace(/[\s，。！？、；：,.!?;:'"“”‘’（）()【】《》]/g, '');
 
@@ -180,6 +182,7 @@ export class KnowledgeService {
     if (!item) throw new Error('商品不存在');
     assertScope(item, scope);
     const input = validateProductKnowledgeInput(body);
+    assertInputScope(input, scope);
     await item.update({
       name: input.name,
       platform_product_id: input.platformProductId,
@@ -226,7 +229,7 @@ export class KnowledgeService {
     if (query.stage && query.stage !== 'all') where.stage = String(query.stage);
     const [result, counts] = await Promise.all([
       StoreKnowledge.findAndCountAll({ where, limit: pageSize, offset, order: [['updated_at', 'DESC']] }),
-      Promise.all(['presale', 'mid', 'aftersale'].map((stage) => StoreKnowledge.count({ where: { stage } }))),
+      Promise.all(['presale', 'mid', 'aftersale'].map((stage) => StoreKnowledge.count({ where: { ...where, stage } }))),
     ]);
     return {
       list: result.rows.map(storeJson),
@@ -237,9 +240,13 @@ export class KnowledgeService {
     };
   }
 
-  async listStoreKnowledgeConflicts() {
+  async listStoreKnowledgeConflicts(query: any = {}) {
     const now = new Date();
-    const items = (await StoreKnowledge.findAll({ where: { enabled: true }, order: [['updated_at', 'DESC']] }))
+    const where: any = { enabled: true };
+    if (query.shop && query.shop !== 'all') where.shop_id = String(query.shop);
+    if (query.platform && query.platform !== 'all') where.platform_id = String(query.platform);
+    if (query.stage && query.stage !== 'all') where.stage = String(query.stage);
+    const items = (await StoreKnowledge.findAll({ where, order: [['updated_at', 'DESC']] }))
       .filter((item) => (!item.effective_at || item.effective_at <= now) && (!item.expires_at || item.expires_at > now));
     const groups = new Map<string, StoreKnowledge[]>();
     items.forEach((item) => {
@@ -286,6 +293,7 @@ export class KnowledgeService {
     const item = await StoreKnowledge.findByPk(id);
     if (!item) throw new Error('知识条目不存在');
     assertScope(item, scope);
+    assertInputScope(input, scope);
     await item.update({
       question: input.question,
       answer: input.answer,
@@ -321,7 +329,7 @@ export class KnowledgeService {
     });
   }
 
-  async rollback(kind: 'store' | 'product', id: string, version: number) {
+  async rollback(kind: 'store' | 'product', id: string, version: number, scope?: any) {
     const saved = await KnowledgeVersion.findOne({
       where: { knowledge_type: kind, knowledge_id: id, version },
     });
@@ -331,10 +339,12 @@ export class KnowledgeService {
       const item = await StoreKnowledge.findByPk(id);
       if (!item) throw new Error('知识条目不存在');
       const input = validateStoreKnowledgeInput(snapshot);
+      assertScope(item, scope);
+      assertInputScope(input, scope);
       await item.update({
         question: input.question, answer: input.answer,
         related_questions: input.relatedQuestions, tags: input.tags,
-        stage: input.stage, match_type: input.matchType, shop_id: input.shopId,
+        stage: input.stage, match_type: input.matchType, shop_id: input.shopId, platform_id: input.platformId,
         enabled: input.enabled, sync_status: 'pending', sync_error: null, updated_at: new Date(),
         effective_at: input.effectiveAt, expires_at: input.expiresAt,
       });
@@ -345,9 +355,11 @@ export class KnowledgeService {
     const item = await ProductKnowledge.findByPk(id);
     if (!item) throw new Error('商品知识不存在');
     const input = validateProductKnowledgeInput(snapshot);
+    assertScope(item, scope);
+    assertInputScope(input, scope);
     await item.update({
       name: input.name, platform_product_id: input.platformProductId,
-      barcode: input.barcode, shop_id: input.shopId, shop_name: input.shopName,
+      barcode: input.barcode, shop_id: input.shopId, platform_id: input.platformId, shop_name: input.shopName,
       tags: input.tags, on_sale: input.onSale, sync_status: 'pending', sync_error: null,
       updated_at: new Date(),
     });
@@ -356,11 +368,12 @@ export class KnowledgeService {
     return productJson(item);
   }
 
-  async previewStoreMerge(targetId: string, sourceId: string) {
+  async previewStoreMerge(targetId: string, sourceId: string, scope?: any) {
     const [target, source] = await Promise.all([
       StoreKnowledge.findByPk(targetId), StoreKnowledge.findByPk(sourceId),
     ]);
     if (!target || !source || target.id === source.id) throw new Error('请选择两个不同的知识条目');
+    assertScope(target, scope); assertScope(source, scope);
     return {
       target: storeJson(target), source: storeJson(source),
       merged: {
@@ -372,7 +385,7 @@ export class KnowledgeService {
   }
 
   async mergeStoreKnowledge(targetId: string, sourceId: string, scope?: any) {
-    const preview = await this.previewStoreMerge(targetId, sourceId);
+    const preview = await this.previewStoreMerge(targetId, sourceId, scope);
     const target = await StoreKnowledge.findByPk(targetId) as StoreKnowledge;
     const source = await StoreKnowledge.findByPk(sourceId) as StoreKnowledge;
     assertScope(target, scope); assertScope(source, scope);
@@ -436,10 +449,11 @@ export class KnowledgeService {
     return { products: products.length, stores: activeStores.length, failed };
   }
 
-  async importProducts(rows: any[]) {
+  async importProducts(rows: any[], scope?: any) {
     const results: Array<{ row: number; success: boolean; id?: string; error?: string }> = [];
     for (let index = 0; index < rows.slice(0, 2000).length; index += 1) {
       try {
+        assertInputScope(validateProductKnowledgeInput(rows[index]), scope);
         const item = await this.createProduct(rows[index], false);
         results.push({ row: index + 2, success: true, id: item.id });
       } catch (error) {
@@ -449,10 +463,11 @@ export class KnowledgeService {
     return results;
   }
 
-  async importStoreKnowledge(rows: any[]) {
+  async importStoreKnowledge(rows: any[], scope?: any) {
     const results: Array<{ row: number; success: boolean; id?: string; error?: string }> = [];
     for (let index = 0; index < rows.slice(0, 2000).length; index += 1) {
       try {
+        assertInputScope(validateStoreKnowledgeInput(rows[index]), scope);
         const item = await this.createStoreKnowledge(rows[index], false);
         results.push({ row: index + 2, success: true, id: item.id });
       } catch (error) {
