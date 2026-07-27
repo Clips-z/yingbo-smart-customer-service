@@ -67,6 +67,7 @@ import { BackupService } from './services/backupService';
 import { appendAuditEvent, AuditExportFormat, listAuditEvents, serializeAuditExport } from './services/auditService';
 import { deleteReplayFixture, listReplayFixtures, replaySanitizedFixtures, saveReplayFixture } from './services/replayService';
 import { CompanionContextRegistry } from './services/companionContextRegistry';
+import { Config } from './entities/config';
 import {
   CTX_APP_ID,
   CTX_APP_NAME,
@@ -226,8 +227,20 @@ class BKServer {
       this.loggerService,
       this.dispatchService,
     );
-    this.evaluationService = new EvaluationService((query, topK) =>
-      this.ragService.search(query, topK),
+    this.evaluationService = new EvaluationService(
+      (query, topK) => this.ragService.search(query, topK),
+      async ({ question, variant, knowledge }) => {
+        const baseConfig = await this.configController.get(new Map());
+        const config = Config.build(baseConfig.get({ plain: true }), { isNewRecord: false });
+        config.has_use_gpt = true; config.has_keyword_match = false;
+        config.reply_speed = 0; config.reply_random_speed = 0; config.context_count = 1;
+        config.rag_enabled = false; config.knowledge_base = knowledge;
+        if (variant.model) config.model = variant.model;
+        if (variant.systemPrompt) config.system_prompt = variant.systemPrompt;
+        const reply = await this.messageService.getReply(config, new Map(), [{ sender: 'evaluation', content: question, role: 'OTHER', type: 'TEXT' }]);
+        if (!reply.content) throw new Error('model returned no reply');
+        return reply.content;
+      },
     );
     this.backupService = new BackupService(sequelize);
     this.knowledgeService.setIndexer((text, filename) =>

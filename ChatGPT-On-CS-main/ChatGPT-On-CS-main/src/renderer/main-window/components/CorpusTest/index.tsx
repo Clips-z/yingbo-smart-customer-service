@@ -126,6 +126,12 @@ const CorpusTest: React.FC = () => {
   const [variantB, setVariantB] = useState({ name: '召回 Top5', topK: 5 });
   const [variantFeedback, setVariantFeedback] = useState<Array<{ variant: string; totalActions: number; acceptanceRate: number; averageEditRatio: number }>>([]);
   const [comparisonRuns, setComparisonRuns] = useState<Array<{ id: string; winner: string; created_at: string; results: Array<{ name: string; hitRate: number }> }>>([]);
+  const [modelA, setModelA] = useState('');
+  const [modelB, setModelB] = useState('');
+  const [promptA, setPromptA] = useState('');
+  const [promptB, setPromptB] = useState('');
+  const [knowledgeVersionA, setKnowledgeVersionA] = useState('');
+  const [knowledgeVersionB, setKnowledgeVersionB] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -201,6 +207,11 @@ const CorpusTest: React.FC = () => {
         </Text>
       </Box>
 
+      <Box bg="purple.50" borderRadius="md" p={2}>
+        <Text fontSize="xs" mb={1}>真实 A/B：留空继承当前模型/提示词；知识版本填条目历史版本号。</Text>
+        <Flex gap={2}><Input size="xs" placeholder="A 模型" value={modelA} onChange={(e) => setModelA(e.target.value)} /><Input size="xs" placeholder="A 提示词" value={promptA} onChange={(e) => setPromptA(e.target.value)} /><Input size="xs" w="80px" placeholder="A 知识v" value={knowledgeVersionA} onChange={(e) => setKnowledgeVersionA(e.target.value)} /></Flex>
+        <Flex mt={1} gap={2}><Input size="xs" placeholder="B 模型" value={modelB} onChange={(e) => setModelB(e.target.value)} /><Input size="xs" placeholder="B 提示词" value={promptB} onChange={(e) => setPromptB(e.target.value)} /><Input size="xs" w="80px" placeholder="B 知识v" value={knowledgeVersionB} onChange={(e) => setKnowledgeVersionB(e.target.value)} /><Button size="xs" colorScheme="purple" onClick={async () => { setComparison(await compareEvaluationVariants({ name: '方案 A', topK: variantA.topK, model: modelA, systemPrompt: promptA, knowledgeVersion: Number(knowledgeVersionA) || undefined } as any, { name: '方案 B', topK: variantB.topK, model: modelB, systemPrompt: promptB, knowledgeVersion: Number(knowledgeVersionB) || undefined } as any)); setComparisonRuns(await fetchEvaluationRuns()); }}>真实对比</Button></Flex>
+      </Box>
       <Flex gap={4} align="stretch" flex="1" minH="0">
         {/* 左：输入 + 历史 */}
         <VStack w="320px" flexShrink={0} spacing={3} align="stretch">

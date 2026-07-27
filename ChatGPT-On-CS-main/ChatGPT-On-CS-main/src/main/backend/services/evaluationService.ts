@@ -2,10 +2,13 @@ import crypto from 'crypto';
 import { EvaluationCase } from '../entities/evaluationCase';
 import { EvaluationRun } from '../entities/evaluationRun';
 import { StoreKnowledge } from '../entities/storeKnowledge';
+import { KnowledgeVersion } from '../entities/knowledgeVersion';
 import { RagSearchItem } from './ragService';
 import { appendAuditEvent } from './auditService';
 
 type Searcher = (query: string, topK?: number) => Promise<RagSearchItem[]>;
+type Variant = { name: string; topK: number; model?: string; systemPrompt?: string; knowledgeVersion?: number };
+type ReplyRunner = (input: { question: string; variant: Variant; knowledge: string }) => Promise<string>;
 
 const percentile95 = (values: number[]) => {
   if (!values.length) return 0;
@@ -14,7 +17,24 @@ const percentile95 = (values: number[]) => {
 };
 
 export class EvaluationService {
-  constructor(private searcher: Searcher) {}
+  constructor(private searcher: Searcher, private replyRunner?: ReplyRunner) {}
+
+  setReplyRunner(replyRunner: ReplyRunner) { this.replyRunner = replyRunner; }
+
+  private async versionedKnowledge(found: RagSearchItem[], version?: number) {
+    const ids = found.map((item) => item.knowledgeId).filter(Boolean) as string[];
+    const current = await StoreKnowledge.findAll({ where: { id: ids } });
+    const records = new Map(current.map((item) => [item.id, { question: item.question, answer: item.answer, relatedQuestions: item.related_questions || [] }]));
+    if (version) {
+      const snapshots = await KnowledgeVersion.findAll({ where: { knowledge_type: 'store', knowledge_id: ids, version } });
+      snapshots.forEach((item) => {
+        const snapshot: any = item.snapshot;
+        records.set(item.knowledge_id, { question: String(snapshot.question || ''), answer: String(snapshot.answer || ''), relatedQuestions: Array.isArray(snapshot.relatedQuestions) ? snapshot.relatedQuestions : [] });
+      });
+      if (snapshots.length !== ids.length) throw new Error(`knowledge version v${version} is incomplete`);
+    }
+    return ids.map((id) => records.get(id)).filter(Boolean).map((item: any) => [`问题：${item.question}`, `回复：${item.answer}`, ...(item.relatedQuestions || []).map((question: string) => `相似问法：${question}`)].join('\n')).join('\n\n');
+  }
 
   async search(question: unknown) {
     const query = String(question || '').trim().slice(0, 1000);
@@ -116,10 +136,20 @@ export class EvaluationService {
       { name: String(body.variantA?.name || '当前方案'), topK: Math.min(20, Math.max(1, Number(body.variantA?.topK) || 3)) },
       { name: String(body.variantB?.name || '候选方案'), topK: Math.min(20, Math.max(1, Number(body.variantB?.topK) || 5)) },
     ];
+    const resolvedVariants: Variant[] = variants.map((variant: any, index) => {
+      const input = index === 0 ? body.variantA : body.variantB;
+      return {
+        ...variant,
+        model: String(input?.model || '').trim().slice(0, 200) || undefined,
+        systemPrompt: String(input?.systemPrompt || '').trim().slice(0, 8000) || undefined,
+        knowledgeVersion: Number.isInteger(Number(input?.knowledgeVersion)) && Number(input.knowledgeVersion) > 0 ? Number(input.knowledgeVersion) : undefined,
+      };
+    });
     const results = [];
-    for (const variant of variants) {
+    for (const variant of resolvedVariants) {
       let hits = 0;
       let latency = 0;
+      const rows: Array<{ id: string; answer?: string; error?: string }> = [];
       for (const item of cases) {
         const started = Date.now();
         const found = await this.searcher(item.question, variant.topK);
@@ -127,17 +157,25 @@ export class EvaluationService {
         const expected = item.expected_knowledge_ids || [];
         const ids = found.map((row) => row.knowledgeId).filter(Boolean) as string[];
         if (expected.length ? ids.some((id) => expected.includes(id)) : ids.length > 0) hits += 1;
+        if (this.replyRunner) {
+          try {
+            rows.push({ id: item.id, answer: await this.replyRunner({ question: item.question, variant, knowledge: await this.versionedKnowledge(found, variant.knowledgeVersion) }) });
+          } catch (error) {
+            rows.push({ id: item.id, error: error instanceof Error ? error.message : String(error) });
+          }
+        }
       }
       results.push({
         ...variant,
         total: cases.length,
         hitRate: cases.length ? Math.round(hits / cases.length * 1000) / 10 : 0,
         averageLatencyMs: cases.length ? Math.round(latency / cases.length) : 0,
+        rows,
       });
     }
     const winner = results[1].hitRate > results[0].hitRate ? results[1].name : results[0].name;
     const run = await EvaluationRun.create({
-      id: crypto.randomUUID(), variants, results, winner,
+      id: crypto.randomUUID(), variants: resolvedVariants, results, winner,
       cases: cases.map((item) => ({ id: item.id, updatedAt: item.updated_at.toISOString() })),
       created_at: new Date(),
     });
