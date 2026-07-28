@@ -1,7 +1,7 @@
 {
   "name": "yingbo-smart-customer-service-runtime",
-  "version": "2.1.0",
-  "description": "迎波智能客服：支持微信、千牛等平台的智能回复工作台",
+  "version": "2.5.0",
+  "description": "迎波智能客服：面向多平台、多店铺的智能回复与知识运营工作台",
   "main": "./dist/main/main.js",
   "author": "YinBo",
   "license": "AGPL-3.0",

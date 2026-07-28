@@ -26,7 +26,7 @@ nsis:
   shortcutName: 迎波智能客服
   uninstallDisplayName: 迎波智能客服
   deleteAppDataOnUninstall: true
-  artifactName: "${productName} ${version}.${ext}"
+  artifactName: "yingbo-smart-customer-service_v${version}_windows_x64_setup.${ext}"
 directories:
   app: release/app
   buildResources: assets
