@@ -4,6 +4,7 @@ import {
   CompanionTargetWindow,
   normalizeCompanionDockState,
   resolveDockSide,
+  WindowDockingService,
 } from '../../main/services/windowDockingService';
 
 const workArea = { x: 0, y: 0, width: 1920, height: 1040 };
@@ -139,5 +140,35 @@ describe('companion docking preferences', () => {
     });
     expect(state.targetMode).toBe('follow');
     expect(state.activePlatformId).toBeUndefined();
+  });
+});
+
+describe('WindowDockingService floating mode', () => {
+  test('keeps following the foreground platform without moving the floating panel', async () => {
+    const panel = {
+      isDestroyed: () => false,
+      setBounds: jest.fn(),
+    };
+    const locateTargets = jest.fn().mockResolvedValue([
+      target('win_qianniu'),
+      target('win_wechat', true),
+    ]);
+    const service = new WindowDockingService(
+      panel as never,
+      {
+        attached: false,
+        targetMode: 'follow',
+        activePlatformId: 'win_qianniu',
+      },
+      locateTargets,
+      0,
+    );
+
+    await (service as any).sync();
+    await (service as any).sync();
+
+    expect(service.getState().targetFound).toBe(true);
+    expect(service.getState().activePlatformId).toBe('win_wechat');
+    expect(panel.setBounds).not.toHaveBeenCalled();
   });
 });

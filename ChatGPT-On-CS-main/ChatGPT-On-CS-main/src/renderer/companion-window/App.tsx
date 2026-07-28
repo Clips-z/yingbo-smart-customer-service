@@ -346,8 +346,8 @@ function CompanionSurfaceContent() {
           </Text>
           <Text fontSize="9px" color="whiteAlpha.600" noOfLines={1}>
             {attached
-              ? `${side === 'left' ? '左侧' : '右侧'}吸附`
-              : '自由悬浮'}{' '}
+              ? `${side === 'left' ? '左侧' : '右侧'}吸附并跟随`
+              : '自由悬浮 · 自动识别'}{' '}
             · {dockState.targetFound ? '窗口已连接' : '等待窗口'}
           </Text>
         </Box>
@@ -446,7 +446,9 @@ function CompanionSurfaceContent() {
                 })
               }
             >
-              <option value="follow">自动跟随当前平台</option>
+              <option value="follow">
+                {attached ? '自动跟随当前平台窗口' : '自动识别当前平台（悬浮）'}
+              </option>
               <option value="win_qianniu">固定跟随千牛</option>
               <option value="win_wechat">固定跟随微信</option>
               <option value="win_wecom">固定跟随企业微信</option>

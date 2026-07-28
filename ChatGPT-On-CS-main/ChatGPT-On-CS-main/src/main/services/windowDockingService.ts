@@ -168,7 +168,7 @@ export async function locateCompanionWindows(): Promise<
     const { stdout } = await execFileAsync(
       'powershell.exe',
       ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script],
-      { windowsHide: true, timeout: 4000, encoding: 'utf8' },
+      { windowsHide: true, timeout: 10000, encoding: 'utf8' },
     );
     const line = stdout.trim().split(/\r?\n/).pop();
     if (!line) return [];
@@ -195,6 +195,8 @@ export class WindowDockingService {
   private timer?: NodeJS.Timeout;
 
   private autoHidden = false;
+
+  private syncInFlight = false;
 
   private candidatePlatformId?: CompanionPlatformId;
 
@@ -295,7 +297,17 @@ export class WindowDockingService {
   }
 
   private async sync(): Promise<void> {
-    if (!this.state.attached || this.panel.isDestroyed()) return;
+    if (this.syncInFlight) return;
+    this.syncInFlight = true;
+    try {
+      await this.syncOnce();
+    } finally {
+      this.syncInFlight = false;
+    }
+  }
+
+  private async syncOnce(): Promise<void> {
+    if (this.panel.isDestroyed()) return;
     const targets = await this.locateTargets();
     const selected = chooseCompanionTarget(
       targets,
@@ -310,12 +322,19 @@ export class WindowDockingService {
     if (!selected) return;
     const target = this.commitStableTarget(selected);
     if (!target || target.minimized) {
-      if (target?.minimized && this.panel.isVisible()) {
+      if (
+        this.state.attached &&
+        target?.minimized &&
+        this.panel.isVisible()
+      ) {
         this.autoHidden = true;
         this.panel.hide();
       }
       return;
     }
+    // Floating controls window position only. Platform and conversation
+    // selection must continue following the foreground supported platform.
+    if (!this.state.attached) return;
 
     const display = screen.getDisplayMatching(target);
     const bounds = calculateDockedBounds({
