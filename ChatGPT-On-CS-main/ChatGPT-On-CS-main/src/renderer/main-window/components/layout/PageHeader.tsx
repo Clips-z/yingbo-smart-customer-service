@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Badge,
   Box,
+  Button,
   Flex,
   IconButton,
   Text,
@@ -21,7 +22,7 @@ interface PageHeaderProps {
 
 const PageHeader: React.FC<PageHeaderProps> = ({ title, description }) => (
   <Flex
-    minH="72px"
+    minH="68px"
     px={{ base: 4, md: 6 }}
     py={3}
     align="center"
@@ -75,19 +76,21 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, description }) => (
         fontSize="10px"
       >
         <Box w="6px" h="6px" rounded="full" bg="green.400" mr={1.5} />
-        服务正常
+        后台服务正常
       </Badge>
-      <Tooltip label="打开伴随助手" hasArrow>
-        <IconButton
-          aria-label="打开伴随助手"
-          icon={<FiSidebar />}
-          size="sm"
-          variant="ghost"
-          onClick={() =>
-            window.electron.ipcRenderer.sendMessage('open-companion-window')
-          }
-        />
-      </Tooltip>
+      <Button
+        display={{ base: 'none', sm: 'inline-flex' }}
+        size="sm"
+        leftIcon={<FiSidebar />}
+        bg="#2947A3"
+        color="white"
+        _hover={{ bg: '#203B91' }}
+        onClick={() =>
+          window.electron.ipcRenderer.sendMessage('open-companion-window')
+        }
+      >
+        打开伴随助手
+      </Button>
       <Tooltip label="数据分析" hasArrow>
         <IconButton
           aria-label="数据分析"

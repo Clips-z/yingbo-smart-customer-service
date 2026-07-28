@@ -26,11 +26,12 @@ import {
   useQuery,
 } from '@tanstack/react-query';
 import {
+  FiArrowLeft,
+  FiArrowRight,
   FiChevronsLeft,
   FiChevronsRight,
-  FiLink,
-  FiLink2,
   FiMessageCircle,
+  FiMove,
   FiPackage,
   FiRefreshCw,
   FiSend,
@@ -317,10 +318,10 @@ function CompanionSurfaceContent() {
       overflow="hidden"
     >
       <Flex
-        h="50px"
+        minH="58px"
         px={3}
         align="center"
-        bg="#101828"
+        bg="#111C2E"
         color="white"
         gap={2}
         flexShrink={0}
@@ -341,28 +342,61 @@ function CompanionSurfaceContent() {
         </Flex>
         <Box flex="1" minW={0}>
           <Text fontSize="12px" fontWeight="800">
-            迎波 · {platform.name}伴随面板
+            迎波 · {platform.name}
           </Text>
           <Text fontSize="9px" color="whiteAlpha.600" noOfLines={1}>
             {attached
-              ? `已吸附${side === 'left' ? '左侧' : '右侧'}`
+              ? `${side === 'left' ? '左侧' : '右侧'}吸附`
               : '自由悬浮'}{' '}
             · {dockState.targetFound ? '窗口已连接' : '等待窗口'}
           </Text>
         </Box>
+        <HStack
+          spacing="2px"
+          p="2px"
+          borderRadius="9px"
+          bg="whiteAlpha.100"
+          sx={{ WebkitAppRegion: 'no-drag' }}
+        >
+          {[
+            {
+              label: '吸附左侧',
+              icon: <FiArrowLeft />,
+              active: attached && side === 'left',
+              action: () => command({ action: 'attach', side: 'left' }),
+            },
+            {
+              label: '自由悬浮',
+              icon: <FiMove />,
+              active: !attached,
+              action: () => command({ action: 'detach' }),
+            },
+            {
+              label: '吸附右侧',
+              icon: <FiArrowRight />,
+              active: attached && side === 'right',
+              action: () => command({ action: 'attach', side: 'right' }),
+            },
+          ].map((item) => (
+            <Tooltip key={item.label} label={item.label} hasArrow>
+              <IconButton
+                aria-label={item.label}
+                icon={item.icon}
+                size="xs"
+                minW="26px"
+                variant="ghost"
+                bg={item.active ? 'white' : 'transparent'}
+                color={item.active ? '#233876' : 'whiteAlpha.700'}
+                _hover={{
+                  bg: item.active ? 'white' : 'whiteAlpha.200',
+                  color: item.active ? '#233876' : 'white',
+                }}
+                onClick={item.action}
+              />
+            </Tooltip>
+          ))}
+        </HStack>
         <HStack spacing={0} sx={{ WebkitAppRegion: 'no-drag' }}>
-          <IconButton
-            aria-label="吸附"
-            icon={attached ? <FiLink /> : <FiLink2 />}
-            size="xs"
-            variant="ghost"
-            color="white"
-            onClick={() =>
-              command(
-                attached ? { action: 'detach' } : { action: 'attach', side },
-              )
-            }
-          />
           <IconButton
             aria-label="折叠"
             icon={<FiChevronsRight />}
@@ -384,60 +418,11 @@ function CompanionSurfaceContent() {
 
       <Box flex="1" overflowY="auto" p={3}>
         <Stack spacing={3}>
-          <Box
-            as="details"
-            bg="white"
-            borderRadius="12px"
-            border="1px solid #E6EAF0"
-            px={3}
-            py={2}
-          >
-            <Box
-              as="summary"
-              cursor="pointer"
-              color="gray.500"
-              fontSize="10px"
-              fontWeight="700"
-            >
-              跟随与停靠设置
-            </Box>
-            <Flex gap={2} align="center" mt={2}>
-              <Select
-                size="sm"
-                value={dockState.targetMode || 'follow'}
-                onChange={(event) =>
-                  command({
-                    action: 'target-mode',
-                    targetMode: event.target.value,
-                  })
-                }
-              >
-                <option value="follow">自动跟随前台平台</option>
-                <option value="win_qianniu">锁定千牛</option>
-                <option value="win_wechat">锁定微信</option>
-                <option value="win_wecom">锁定企业微信</option>
-              </Select>
-              <Button
-                size="sm"
-                variant="outline"
-                whiteSpace="nowrap"
-                onClick={() =>
-                  command({
-                    action: 'side',
-                    side: side === 'left' ? 'right' : 'left',
-                  })
-                }
-              >
-                {side === 'left' ? '移到右侧' : '移到左侧'}
-              </Button>
-            </Flex>
-          </Box>
-
           <Flex
-            bg={collectorReady ? '#ECFDF3' : '#FFF7ED'}
+            bg="white"
+            border="1px solid #E6EAF0"
             borderRadius="12px"
-            px={3}
-            py={2}
+            p={2}
             align="center"
             gap={2}
           >
@@ -447,11 +432,31 @@ function CompanionSurfaceContent() {
               borderRadius="full"
               bg={collectorReady ? '#36D399' : '#F59E0B'}
             />
-            <Text flex="1" fontSize="10px">
-              {collectorReady
-                ? `${platform.name}采集已就绪`
-                : `正在连接并识别${platform.name}`}
-            </Text>
+            <Select
+              size="xs"
+              flex="1"
+              border="none"
+              bg="transparent"
+              value={dockState.targetMode || 'follow'}
+              aria-label="伴随平台"
+              onChange={(event) =>
+                command({
+                  action: 'target-mode',
+                  targetMode: event.target.value,
+                })
+              }
+            >
+              <option value="follow">自动跟随当前平台</option>
+              <option value="win_qianniu">固定跟随千牛</option>
+              <option value="win_wechat">固定跟随微信</option>
+              <option value="win_wecom">固定跟随企业微信</option>
+            </Select>
+            <Badge
+              bg={collectorReady ? '#ECFDF3' : '#FFF7ED'}
+              color={collectorReady ? '#027A48' : '#B54708'}
+            >
+              {collectorReady ? '采集就绪' : '连接中'}
+            </Badge>
             <IconButton
               aria-label="刷新"
               icon={<FiRefreshCw />}

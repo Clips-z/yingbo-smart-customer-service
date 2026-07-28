@@ -71,7 +71,7 @@ const DashboardQualityOverview: React.FC = () => {
   const navigate = (section: string, sub?: string, focus?: string) => (window as any).__navigateTo?.(section, sub, focus);
   const openAiSettings = () => window.electron.ipcRenderer.sendMessage('open-settings-window', { tab: 'ai' });
   const steps = [
-    { label: '启用至少一个客服平台', done: activePlatformIds.length > 0, action: () => document.getElementById('platform-manager')?.scrollIntoView({ behavior: 'smooth' }), actionLabel: '去启用' },
+    { label: '启用至少一个客服平台', done: activePlatformIds.length > 0, action: () => navigate('platforms'), actionLabel: '去启用' },
     { label: '配置并启用回复模型', done: Boolean(llm?.model && llm?.key), action: openAiSettings, actionLabel: '去配置' },
     { label: '导入首批店铺知识', done: Boolean(rag?.totalChunks), action: () => navigate('knowledge', 'store-kb'), actionLabel: '去导入' },
     { label: '完成一次测试回复', done: suggestions.length > 0, action: () => navigate('service', undefined, 'pending'), actionLabel: '去测试' },
@@ -108,24 +108,207 @@ const DashboardQualityOverview: React.FC = () => {
     { bg: '#F5F3FF', color: '#6D28D9' },
   ];
   const completedSteps = steps.filter((step) => step.done).length;
+  const attentionCount = stats.pending + unhealthyCount + candidates;
 
-  return <SimpleGrid columns={{ base: 1, xl: 3 }} spacing={5}>
-    <Box gridColumn={{ xl: 'span 2' }} bg="white" border="1px solid" borderColor="#E8ECF3" borderRadius="18px" p={{ base: 4, md: 5 }} boxShadow="0 10px 30px rgba(16,24,40,.035)">
-      <Flex justify="space-between" align="flex-start" mb={5} gap={3}>
-        <Box><Flex align="center" gap={2}><Text fontSize="16px" fontWeight="800" color="#182230">优先处理</Text><Badge px={2} py={0.5} bg="#EEF3FF" color="#3C58BE">实时更新</Badge></Flex><Text fontSize="12px" color="gray.500" mt={1}>从待回复、异常和知识审核开始处理。</Text></Box>
-        <Badge px={2.5} py={1} borderRadius="full" bg={rag?.state === 'running' ? '#ECFDF3' : '#FFF7ED'} color={rag?.state === 'running' ? '#027A48' : '#B54708'}>{rag?.state === 'running' ? '知识检索正常' : `知识检索 ${rag?.state || '检查中'}`}</Badge>
-      </Flex>
-      <SimpleGrid columns={{ base: 2, md: 3, xl: 5 }} spacing={3}>
-        {cards.map((card, index) => { const Icon = taskIcons[index]; const tone = taskTones[index]; return <Box as="button" key={card.label} onClick={card.action} textAlign="left" p={3.5} minH="118px" border="1px solid" borderColor="#EDF0F5" borderRadius="14px" bg="#fff" transition="all .18s" _hover={{ transform: 'translateY(-2px)', borderColor: '#C9D4FF', boxShadow: '0 10px 18px rgba(73,91,179,.08)' }} _focusVisible={{ boxShadow: '0 0 0 3px rgba(91,124,250,.25)' }}><Flex justify="space-between"><Flex w="30px" h="30px" borderRadius="9px" bg={tone.bg} color={tone.color} align="center" justify="center"><Icon size={16} /></Flex><FiArrowRight color="#98A2B3" size={15} /></Flex><Text mt={4} fontSize="25px" lineHeight="1" fontWeight="850" color="#182230">{card.value}</Text><Text mt={1.5} fontSize="11px" color="gray.500" fontWeight="600">{card.label}</Text></Box>; })}
+  return (
+    <VStack spacing={5} align="stretch">
+      <Box
+        position="relative"
+        overflow="hidden"
+        bg="#111C2E"
+        color="white"
+        borderRadius="20px"
+        px={{ base: 4, md: 6 }}
+        py={{ base: 5, md: 6 }}
+        boxShadow="0 18px 42px rgba(17,28,46,.16)"
+        _before={{
+          content: '""',
+          position: 'absolute',
+          w: '420px',
+          h: '420px',
+          right: '-160px',
+          top: '-250px',
+          borderRadius: 'full',
+          bg: 'radial-gradient(circle, rgba(76,111,255,.34), transparent 68%)',
+          pointerEvents: 'none',
+        }}
+      >
+        <Flex
+          position="relative"
+          justify="space-between"
+          align={{ base: 'flex-start', md: 'center' }}
+          direction={{ base: 'column', md: 'row' }}
+          gap={3}
+          mb={5}
+        >
+          <Box>
+            <Text fontSize="11px" color="whiteAlpha.550" fontWeight="700" letterSpacing=".12em">
+              TODAY · 客服运营
+            </Text>
+            <Text mt={1} fontSize={{ base: '21px', md: '25px' }} fontWeight="850" letterSpacing="-.03em">
+              {attentionCount
+                ? `有 ${attentionCount} 项需要关注`
+                : '当前运行平稳，没有紧急待办'}
+            </Text>
+            <Text mt={1.5} fontSize="12px" color="whiteAlpha.650">
+              先处理客户等待和运行异常，再审核可沉淀的知识。
+            </Text>
+          </Box>
+          <Badge
+            px={3}
+            py={1.5}
+            borderRadius="full"
+            bg={rag?.state === 'running' ? 'rgba(56,211,159,.14)' : 'rgba(245,158,11,.16)'}
+            color={rag?.state === 'running' ? '#73E3BA' : '#FDBA74'}
+          >
+            {rag?.state === 'running' ? '知识检索正常' : `知识检索 ${rag?.state || '检查中'}`}
+          </Badge>
+        </Flex>
+        <SimpleGrid position="relative" columns={{ base: 2, md: 5 }} spacing={0}>
+          {cards.map((card, index) => {
+            const Icon = taskIcons[index];
+            return (
+              <Box
+                as="button"
+                key={card.label}
+                onClick={card.action}
+                textAlign="left"
+                px={{ base: 3, md: 4 }}
+                py={3}
+                borderLeft={{ base: 'none', md: index ? '1px solid' : 'none' }}
+                borderTop={{ base: index > 1 ? '1px solid' : 'none', md: 'none' }}
+                borderColor="whiteAlpha.150"
+                _hover={{ bg: 'whiteAlpha.100' }}
+                _focusVisible={{ boxShadow: 'inset 0 0 0 2px #9CB4FF' }}
+              >
+                <Flex align="center" gap={2} color="whiteAlpha.600">
+                  <Icon size={14} />
+                  <Text fontSize="10px" fontWeight="650">{card.label}</Text>
+                </Flex>
+                <Text mt={2} fontSize="27px" lineHeight="1" fontWeight="850">
+                  {card.value}
+                </Text>
+              </Box>
+            );
+          })}
+        </SimpleGrid>
+      </Box>
+
+      <SimpleGrid columns={{ base: 1, xl: 3 }} spacing={5}>
+        <Box
+          gridColumn={{ xl: 'span 2' }}
+          bg="white"
+          border="1px solid"
+          borderColor="#E4E8F0"
+          borderRadius="16px"
+          overflow="hidden"
+        >
+          <Flex justify="space-between" align="center" px={5} py={4} borderBottom="1px solid #EDF0F5">
+            <Box>
+              <Text fontSize="15px" fontWeight="800">今天的处理顺序</Text>
+              <Text fontSize="11px" color="gray.500" mt={0.5}>按客户等待风险和业务影响排序</Text>
+            </Box>
+            <Badge bg="#EEF2FF" color="#2947A3">实时更新</Badge>
+          </Flex>
+          {cards.slice(0, 4).map((card, index) => {
+            const Icon = taskIcons[index];
+            const tone = taskTones[index];
+            const helper = [
+              '审核 AI 建议并填入当前客户',
+              '优先处理等待超过 5 分钟的客户',
+              '检查上下文后重试或改为人工',
+              '检查对应平台的采集和登录状态',
+            ][index];
+            return (
+              <Flex
+                as="button"
+                key={card.label}
+                w="full"
+                align="center"
+                gap={3}
+                px={5}
+                py={3.5}
+                textAlign="left"
+                borderBottom={index < 3 ? '1px solid #F0F2F6' : 'none'}
+                _hover={{ bg: '#F8FAFD' }}
+                onClick={card.action}
+              >
+                <Flex w="34px" h="34px" borderRadius="10px" bg={tone.bg} color={tone.color} align="center" justify="center">
+                  <Icon size={16} />
+                </Flex>
+                <Box flex="1">
+                  <Text fontSize="12px" fontWeight="750">{card.label}</Text>
+                  <Text fontSize="10px" color="gray.500">{helper}</Text>
+                </Box>
+                <Text fontSize="18px" fontWeight="850">{card.value}</Text>
+                <FiArrowRight color="#98A2B3" />
+              </Flex>
+            );
+          })}
+        </Box>
+
+        <Box bg="white" border="1px solid #E4E8F0" borderRadius="16px" p={5}>
+          <Flex justify="space-between" align="flex-start">
+            <Box>
+              <Text fontSize="15px" fontWeight="800">回复质量</Text>
+              <Text fontSize="11px" color="gray.500" mt={0.5}>近 7 天人工反馈</Text>
+            </Box>
+            <Button size="xs" variant="ghost" rightIcon={<FiArrowRight />} onClick={() => window.electron.ipcRenderer.sendMessage('open-dataview-window', {})}>
+              查看复盘
+            </Button>
+          </Flex>
+          <SimpleGrid columns={2} mt={5} spacing={3}>
+            <Box borderRight="1px solid #EDF0F5">
+              <Text fontSize="24px" fontWeight="850">{acceptanceRate == null ? '—' : `${acceptanceRate}%`}</Text>
+              <Text fontSize="10px" color="gray.500">直接采用率</Text>
+            </Box>
+            <Box pl={2}>
+              <Text fontSize="24px" fontWeight="850">{editRate == null ? '—' : `${editRate}%`}</Text>
+              <Text fontSize="10px" color="gray.500">人工编辑率</Text>
+            </Box>
+          </SimpleGrid>
+          {trend.length ? (
+            <Flex mt={5} h="64px" gap={2} align="end" aria-label="近七天回复采用趋势">
+              {trend.map((item) => (
+                <Flex key={item.date} flex="1" h="full" minW="0" direction="column" justify="end" align="center" title={`${item.date}：${item.accepted}/${item.totalActions}`}>
+                  <Box w="full" maxW="30px" h={`${Math.max(7, Math.round((item.accepted / maxTrendActions) * 100))}%`} bg="linear-gradient(180deg, #8EA7FF, #4C6FFF)" borderRadius="4px 4px 1px 1px" />
+                  <Text mt={1} fontSize="8px" color="gray.400">{item.date.slice(5)}</Text>
+                </Flex>
+              ))}
+            </Flex>
+          ) : (
+            <Flex mt={5} h="64px" bg="#F7F9FC" borderRadius="10px" align="center" justify="center">
+              <Text fontSize="10px" color="gray.500">产生人工采用或编辑后显示趋势</Text>
+            </Flex>
+          )}
+          <Button mt={4} size="sm" w="full" variant="outline" leftIcon={<FiBookOpen />} onClick={() => navigate('knowledge', 'knowledge-candidates')}>
+            审核知识候选（{candidates}）
+          </Button>
+        </Box>
       </SimpleGrid>
-      <Flex mt={5} pt={4} borderTop="1px solid" borderColor="#EDF0F5" gap={{ base: 3, md: 6 }} wrap="wrap" align="center"><Text fontSize="12px" color="gray.500">近 7 天采用率 <Text as="span" ml={1} color="#182230" fontWeight="800">{acceptanceRate == null ? '暂无数据' : `${acceptanceRate}%`}</Text></Text><Text fontSize="12px" color="gray.500">人工编辑率 <Text as="span" ml={1} color="#182230" fontWeight="800">{editRate == null ? '暂无数据' : `${editRate}%`}</Text></Text>{feedback?.failed ? <Text fontSize="12px" color="red.500">失败反馈 {feedback.failed}</Text> : <Flex fontSize="12px" color="green.600" align="center" gap={1}><FiCheckCircle /> 暂无失败反馈</Flex>}</Flex>
-      <Flex mt={3} h="52px" gap={2} align="end" aria-label="近七天回复采用趋势">{trend.map((item) => <Flex key={item.date} flex="1" h="full" minW="0" direction="column" justify="end" align="center" title={`${item.date}：${item.accepted}/${item.totalActions}`}><Box w="full" maxW="34px" h={`${Math.max(7, Math.round((item.accepted / maxTrendActions) * 100))}%`} bg="linear-gradient(180deg, #8AA5FF, #5B7CFA)" borderRadius="5px 5px 2px 2px" /><Text mt={1} fontSize="9px" color="gray.400">{item.date.slice(5)}</Text></Flex>)}</Flex>
-    </Box>
-    <Box bg="#182230" color="white" borderRadius="18px" p={{ base: 4, md: 5 }} boxShadow="0 14px 30px rgba(16,24,40,.12)">
-      <Flex justify="space-between" align="center"><Box><Text fontSize="16px" fontWeight="800">启用清单</Text><Text fontSize="12px" color="whiteAlpha.600" mt={1}>完成基础配置后即可稳定运行</Text></Box><Flex w="38px" h="38px" rounded="full" bg="whiteAlpha.100" align="center" justify="center"><Text fontWeight="800">{completedSteps}/{steps.length}</Text></Flex></Flex>
-      <VStack align="stretch" spacing={1} mt={5}>{steps.map((step, index) => <Flex key={step.label} gap={3} align="center" py={2}><Flex w="20px" h="20px" flexShrink={0} rounded="full" align="center" justify="center" bg={step.done ? '#36D399' : 'whiteAlpha.100'} color={step.done ? '#0B261C' : 'whiteAlpha.700'} fontSize="10px" fontWeight="800">{step.done ? <FiCheckCircle size={13} /> : index + 1}</Flex><Text fontSize="12px" color={step.done ? 'whiteAlpha.500' : 'white'} flex="1" textDecoration={step.done ? 'line-through' : 'none'}>{step.label}</Text>{!step.done && <Button size="xs" variant="ghost" color="white" rightIcon={<FiArrowRight />} _hover={{ bg: 'whiteAlpha.150' }} onClick={step.action}>{step.actionLabel}</Button>}</Flex>)}</VStack>
-    </Box>
-  </SimpleGrid>;
+
+      {completedSteps < steps.length && (
+        <Box bg="#FFFDF7" border="1px solid #F3E7C2" borderRadius="14px" px={5} py={4}>
+          <Flex justify="space-between" align="center" mb={3}>
+            <Box>
+              <Text fontSize="13px" fontWeight="800">还有 {steps.length - completedSteps} 项基础配置未完成</Text>
+              <Text fontSize="10px" color="gray.500">完成后，迎波可以稳定陪伴平台窗口运行。</Text>
+            </Box>
+            <Badge bg="#FFF4D6" color="#9A6700">{completedSteps}/{steps.length}</Badge>
+          </Flex>
+          <VStack align="stretch" spacing={1}>
+            {steps.filter((step) => !step.done).map((step) => (
+              <Flex key={step.label} align="center" gap={2} py={1.5}>
+                <FiClock color="#B7791F" />
+                <Text flex="1" fontSize="11px">{step.label}</Text>
+                <Button size="xs" variant="ghost" rightIcon={<FiArrowRight />} onClick={step.action}>{step.actionLabel}</Button>
+              </Flex>
+            ))}
+          </VStack>
+        </Box>
+      )}
+    </VStack>
+  );
 };
 
 export default React.memo(DashboardQualityOverview);

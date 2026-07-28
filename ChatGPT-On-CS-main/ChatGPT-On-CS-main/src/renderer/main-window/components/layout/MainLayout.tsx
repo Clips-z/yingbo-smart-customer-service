@@ -29,25 +29,6 @@ const DashboardContent = () => (
   <VStack spacing={5} align="stretch">
     <DashboardQualityOverview />
     <Box
-      id="platform-manager"
-      bg="white"
-      border="1px solid"
-      borderColor="ui.border"
-      borderRadius="ui.panel"
-      p={{ base: 4, md: 5 }}
-      boxShadow="ui.panel"
-    >
-      <Box mb={4}>
-        <Text fontSize="15px" fontWeight="800" color="ui.ink">
-          平台与店铺
-        </Text>
-        <Text fontSize="11px" color="gray.500" mt={1}>
-          查看每个平台、店铺和运行实例的实时状态。
-        </Text>
-      </Box>
-      <AppManager />
-    </Box>
-    <Box
       as="details"
       bg="white"
       border="1px solid"
@@ -82,6 +63,52 @@ const DashboardContent = () => (
   </VStack>
 );
 
+const PlatformContent = () => (
+  <Box
+    id="platform-manager"
+    bg="white"
+    border="1px solid"
+    borderColor="ui.border"
+    borderRadius="ui.panel"
+    p={{ base: 4, md: 5 }}
+    boxShadow="ui.panel"
+    minH="520px"
+  >
+    <Flex
+      justify="space-between"
+      align={{ base: 'flex-start', md: 'center' }}
+      direction={{ base: 'column', md: 'row' }}
+      gap={3}
+      mb={5}
+      pb={4}
+      borderBottom="1px solid"
+      borderColor="ui.border"
+    >
+      <Box>
+        <Text fontSize="16px" fontWeight="800" color="ui.ink">
+          店铺运行状态
+        </Text>
+        <Text fontSize="11px" color="gray.500" mt={1}>
+          先选择平台，再查看其客服实例、登录和采集状态。
+        </Text>
+      </Box>
+      <Alert
+        status="info"
+        variant="subtle"
+        borderRadius="10px"
+        w="auto"
+        py={2}
+        px={3}
+        fontSize="11px"
+      >
+        <AlertIcon boxSize="14px" />
+        一个平台可以管理多个店铺或客服实例
+      </Alert>
+    </Flex>
+    <AppManager />
+  </Box>
+);
+
 const PAGE_META: Record<
   Exclude<NavSection, 'dataview'>,
   { title: string; description: string }
@@ -91,8 +118,12 @@ const PAGE_META: Record<
     description: '集中查看待办、异常、回复质量与平台运行状态。',
   },
   service: {
-    title: '会话工作台',
-    description: '审核 AI 建议，结合上下文完成客户回复。',
+    title: '回复审核',
+    description: '集中处理待回复、超时、失败和需要人工确认的会话。',
+  },
+  platforms: {
+    title: '店铺与平台',
+    description: '管理各平台下的店铺、客服实例和运行状态。',
   },
   knowledge: {
     title: '知识资产',
@@ -156,6 +187,7 @@ const MainLayout = () => {
     if (activeSection === 'service') {
       return <ReplyWorkbench initialFocus={replyFocus} />;
     }
+    if (activeSection === 'platforms') return <PlatformContent />;
     if (activeSection === 'security') return <ContentSecurity />;
     if (activeSection !== 'knowledge') return <DashboardContent />;
 
