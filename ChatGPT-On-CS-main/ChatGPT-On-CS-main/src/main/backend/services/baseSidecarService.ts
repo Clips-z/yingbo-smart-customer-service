@@ -405,6 +405,7 @@ export abstract class BaseSidecarService {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
+        PYTHONPATH: [runtimePath('tools', 'wechat-py311'), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
         PYTHONUTF8: '1',
         PYTHONUNBUFFERED: '1',
       },

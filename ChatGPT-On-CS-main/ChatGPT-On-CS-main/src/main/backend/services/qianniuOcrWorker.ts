@@ -1,6 +1,7 @@
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import crypto from 'crypto';
 import readline from 'readline';
+import path from 'path';
 import {
   getRuntimeRoot,
   rapidOcrPythonPath,
@@ -89,6 +90,10 @@ export class QianniuOcrWorker {
       cwd: getRuntimeRoot(),
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: {
+        ...process.env,
+        PYTHONPATH: [runtimePath('tools', 'rapidocr-py311'), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+      },
     });
     this.process = worker;
     this.stderrTail = '';

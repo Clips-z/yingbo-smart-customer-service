@@ -262,6 +262,7 @@ export class RagService {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: {
           ...process.env,
+          PYTHONPATH: [path.join(getRuntimeRoot(), 'tools', 'rag-py311'), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
           // 确保 RAG 服务能找到自己的 config.json 和 data 目录
           PYTHONUNBUFFERED: '1',
           PYTHONUTF8: '1',
