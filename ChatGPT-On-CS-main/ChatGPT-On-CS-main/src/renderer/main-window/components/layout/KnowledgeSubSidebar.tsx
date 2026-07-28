@@ -25,28 +25,30 @@ const KnowledgeSubSidebar: React.FC<KnowledgeSubSidebarProps> = ({
   return (
     <Flex
       direction="column"
-      w="176px"
-      bg="white"
+      w="216px"
+      bg="#FFFFFF"
       borderRight="1px solid"
-      borderColor="gray.100"
+      borderColor="#E8ECF3"
       flexShrink={0}
       h="full"
-      pt={4}
+      pt={6}
+      px={3}
     >
       {/* 子菜单标题 */}
       <Text
-        px={4}
-        pb={3}
-        fontSize="14px"
+        px={3}
+        pb={1}
+        fontSize="15px"
         fontWeight={800}
         color="gray.700"
         letterSpacing="-0.01em"
       >
-        知识管理
+        知识资产
       </Text>
+      <Text px={3} pb={4} fontSize="11px" color="gray.400">可查看、导出并编辑每一条知识</Text>
 
       {/* 子菜单项列表 */}
-      <Flex direction="column" gap={0.5} px={2}>
+      <Flex direction="column" gap={1}>
         {KNOWLEDGE_SUB_ITEMS.map((item) => {
           const isActive = item.key === activeSub;
 
@@ -58,9 +60,9 @@ const KnowledgeSubSidebar: React.FC<KnowledgeSubSidebarProps> = ({
               display="flex"
               alignItems="center"
               w="full"
-              h="38px"
+              h="42px"
               px={3}
-              borderRadius="lg"
+              borderRadius="10px"
               transition="all 0.15s ease"
               cursor="pointer"
               outline="none"
@@ -68,8 +70,8 @@ const KnowledgeSubSidebar: React.FC<KnowledgeSubSidebarProps> = ({
                 boxShadow: '0 0 0 2px rgba(66, 99, 235, 0.35)',
               }}
               /* 激活态：深蓝底 + 白字 + 左侧粗指示条 */
-              bg={isActive ? 'linear-gradient(135deg, #4A5BB3 0%, #3D56B8 100%)' : 'transparent'}
-              color={isActive ? 'white' : 'gray.600'}
+              bg={isActive ? '#EEF3FF' : 'transparent'}
+              color={isActive ? '#3854B7' : 'gray.600'}
               _hover={
                 isActive
                   ? {}
@@ -80,12 +82,8 @@ const KnowledgeSubSidebar: React.FC<KnowledgeSubSidebarProps> = ({
                 _before: {
                   content: '""',
                   position: 'absolute',
-                  left: '-10px',
-                  top: '6px',
-                  bottom: '6px',
-                  w: '3px',
-                  borderRadius: '0 3px 3px 0',
-                  bg: '#4A5BB3', // 与主侧栏激活色一致
+                  left: '0', top: '9px', bottom: '9px', w: '3px',
+                  borderRadius: '0 3px 3px 0', bg: '#5B7CFA',
                 },
               })}
             >
@@ -103,7 +101,7 @@ const KnowledgeSubSidebar: React.FC<KnowledgeSubSidebarProps> = ({
               )}
               <Text
                 fontSize="13px"
-                fontWeight={isActive ? 700 : 500}
+                fontWeight={isActive ? 700 : 550}
                 lineHeight={1}
                 whiteSpace="nowrap"
               >

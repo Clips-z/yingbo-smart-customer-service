@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, AlertIcon, Box, Flex, IconButton, Text, Tooltip, VStack } from '@chakra-ui/react';
-import { FiSidebar } from 'react-icons/fi';
+import { Alert, AlertIcon, Badge, Box, Flex, IconButton, Text, Tooltip, VStack } from '@chakra-ui/react';
+import { FiBarChart2, FiChevronRight, FiSettings, FiSidebar } from 'react-icons/fi';
 import AppSidebar, { NavSection, KnowledgeSubKey } from './AppSidebar';
 import KnowledgeSubSidebar from './KnowledgeSubSidebar';
 import AppManager from '../AppManager';
@@ -23,14 +23,7 @@ const DashboardContent = () => (
   <VStack spacing={4} align="stretch">
     {/* 区块标题 */}
     <Flex pt={1} align="center" justify="space-between">
-      <Box>
-        <Text fontSize="18px" fontWeight={800} color="gray.800" letterSpacing="-0.01em">
-          平台管理
-        </Text>
-        <Text fontSize="12.5px" color="gray.400" mt={0.5}>
-          启停各平台客服，查看自动回复运行状态
-        </Text>
-      </Box>
+      <Box><Text fontSize="13px" fontWeight={700} color="gray.700">平台连接</Text><Text fontSize="12px" color="gray.400" mt={0.5}>启停各平台客服，查看自动回复运行状态</Text></Box>
       <Tooltip label="打开千牛伴随面板" placement="left" hasArrow>
         <IconButton
           aria-label="打开千牛伴随面板"
@@ -128,9 +121,17 @@ const MainLayout = () => {
 
   /** 当前是否需要显示知识管理子侧栏 */
   const showKnowledgeSub = activeSection === 'knowledge';
+  const pageMeta: Record<NavSection, { title: string; description: string }> = {
+    dashboard: { title: '运营总览', description: '把需要处理的客户服务工作集中在一个地方。' },
+    service: { title: '会话工作台', description: '查看、审核并发送 AI 建议回复。' },
+    knowledge: { title: '知识资产', description: '持续沉淀对话经验，并随时导出、编辑和治理。' },
+    security: { title: '安全与合规', description: '为自动回复设置明确的安全边界。' },
+    dataview: { title: '数据分析', description: '查看经营与回复质量趋势。' },
+  };
+  const currentMeta = pageMeta[activeSection];
 
   return (
-    <Flex h="100vh" bg="#F7FAFC" overflow="hidden">
+    <Flex h="100vh" bg="#F5F7FB" overflow="hidden">
       {/* ═══ 左侧图标侧边栏 ═══ */}
       <AppSidebar
         activeSection={activeSection}
@@ -156,13 +157,23 @@ const MainLayout = () => {
         flexDirection="column"
         overflow="hidden"
       >
+        <Flex h="76px" px={{ base: 5, md: 8 }} align="center" justify="space-between" bg="rgba(255,255,255,.86)" borderBottom="1px solid" borderColor="#E8ECF3" flexShrink={0} backdropFilter="blur(16px)">
+          <Box minW="0"><Flex align="center" gap={1.5} mb={1}><Text color="gray.400" fontSize="11px">工作空间</Text><FiChevronRight size={13} color="#98A2B3" /><Text color="gray.500" fontSize="11px">{currentMeta.title}</Text></Flex><Text fontSize={{ base: '19px', md: '22px' }} fontWeight="800" color="#182230" letterSpacing="-.03em">{currentMeta.title}</Text><Text display={{ base: 'none', lg: 'block' }} fontSize="12px" color="gray.500" mt={0.5}>{currentMeta.description}</Text></Box>
+          <Flex align="center" gap={2} flexShrink={0}>
+            <Badge display={{ base: 'none', md: 'inline-flex' }} px={2.5} py={1} bg="green.50" color="green.700" borderRadius="full"><Box w="6px" h="6px" rounded="full" bg="green.400" mr={1.5} />服务正常</Badge>
+            <Tooltip label="打开千牛伴随面板" hasArrow><IconButton aria-label="打开千牛伴随面板" icon={<FiSidebar />} size="sm" variant="ghost" onClick={() => window.electron.ipcRenderer.sendMessage('open-companion-window')} /></Tooltip>
+            <Tooltip label="查看数据分析" hasArrow><IconButton aria-label="查看数据分析" icon={<FiBarChart2 />} size="sm" variant="ghost" onClick={() => window.electron.ipcRenderer.sendMessage('open-dataview-window', {})} /></Tooltip>
+            <Tooltip label="系统设置" hasArrow><IconButton aria-label="系统设置" icon={<FiSettings />} size="sm" variant="ghost" onClick={() => window.electron.ipcRenderer.sendMessage('open-settings-window', {})} /></Tooltip>
+          </Flex>
+        </Flex>
         {!isOnline && (
           <Alert status="warning" borderRadius={0} fontSize="13px">
             <AlertIcon />
             当前处于离线状态：新消息、知识检索和平台同步将在网络恢复后继续。
           </Alert>
         )}
-        <Box flex="1" minH="0" overflowY="auto" px={5} pb={6}>
+        <Box flex="1" minH="0" overflowY="auto" px={{ base: 4, md: 8 }} py={6}>
+          <Box maxW="1560px" mx="auto">
           {(() => {
             switch (activeSection) {
               case 'dashboard':
@@ -205,6 +216,7 @@ const MainLayout = () => {
                 return <DashboardContent />;
             }
           })()}
+          </Box>
         </Box>
       </Box>
     </Flex>
