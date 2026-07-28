@@ -1,15 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   Box,
-  VStack,
-  Text,
+  Button,
   Flex,
-  IconButton,
-  Tooltip,
   Spinner,
+  Text,
   useToast,
 } from '@chakra-ui/react';
-import { AddIcon } from '@chakra-ui/icons';
+import { FiPlus } from 'react-icons/fi';
 import InstanceCardComponent from './InstanceCardComponent';
 import { useAppManager } from './AppManagerContext';
 import { trackButtonClick } from '../../../common/services/analytics';
@@ -25,96 +23,76 @@ const InstanceListComponent = () => {
     handleAddTask,
     setIsSettingsOpen,
   } = useAppManager();
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [currentAppId, setCurrentAppId] = useState(selectedAppId);
   const toast = useToast();
 
-  useEffect(() => {
-    setCurrentAppId(selectedAppId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedAppId]);
-
-  const handleAddTaskWrapper = async () => {
+  const addInstance = async () => {
     try {
       trackButtonClick(`add_task_${selectedAppId || ''}`);
       await handleAddTask();
     } catch (error) {
       toast({
-        title: '添加失败',
-        description: (error as Error).message || '未知错误',
-        position: 'top',
+        title: '新增客服实例失败',
+        description: (error as Error).message || '请稍后重试',
         status: 'error',
-        duration: 5000,
-        isClosable: true,
+        position: 'top',
       });
     }
   };
 
-  let content;
-
   if (!selectedAppId) {
     return (
-      <Flex justifyContent="center" alignItems="center" w="60%" h="100%">
-        <Text fontSize="xl" color="gray.500">
-          请先选择一个应用
+      <Flex minH="166px" align="center" justify="center" direction="column">
+        <Text fontSize="12px" fontWeight="650" color="gray.500">
+          请选择一个在线平台
+        </Text>
+        <Text mt={1} fontSize="10px" color="gray.400">
+          选择后可查看该平台下的客服任务
         </Text>
       </Flex>
     );
   }
 
-  if (filteredInstances.length > 0) {
-    content = filteredInstances.map((instance, i) => (
-      <InstanceCardComponent
-        key={i}
-        instance={instance}
-        selectedInstanceId={selectedInstanceId}
-        setSelectedInstanceId={setSelectedInstanceId}
-        handleDelete={handleDelete}
-        openSettings={() => setIsSettingsOpen(true)}
-      />
-    ));
-  } else {
-    content = (
-      <Text fontSize="xl" color="gray.500">
-        没有启动该应用的客服
-      </Text>
-    );
-  }
-
   return (
-    <Box w="60%" p={4} bg="gray.50" overflowY="auto">
-      <VStack spacing={4}>
-        {content}
+    <Box p={3}>
+      <Flex direction="column" gap={2}>
+        {filteredInstances.map((instance) => (
+          <InstanceCardComponent
+            key={instance.task_id}
+            instance={instance}
+            selectedInstanceId={selectedInstanceId}
+            setSelectedInstanceId={setSelectedInstanceId}
+            handleDelete={handleDelete}
+            openSettings={() => setIsSettingsOpen(true)}
+          />
+        ))}
+        {!filteredInstances.length && !isTasksLoading && (
+          <Flex py={5} align="center" justify="center" direction="column">
+            <Text fontSize="12px" color="gray.500">
+              还没有客服实例
+            </Text>
+            <Text fontSize="10px" color="gray.400" mt={1}>
+              新增后可为不同客服账号配置独立策略
+            </Text>
+          </Flex>
+        )}
         {isTasksLoading ? (
-          <Flex justifyContent="center" alignItems="center" w="100%" h="50px">
-            <Spinner size="md" />
+          <Flex h="36px" align="center" justify="center">
+            <Spinner size="xs" />
           </Flex>
         ) : (
-          <Tooltip label={`新增一个客服账户`}>
-            <Flex
-              w="100%"
-              h="50px"
-              bg="gray.100"
-              borderRadius="md"
-              align="center"
-              p={3}
-              justify="center"
-              cursor="pointer"
-              onClick={handleAddTaskWrapper}
-              _hover={{ bg: 'gray.200' }}
-            >
-              <IconButton
-                aria-label="Add instance"
-                variant="unstyled"
-                icon={<AddIcon />}
-              />
-            </Flex>
-          </Tooltip>
+          <Button
+            size="sm"
+            variant="outline"
+            borderStyle="dashed"
+            leftIcon={<FiPlus />}
+            onClick={addInstance}
+          >
+            新增客服实例
+          </Button>
         )}
-      </VStack>
+      </Flex>
     </Box>
   );
 };
 
-export default InstanceListComponent;
+export default React.memo(InstanceListComponent);

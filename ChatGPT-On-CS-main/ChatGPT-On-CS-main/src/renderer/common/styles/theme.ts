@@ -7,11 +7,12 @@ const theme = extendTheme({
   styles: {
     global: {
       'html, body': {
-        bg: '#F7FAFC',
+        bg: '#F4F6FA',
         fontSize: 'md',
         fontWeight: 400,
         height: '100%',
-        fontFamily: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif`,
+        color: '#182230',
+        fontFamily: `"IBM Plex Sans", "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`,
       },
       a: {
         color: 'brand.500',
@@ -43,26 +44,36 @@ const theme = extendTheme({
     lg: '20px',
     xl: '24px',
     '2xl': '28px',
-  },
-  shadows: {
-    sm: '0 1px 2px 0 rgba(15, 23, 42, 0.04)',
-    md: '0 4px 12px -2px rgba(15, 23, 42, 0.06), 0 2px 6px -2px rgba(15, 23, 42, 0.04)',
-    lg: '0 12px 24px -6px rgba(15, 23, 42, 0.08), 0 4px 8px -4px rgba(15, 23, 42, 0.04)',
-    xl: '0 24px 40px -12px rgba(15, 23, 42, 0.12), 0 8px 16px -8px rgba(15, 23, 42, 0.05)',
+    ui: {
+      panel: '16px',
+      control: '10px',
+    },
   },
   colors: {
     ...colors,
+    ui: {
+      canvas: '#F4F6FA',
+      panel: '#FFFFFF',
+      ink: '#182230',
+      muted: '#667085',
+      border: '#E6EAF0',
+      accent: '#4667D9',
+      accentSoft: '#EEF2FF',
+      navy: '#101828',
+    },
   },
+  semanticTokens: {},
   components: {
     Table: tableTheme,
     IconButton: iconButtonTheme,
     // 全局 Button 样式优化
     Button: {
       baseStyle: {
-        fontWeight: 500,
-        borderRadius: 'md',
-        _focus: {
-          boxShadow: 'none',
+        fontWeight: 650,
+        borderRadius: '10px',
+        transition: 'all 150ms ease',
+        _focusVisible: {
+          boxShadow: '0 0 0 3px rgba(70, 103, 217, .22)',
         },
       },
       sizes: {
@@ -84,16 +95,32 @@ const theme = extendTheme({
     },
     // 全局 Input / Select / Textarea 样式
     Input: {
+      baseStyle: {
+        field: {
+          borderRadius: '10px',
+          bg: 'white',
+        },
+      },
       defaultProps: {
         focusBorderColor: 'brand.400',
       },
     },
     Select: {
+      baseStyle: {
+        field: {
+          borderRadius: '10px',
+          bg: 'white',
+        },
+      },
       defaultProps: {
         focusBorderColor: 'brand.400',
       },
     },
     Textarea: {
+      baseStyle: {
+        borderRadius: '10px',
+        bg: 'white',
+      },
       defaultProps: {
         focusBorderColor: 'brand.400',
       },
@@ -107,6 +134,16 @@ const theme = extendTheme({
           },
         },
       },
+    },
+  },
+  shadows: {
+    sm: '0 1px 2px rgba(16, 24, 40, .04)',
+    md: '0 6px 18px rgba(16, 24, 40, .06)',
+    lg: '0 14px 32px rgba(16, 24, 40, .09)',
+    xl: '0 20px 44px rgba(16, 24, 40, .12)',
+    ui: {
+      panel: '0 1px 2px rgba(16, 24, 40, .025), 0 8px 24px rgba(16, 24, 40, .035)',
+      floating: '0 16px 36px rgba(16, 24, 40, .14)',
     },
   },
 });

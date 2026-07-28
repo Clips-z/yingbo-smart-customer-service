@@ -205,7 +205,7 @@ export const AppManagerProvider = ({ children }: AppManagerProviderProps) => {
       setSelectedAppId(null);
       setSelectedInstanceId(null);
     }
-    if (!selectedAppId && activeIds.length === 1) {
+    if (!selectedAppId && activeIds.length > 0) {
       setSelectedAppId(activeIds[0]);
     }
     if (

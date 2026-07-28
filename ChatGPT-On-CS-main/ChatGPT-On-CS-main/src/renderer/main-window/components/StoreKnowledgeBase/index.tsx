@@ -363,6 +363,7 @@ const StoreKnowledgeBase: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [editing, setEditing] = useState<QAItem | null>(null);
   const [confirmation, setConfirmation] = useState<{
     title: string;
@@ -511,12 +512,25 @@ const StoreKnowledgeBase: React.FC = () => {
   return (
     <Flex h="full" gap={4} align="stretch">
       <Box flex="1" minW="0" display="flex" flexDirection="column">
-        <Flex align="center" justify="space-between" mb={3}>
-          <Box>
-            <Text fontSize="18px" fontWeight={800} color="gray.800" letterSpacing="-0.01em">店铺知识库</Text>
-            <Text fontSize="12.5px" color="gray.400" mt={0.5}>管理店铺级问答知识，自动学习客服历史对话</Text>
-          </Box>
-          <HStack>{selectedIds.size > 0 && <Badge colorScheme="brand" borderRadius="full" px={2}>已选 {selectedIds.size} 项</Badge>}{selectedIds.size === 2 && <Button size="xs" colorScheme="purple" onClick={handleMerge}>预览并合并</Button>}</HStack>
+        <Flex align="center" justify="space-between" mb={3} gap={2} wrap="wrap">
+          <InputGroup size="sm" maxW="360px" flex="1" minW="220px">
+            <InputLeftElement pointerEvents="none" h="full"><FiSearch color="#98A2B3" /></InputLeftElement>
+            <Input
+              placeholder="搜索问题、回复或标签"
+              value={keyword}
+              onChange={(event) => { setKeyword(event.target.value); setPage(1); }}
+            />
+          </InputGroup>
+          <HStack spacing={2}>
+            {selectedIds.size > 0 && <Badge colorScheme="brand" borderRadius="full" px={2}>已选 {selectedIds.size} 项</Badge>}
+            {selectedIds.size === 2 && <Button size="xs" colorScheme="purple" onClick={handleMerge}>预览并合并</Button>}
+            <Button size="sm" variant="outline" leftIcon={<FiFilter />} onClick={() => setFiltersOpen((value) => !value)}>
+              {filtersOpen ? '收起筛选' : '筛选与导入导出'}
+            </Button>
+            <Button size="sm" colorScheme="brand" leftIcon={<FiPlus />} onClick={openAdd}>
+              新增问答
+            </Button>
+          </HStack>
         </Flex>
 
         <Box flex="1" minH="0" overflowY="auto" pr={1}>
@@ -548,7 +562,7 @@ const StoreKnowledgeBase: React.FC = () => {
         )}
       </Box>
 
-      <Box w="300px" flexShrink={0} bg="white" borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="sm" p={4} overflowY="auto">
+      <Box display={filtersOpen ? 'block' : 'none'} w="280px" flexShrink={0} bg="white" borderRadius="ui.panel" border="1px solid" borderColor="ui.border" boxShadow="ui.panel" p={4} overflowY="auto">
         <StatsPanel stats={stats} keyword={keyword} onKeyword={(v) => { setKeyword(v); setPage(1); }} shop={shop} onShop={(v) => { setShop(v); setPage(1); }} stage={stage} onStage={(v) => { setStage(v); setPage(1); }} onAdd={openAdd} onImport={importDisclosure.onOpen} onExport={handleExport} conflicts={conflicts} onMergeConflict={requestMerge} />
       </Box>
 

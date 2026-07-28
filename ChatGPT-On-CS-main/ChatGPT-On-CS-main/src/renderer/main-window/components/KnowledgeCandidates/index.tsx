@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Badge, Box, Button, Flex, FormControl, FormLabel, Heading, Input, Select,
+  Badge, Box, Button, Flex, FormControl, FormLabel, Input, Select,
   SimpleGrid, Spinner, Text, Textarea, useToast, Modal, ModalOverlay,
   ModalContent, ModalHeader, ModalBody, ModalFooter, ModalCloseButton,
 } from '@chakra-ui/react';
@@ -53,15 +53,12 @@ const KnowledgeCandidates: React.FC = () => {
   };
 
   return (
-    <Box py={5}>
-      <Flex justify="space-between" align="start" mb={5} gap={4} wrap="wrap">
-        <Box>
-          <Heading size="md">对话知识候选</Heading>
-          <Text color="gray.500" fontSize="sm" mt={1}>从实际采用的客服回复中积累，人工审核后才进入正式知识库。</Text>
-        </Box>
+    <Box>
+      <Flex justify="space-between" align="center" mb={4} gap={3} wrap="wrap" bg="white" border="1px solid" borderColor="ui.border" borderRadius="ui.panel" boxShadow="ui.panel" p={3}>
+        <Text color="gray.500" fontSize="11px">从实际采用的回复中积累，审核后进入正式知识库。</Text>
         <Flex gap={2}>
-          <Input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索问题或答案" w="220px" />
-          <Select value={status} onChange={(event) => setStatus(event.target.value)} w="130px">
+          <Input size="sm" value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索问题或答案" w="240px" />
+          <Select size="sm" value={status} onChange={(event) => setStatus(event.target.value)} w="130px">
             <option value="pending">待审核</option><option value="approved">已批准</option>
             <option value="rejected">已驳回</option><option value="all">全部</option>
           </Select>

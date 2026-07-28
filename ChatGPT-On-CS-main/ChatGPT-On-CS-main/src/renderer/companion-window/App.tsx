@@ -312,15 +312,15 @@ function CompanionSurfaceContent() {
     <Flex
       h="100vh"
       direction="column"
-      bg="#edf3f2"
-      color="#173238"
+      bg="#F4F6FA"
+      color="#182230"
       overflow="hidden"
     >
       <Flex
         h="50px"
         px={3}
         align="center"
-        bg="#10252a"
+        bg="#101828"
         color="white"
         gap={2}
         flexShrink={0}
@@ -330,8 +330,8 @@ function CompanionSurfaceContent() {
           w="28px"
           h="28px"
           borderRadius="9px"
-          bg="#2dd4a2"
-          color="#0d2927"
+          bg="#5B7CFA"
+          color="white"
           align="center"
           justify="center"
           fontWeight="900"
@@ -384,45 +384,57 @@ function CompanionSurfaceContent() {
 
       <Box flex="1" overflowY="auto" p={3}>
         <Stack spacing={3}>
-          <Flex
+          <Box
+            as="details"
             bg="white"
-            borderRadius="14px"
-            p={2.5}
-            border="1px solid #dbe7e5"
-            gap={2}
-            align="center"
+            borderRadius="12px"
+            border="1px solid #E6EAF0"
+            px={3}
+            py={2}
           >
-            <Select
-              size="sm"
-              value={dockState.targetMode || 'follow'}
-              onChange={(event) =>
-                command({
-                  action: 'target-mode',
-                  targetMode: event.target.value,
-                })
-              }
+            <Box
+              as="summary"
+              cursor="pointer"
+              color="gray.500"
+              fontSize="10px"
+              fontWeight="700"
             >
-              <option value="follow">自动跟随前台平台</option>
-              <option value="win_qianniu">锁定千牛</option>
-              <option value="win_wechat">锁定微信</option>
-              <option value="win_wecom">锁定企业微信</option>
-            </Select>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                command({
-                  action: 'side',
-                  side: side === 'left' ? 'right' : 'left',
-                })
-              }
-            >
-              {side === 'left' ? '移到右侧' : '移到左侧'}
-            </Button>
-          </Flex>
+              跟随与停靠设置
+            </Box>
+            <Flex gap={2} align="center" mt={2}>
+              <Select
+                size="sm"
+                value={dockState.targetMode || 'follow'}
+                onChange={(event) =>
+                  command({
+                    action: 'target-mode',
+                    targetMode: event.target.value,
+                  })
+                }
+              >
+                <option value="follow">自动跟随前台平台</option>
+                <option value="win_qianniu">锁定千牛</option>
+                <option value="win_wechat">锁定微信</option>
+                <option value="win_wecom">锁定企业微信</option>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                whiteSpace="nowrap"
+                onClick={() =>
+                  command({
+                    action: 'side',
+                    side: side === 'left' ? 'right' : 'left',
+                  })
+                }
+              >
+                {side === 'left' ? '移到右侧' : '移到左侧'}
+              </Button>
+            </Flex>
+          </Box>
 
           <Flex
-            bg={collectorReady ? '#e5f7f1' : '#fff7e8'}
+            bg={collectorReady ? '#ECFDF3' : '#FFF7ED'}
             borderRadius="12px"
             px={3}
             py={2}
@@ -433,7 +445,7 @@ function CompanionSurfaceContent() {
               w="7px"
               h="7px"
               borderRadius="full"
-              bg={collectorReady ? '#20a982' : '#d9a441'}
+              bg={collectorReady ? '#36D399' : '#F59E0B'}
             />
             <Text flex="1" fontSize="10px">
               {collectorReady
@@ -449,13 +461,13 @@ function CompanionSurfaceContent() {
             />
           </Flex>
 
-          <Box bg="white" borderRadius="16px" p={3} border="1px solid #dbe7e5">
+          <Box bg="white" borderRadius="14px" p={3} border="1px solid #E6EAF0">
             <Flex align="center" gap={2.5}>
               <Flex
                 w="38px"
                 h="38px"
                 borderRadius="13px"
-                bg={stable ? '#d8f8ee' : '#fff1dc'}
+                bg={stable ? '#ECFDF3' : '#FFF7ED'}
                 align="center"
                 justify="center"
               >
@@ -481,18 +493,19 @@ function CompanionSurfaceContent() {
 
           {platformId === 'win_qianniu' && (
             <Box
+              as="details"
               bg="white"
-              borderRadius="16px"
+              borderRadius="12px"
               p={3}
-              border="1px solid #dbe7e5"
+              border="1px solid #E6EAF0"
             >
-              <HStack mb={1}>
-                <FiPackage color="#0f8b70" />
+              <HStack as="summary" cursor="pointer">
+                <FiPackage color="#4667D9" />
                 <Text fontSize="11px" fontWeight="900">
                   当前咨询商品
                 </Text>
               </HStack>
-              <Text fontSize="11px" color="#61777a">
+              <Text mt={2} fontSize="11px" color="#667085">
                 {context?.productTitle ||
                   (context?.productId
                     ? `商品 ID ${context.productId}`
@@ -503,12 +516,13 @@ function CompanionSurfaceContent() {
 
           {Boolean(context?.recentMessages?.length) && (
             <Box
+              as="details"
               bg="white"
-              borderRadius="16px"
+              borderRadius="12px"
               p={3}
-              border="1px solid #dbe7e5"
+              border="1px solid #E6EAF0"
             >
-              <HStack justify="space-between" mb={2}>
+              <HStack as="summary" cursor="pointer" justify="space-between">
                 <Text fontSize="11px" fontWeight="900">
                   最近真实对话
                 </Text>
@@ -517,7 +531,7 @@ function CompanionSurfaceContent() {
                   {context?.recentMessagesReused ? ' · 已恢复' : ''}
                 </Badge>
               </HStack>
-              <Stack spacing={1.5}>
+              <Stack spacing={1.5} mt={2}>
                 {context?.recentMessages?.slice(-3).map((message, index) => (
                   <Flex
                     key={`${message.direction}-${index}-${message.content}`}
@@ -545,9 +559,9 @@ function CompanionSurfaceContent() {
             </Box>
           )}
 
-          <Box bg="#17383d" color="white" borderRadius="16px" p={3}>
+          <Box bg="#182230" color="white" borderRadius="14px" p={3}>
             <HStack mb={2}>
-              <FiMessageCircle color="#5ce1b6" />
+              <FiMessageCircle color="#8FA8FF" />
               <Text fontSize="10px" color="whiteAlpha.700">
                 客户最新问题
               </Text>
@@ -557,7 +571,7 @@ function CompanionSurfaceContent() {
             </Text>
           </Box>
 
-          <Box bg="white" borderRadius="16px" p={3} border="1px solid #dbe7e5">
+          <Box bg="white" borderRadius="14px" p={3} border="1px solid #E6EAF0">
             <Flex justify="space-between" mb={2}>
               <Text fontSize="11px" fontWeight="900">
                 AI 回复草稿
@@ -596,25 +610,30 @@ function CompanionSurfaceContent() {
               </Text>
             )}
             {history.length > 0 && (
-              <Stack mt={3} pt={2} borderTop="1px solid #e1ebe9" spacing={1.5}>
-                {history.map((item) => (
-                  <Box key={item.id} bg="#f3f7f6" borderRadius="10px" p={2}>
-                    <Text fontSize="9px" noOfLines={1}>
-                      客户：{item.incoming_content}
-                    </Text>
-                    <Text fontSize="10px" noOfLines={2}>
-                      回复：{item.draft_content || item.reply_content}
-                    </Text>
-                  </Box>
-                ))}
-              </Stack>
+              <Box as="details" mt={3} pt={2} borderTop="1px solid #E6EAF0">
+                <Text as="summary" cursor="pointer" fontSize="10px" fontWeight="700" color="gray.500">
+                  查看当前客户历史回复（{history.length}）
+                </Text>
+                <Stack mt={2} spacing={1.5}>
+                  {history.map((item) => (
+                    <Box key={item.id} bg="#F7F8FA" borderRadius="10px" p={2}>
+                      <Text fontSize="9px" noOfLines={1}>
+                        客户：{item.incoming_content}
+                      </Text>
+                      <Text fontSize="10px" noOfLines={2}>
+                        回复：{item.draft_content || item.reply_content}
+                      </Text>
+                    </Box>
+                  ))}
+                </Stack>
+              </Box>
             )}
           </Box>
         </Stack>
       </Box>
 
-      <Box p={3} bg="white" borderTop="1px solid #dbe7e5">
-        <Flex bg="#edf3f2" borderRadius="12px" p="3px" mb={2} gap="3px">
+      <Box p={3} bg="white" borderTop="1px solid #E6EAF0">
+        <Flex bg="#F1F3F7" borderRadius="10px" p="3px" mb={2} gap="3px">
           {(
             [
               ['hint', '仅人工'],
@@ -626,7 +645,7 @@ function CompanionSurfaceContent() {
               key={value}
               flex="1"
               size="xs"
-              bg={mode === value ? '#17383d' : 'transparent'}
+              bg={mode === value ? '#182230' : 'transparent'}
               color={mode === value ? 'white' : '#667d80'}
               isDisabled={working || value === 'unattended'}
               onClick={() =>
@@ -642,7 +661,7 @@ function CompanionSurfaceContent() {
         <Button
           w="full"
           leftIcon={<FiSend />}
-          bg="#20a982"
+          bg="#4667D9"
           color="white"
           isLoading={working}
           isDisabled={!safeToFill || !content.trim()}

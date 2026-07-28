@@ -479,13 +479,8 @@ const ProductQALibrary: React.FC = () => {
 
   return (
     <VStack spacing={4} align="stretch" h="full">
-      <Box pt={1}>
-        <Text fontSize="18px" fontWeight={800} color="gray.800" letterSpacing="-0.01em">商品问答库</Text>
-        <Text fontSize="12.5px" color="gray.400" mt={0.5}>为商品配置智能问答，让 AI 客服精准回复商品相关问题</Text>
-      </Box>
-
       {/* 工具栏 */}
-      <Flex align="center" gap={2} flexWrap="wrap" bg="white" p={3} borderRadius="xl" border="1px solid" borderColor="gray.100" boxShadow="sm">
+      <Flex align="center" gap={2} flexWrap="wrap" bg="white" p={3} borderRadius="ui.panel" border="1px solid" borderColor="ui.border" boxShadow="ui.panel">
         <InputGroup size="sm" maxW="300px" flex="1" minW="220px">
           <InputLeftElement pointerEvents="none" h="full"><FiSearch color="#A0AEC0" /></InputLeftElement>
           <Input placeholder="搜索商品名称 / 平台商品ID / 商品条码" value={keyword}
@@ -537,7 +532,7 @@ const ProductQALibrary: React.FC = () => {
         <Button size="sm" variant="outline" colorScheme="gray" leftIcon={<FiUpload />} borderRadius="lg" onClick={importDisclosure.onOpen}>
           导入 CSV / Excel
         </Button>
-        <Button size="sm" colorScheme="brand" leftIcon={<FiPlus />} borderRadius="lg" bgGradient="linear-gradient(135deg, #4A5BB3, #3866D4)" _hover={{ bgGradient: 'linear-gradient(135deg, #43529F, #2F5AC0)' }} onClick={openAdd}>
+        <Button size="sm" colorScheme="brand" leftIcon={<FiPlus />} borderRadius="lg" onClick={openAdd}>
           添加商品
         </Button>
       </Flex>

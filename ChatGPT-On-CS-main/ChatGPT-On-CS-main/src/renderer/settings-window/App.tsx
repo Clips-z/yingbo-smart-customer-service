@@ -60,9 +60,9 @@ const queryClient = new QueryClient({
 
 // 侧边栏导航配置
 const NAV_ITEMS = [
-  { key: 'general', icon: FiSettings, label: '通用设置' },
-  { key: 'ai', icon: FiCpu, label: 'AI 配置' },
-  { key: 'plugin', icon: FiBox, label: '插件设置' },
+  { key: 'general', icon: FiSettings, label: '平台与回复策略' },
+  { key: 'ai', icon: FiCpu, label: 'AI 模型与知识' },
+  { key: 'plugin', icon: FiBox, label: '高级插件' },
   { key: 'about', icon: FiInfo, label: '关于' },
 ];
 
@@ -188,31 +188,27 @@ const App = () => {
   }, [fetchConfigActive]);
 
   const renderSettingsTabs = () => (
-    <Flex direction="row" height="100vh" bg="gray.50">
+    <Flex direction="row" height="100vh" bg="ui.canvas">
       {/* 侧边导航栏 — 图标风格 */}
       <Flex
         direction="column"
-        w="180px"
-        bg="white"
-        borderRight="1px solid"
-        borderColor="gray.100"
-        py={4}
-        px={2}
+        w="216px"
+        bg="ui.navy"
+        color="white"
+        py={5}
+        px={3}
       >
         {/* Logo */}
-        <Box px={3} mb={6}>
+        <Box px={3} mb={7}>
           <Heading
             size="sm"
             fontWeight="800"
             letterSpacing="-0.02em"
-            className="font-zh"
-            background="linear-gradient(135deg, #6366F1 0%, #06B6D4 100%)"
-            backgroundClip="text"
-            style={{ WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}
+            color="white"
           >
             迎波智能客服
           </Heading>
-          <Text fontSize="10px" color="gray.400" mt={0.5} fontWeight={500}>
+          <Text fontSize="10px" color="whiteAlpha.500" mt={1} fontWeight={600} letterSpacing=".08em">
             设置中心
           </Text>
         </Box>
@@ -252,9 +248,11 @@ const App = () => {
                   justifyContent="flex-start"
                   fontSize="13px"
                   fontWeight={isSelected ? 600 : 500}
-                  color={isSelected ? 'brand.600' : 'gray.600'}
-                  bg={isSelected ? 'brand.50' : 'transparent'}
-                  _hover={isSelected ? {} : { bg: 'gray.100', color: 'gray.700' }}
+                  color={isSelected ? 'white' : 'whiteAlpha.600'}
+                  bg={isSelected ? 'rgba(122,145,255,.20)' : 'transparent'}
+                  border="1px solid"
+                  borderColor={isSelected ? 'rgba(143,162,255,.22)' : 'transparent'}
+                  _hover={isSelected ? {} : { bg: 'whiteAlpha.100', color: 'white' }}
                   transition="all 0.2s"
                 >
                   <Icon size={16} style={{ marginRight: 10 }} />
@@ -267,7 +265,7 @@ const App = () => {
       </Flex>
 
       {/* 内容区域 */}
-      <Box flex="1" overflowY="auto" p={6} bg="gray.50">
+      <Box flex="1" overflowY="auto" p={{ base: 5, lg: 7 }} bg="ui.canvas">
         <Tabs
           orientation="vertical"
           index={tabIndex}
@@ -277,7 +275,7 @@ const App = () => {
         >
           <TabPanels>
             <TabPanel p={0}>
-              <Box bg="white" borderRadius="xl" p={6} boxShadow="sm" border="1px solid" borderColor="gray.100">
+              <Box bg="white" borderRadius="ui.panel" p={6} boxShadow="ui.panel" border="1px solid" borderColor="ui.border">
                 <Heading as="h3" size="md" mb={5} color="gray.800" display="flex" alignItems="center" gap={2}>
                   <FiSettings size={20} /> 通用设置
                 </Heading>
@@ -289,7 +287,7 @@ const App = () => {
               </Box>
             </TabPanel>
             <TabPanel p={0}>
-              <Box bg="white" borderRadius="xl" p={6} boxShadow="sm" border="1px solid" borderColor="gray.100">
+              <Box bg="white" borderRadius="ui.panel" p={6} boxShadow="ui.panel" border="1px solid" borderColor="ui.border">
                 <Heading as="h3" size="md" mb={5} color="gray.800" display="flex" alignItems="center" gap={2}>
                   <FiCpu size={20} /> AI 配置
                 </Heading>
@@ -316,7 +314,7 @@ const App = () => {
               </Router>
             </TabPanel>
             <TabPanel p={0}>
-              <Box bg="white" borderRadius="xl" p={6} boxShadow="sm" border="1px solid" borderColor="gray.100">
+              <Box bg="white" borderRadius="ui.panel" p={6} boxShadow="ui.panel" border="1px solid" borderColor="ui.border">
                 <AboutPage />
               </Box>
             </TabPanel>

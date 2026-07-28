@@ -26,8 +26,10 @@ import {
 } from '@chakra-ui/react';
 import {
   FiCheck,
+  FiBookOpen,
   FiClipboard,
   FiCornerUpLeft,
+  FiMessageSquare,
   FiSend,
   FiUser,
 } from 'react-icons/fi';
@@ -223,16 +225,122 @@ const ConversationListItem = React.memo(
 );
 ConversationListItem.displayName = 'ConversationListItem';
 
+const ConversationContext = React.memo(
+  ({ item }: { item: ReplySuggestion }) => (
+    <Flex h="full" direction="column">
+      <Flex
+        minH="54px"
+        px={4}
+        py={3}
+        align="center"
+        borderBottom="1px solid"
+        borderColor="ui.border"
+        bg="white"
+      >
+        <Flex
+          w="30px"
+          h="30px"
+          mr={2.5}
+          align="center"
+          justify="center"
+          borderRadius="9px"
+          bg="ui.accentSoft"
+          color="ui.accent"
+        >
+          <FiMessageSquare size={14} />
+        </Flex>
+        <Box minW="0">
+          <Text fontSize="12px" fontWeight="750" color="ui.ink">
+            客户上下文
+          </Text>
+          <Text fontSize="10px" color="gray.500" noOfLines={1}>
+            {item.store_id || item.store || '未识别店铺'} ·{' '}
+            {item.sender || '未知客户'}
+          </Text>
+        </Box>
+      </Flex>
+      <Box flex="1" minH="0" overflowY="auto" p={4}>
+        <Text fontSize="10px" color="gray.400" fontWeight="700" mb={2}>
+          客户最新问题
+        </Text>
+        <Box
+          bg="#F7F8FA"
+          border="1px solid"
+          borderColor="ui.border"
+          borderRadius="12px"
+          px={3.5}
+          py={3}
+        >
+          <Text fontSize="13px" color="ui.ink" lineHeight="1.7">
+            {item.incoming_content}
+          </Text>
+        </Box>
+        <Text fontSize="10px" color="gray.400" fontWeight="700" mt={5} mb={2}>
+          AI 原始建议
+        </Text>
+        <Box
+          bg="ui.accentSoft"
+          border="1px solid"
+          borderColor="#D8E0FF"
+          borderRadius="12px"
+          px={3.5}
+          py={3}
+        >
+          <Text fontSize="13px" color="#2E478F" lineHeight="1.7">
+            {item.reply_content}
+          </Text>
+        </Box>
+        <Flex align="center" gap={1.5} mt={5} mb={2}>
+          <FiBookOpen size={13} color="#98A2B3" />
+          <Text fontSize="10px" color="gray.400" fontWeight="700">
+            识别信息
+          </Text>
+        </Flex>
+        <Flex gap={1.5} wrap="wrap">
+          {item.product_title && (
+            <Badge variant="subtle" colorScheme="blue">
+              {item.product_title}
+            </Badge>
+          )}
+          {item.retrieval_status && (
+            <Badge
+              colorScheme={item.retrieval_status === 'hit' ? 'green' : 'orange'}
+            >
+              知识检索 {item.retrieval_status}
+            </Badge>
+          )}
+          {item.risk_level && (
+            <Badge
+              colorScheme={item.risk_level === 'high' ? 'red' : 'gray'}
+            >
+              风险 {item.risk_level}
+            </Badge>
+          )}
+          {item.model_name && <Badge variant="outline">{item.model_name}</Badge>}
+          {item.ocr_confidence != null && (
+            <Badge variant="outline">
+              OCR {Math.round(item.ocr_confidence * 100)}%
+            </Badge>
+          )}
+        </Flex>
+      </Box>
+    </Flex>
+  ),
+);
+ConversationContext.displayName = 'ConversationContext';
+
 /** 右列：会话详情（聊天气泡风格） */
 const ConversationDetail = React.memo(
   ({
     item,
     mode,
     onChanged,
+    compactComposer = false,
   }: {
     item: ReplySuggestion;
     mode: QianniuReplyMode;
     onChanged: () => void;
+    compactComposer?: boolean;
   }) => {
     const { toast } = useToast();
     const initialContent = (item.draft_content || item.reply_content).slice(0, 300);
@@ -436,7 +544,7 @@ const ConversationDetail = React.memo(
         {/* 中间：对话气泡区 */}
         <Box flex="1" minH={0} overflowY="auto" px={1}>
           {/* 买家消息 — 左对齐灰色气泡 */}
-          <Flex justify="flex-start" mb={4}>
+          <Flex display={compactComposer ? 'none' : 'flex'} justify="flex-start" mb={4}>
             <Box maxW="85%">
               <Text fontSize="10px" color="gray.400" fontWeight={600} mb={1} ml={1}>
                 买家消息
@@ -458,7 +566,7 @@ const ConversationDetail = React.memo(
           </Flex>
 
           {/* AI建议回复 — 右对齐品牌色气泡 */}
-          <Flex justify="flex-end" mb={4}>
+          <Flex display={compactComposer ? 'none' : 'flex'} justify="flex-end" mb={4}>
             <Box maxW="85%">
               <Text fontSize="10px" color="gray.400" fontWeight={600} mb={1} mr={1} textAlign="right">
                 AI 建议回复
@@ -826,7 +934,7 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
   })();
 
   return (
-    <Box bg="white" borderRadius="xl" p={4} boxShadow="sm" border="1px solid" borderColor="gray.100">
+    <Box bg="white" borderRadius="ui.panel" p={{ base: 3, md: 4 }} boxShadow="ui.panel" border="1px solid" borderColor="ui.border">
       {/* ── 顶部：平台 Pill 标签 ── */}
       <Flex gap={1.5} mb={4} flexWrap="wrap">
         {activePlatformIds.length > 1 && (
@@ -1056,21 +1164,29 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
         <EmptyState tabKey={tabKey} />
       ) : (
         <Flex
-          direction={{ base: 'column', lg: 'row' }}
-          gap={3}
+          direction={{ base: 'column', xl: 'row' }}
+          gap={0}
           align="stretch"
+          border="1px solid"
+          borderColor="ui.border"
+          borderRadius="14px"
+          overflow="hidden"
+          minH={{ xl: '500px' }}
         >
           {/* 左列：消息列表 */}
           <Box
-            flex="1"
+            flex="0 0 29%"
             minW={0}
             data-reply-list
             tabIndex={0}
             aria-label="回复消息列表，聚焦后可使用 J 和 K 切换"
             _focusVisible={{ outline: '2px solid', outlineColor: 'brand.400', borderRadius: 'lg' }}
-            maxH={{ base: '300px', lg: 'calc(100vh - 420px)' }}
+            maxH={{ base: '300px', xl: 'calc(100vh - 350px)' }}
             overflowY="auto"
-            pr={1}
+            p={2}
+            bg="#FAFBFC"
+            borderRight={{ xl: '1px solid' }}
+            borderColor="ui.border"
           >
             <VStack spacing={1.5} align="stretch">
               {listData.map((item) => (
@@ -1088,14 +1204,24 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
 
           {/* 右列：会话详情 */}
           <Box
-            flex="1.2"
+            display={{ base: 'none', xl: 'block' }}
+            flex="1 1 32%"
             minW={0}
-            bg="gray.50"
-            borderRadius="xl"
+            bg="white"
+            borderRight="1px solid"
+            borderColor="ui.border"
+            maxH="calc(100vh - 350px)"
+            overflow="hidden"
+          >
+            {activeItem && <ConversationContext item={activeItem} />}
+          </Box>
+
+          <Box
+            flex="1 1 39%"
+            minW={0}
+            bg="white"
             p={4}
-            border="1px solid"
-            borderColor="gray.100"
-            maxH={{ base: 'none', lg: 'calc(100vh - 420px)' }}
+            maxH={{ base: 'none', xl: 'calc(100vh - 350px)' }}
             overflowY="auto"
           >
             {activeItem ? (
@@ -1103,6 +1229,7 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
                 item={activeItem}
                 mode={mode}
                 onChanged={refresh}
+                compactComposer
               />
             ) : (
               <Flex direction="column" align="center" justify="center" h="full" py={12} textAlign="center">
