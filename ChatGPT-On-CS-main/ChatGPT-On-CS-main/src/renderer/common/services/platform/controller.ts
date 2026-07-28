@@ -480,6 +480,25 @@ export async function recordReplyFeedback(input: {
   return POST('/api/v1/quality/feedback', input);
 }
 
+export async function getReplyQualityMetrics(days = 7) {
+  return GET<{
+    data: {
+      totalActions: number;
+      accepted: number;
+      edited: number;
+      averageEditRatio: number;
+      failed: number;
+    };
+  }>('/api/v1/quality/metrics', { days });
+}
+
+export async function getReplyQualityTrend(days = 7) {
+  return GET<{ data: Array<{ date: string; totalActions: number; accepted: number }> }>(
+    '/api/v1/quality/metrics/daily',
+    { days },
+  );
+}
+
 export async function fillQianniuSuggestion(id: number, content: string) {
   return POST<{ data: ReplySuggestion }>(
     '/api/v1/compat/qianniu/suggestions/fill',
@@ -552,10 +571,11 @@ export async function batchDeleteSuggestions(ids: number[]) {
 export async function clearSuggestions(
   status: 'handled' | ReplySuggestionStatus = 'handled',
   platformId = 'all',
+  storeId = 'all',
 ) {
   return POST<{ data: { cleared: number } }>(
     '/api/v1/compat/qianniu/suggestions/clear',
-    { status, platformId },
+    { status, platformId, storeId },
   );
 }
 

@@ -81,10 +81,25 @@ const queryClient = new QueryClient({
 });
 
 function command(value: object) {
-  window.electron.ipcRenderer.sendMessage('companion-command', value);
+  window.electron?.ipcRenderer?.sendMessage('companion-command', value);
 }
 
 function CompanionSurface() {
+  if (!window.electron?.ipcRenderer) {
+    return (
+      <Flex h="100vh" p={5} direction="column" justify="center" gap={3} bg="gray.50">
+        <Text fontWeight={800} color="gray.800">伴随助手暂时无法连接桌面服务</Text>
+        <Text fontSize="sm" color="gray.600">请重新加载此窗口；若问题仍然存在，请重启迎波智能客服。</Text>
+        <Button size="sm" colorScheme="brand" onClick={() => window.location.reload()}>
+          重新加载
+        </Button>
+      </Flex>
+    );
+  }
+  return <CompanionSurfaceContent />;
+}
+
+function CompanionSurfaceContent() {
   const [dockState, setDockState] = useState<DockState>(() => {
     try {
       return (

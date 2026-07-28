@@ -24,6 +24,43 @@ export interface RecordReplyFeedbackInput {
   metadata?: Record<string, unknown>;
 }
 
+export interface DailyReplyMetric {
+  date: string;
+  totalActions: number;
+  accepted: number;
+}
+
+const localDateKey = (value: Date) => [
+  value.getFullYear(),
+  String(value.getMonth() + 1).padStart(2, '0'),
+  String(value.getDate()).padStart(2, '0'),
+].join('-');
+
+export function buildDailyReplyMetrics(
+  rows: Array<{ action: string; created_at: Date | string }>,
+  days = 7,
+  now = new Date(),
+): DailyReplyMetric[] {
+  const safeDays = Math.min(30, Math.max(1, Number(days) || 7));
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - safeDays + 1);
+  const buckets = new Map<string, DailyReplyMetric>();
+  for (let offset = 0; offset < safeDays; offset += 1) {
+    const date = new Date(start);
+    date.setDate(date.getDate() + offset);
+    const key = localDateKey(date);
+    buckets.set(key, { date: key, totalActions: 0, accepted: 0 });
+  }
+  rows.forEach((row) => {
+    const bucket = buckets.get(localDateKey(new Date(row.created_at)));
+    if (!bucket) return;
+    bucket.totalActions += 1;
+    if (['filled', 'sent'].includes(row.action)) bucket.accepted += 1;
+  });
+  return [...buckets.values()];
+}
+
 function levenshteinDistance(left: string, right: string): number {
   if (left === right) return 0;
   if (!left.length) return right.length;
@@ -118,6 +155,19 @@ export class ReplyFeedbackService {
         ? Math.round((editedRows.reduce((sum, row) => sum + Number(row.edit_ratio), 0) / editedRows.length) * 10000) / 10000
         : 0,
     };
+  }
+
+  async getDailyMetrics(days = 7) {
+    const safeDays = Math.min(30, Math.max(1, Number(days) || 7));
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - safeDays + 1);
+    const rows = await ReplyFeedback.findAll({
+      where: { created_at: { [Op.gte]: start } },
+      attributes: ['action', 'created_at'],
+      raw: true,
+    }) as unknown as Array<{ action: string; created_at: Date }>;
+    return buildDailyReplyMetrics(rows, safeDays);
   }
 
   async getVariantMetrics(days = 30) {

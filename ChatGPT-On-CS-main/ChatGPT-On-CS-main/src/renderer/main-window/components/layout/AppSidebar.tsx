@@ -7,6 +7,7 @@ import {
   FiShield,
   FiBarChart2,
   FiBell,
+  FiMenu,
 } from 'react-icons/fi';
 
 /* ── 导航项定义 ── */
@@ -43,7 +44,7 @@ const MAIN_NAV: NavItem[] = [
   { key: 'service', label: '客服中心', icon: <FiHeadphones size={19} /> },
   { key: 'knowledge', label: '知识管理', icon: <FiBookOpen size={19} /> },
   { key: 'security', label: '内容安全', icon: <FiShield size={19} /> },
-  { key: 'dataview', label: '数据与统计', icon: <FiBarChart2 size={19} /> },
+  { key: 'dataview', label: '数据与统计 ↗', icon: <FiBarChart2 size={19} /> },
 ];
 
 interface AppSidebarProps {
@@ -51,6 +52,8 @@ interface AppSidebarProps {
   onNavigate: (section: NavSection) => void;
   /** 是否显示知识管理子侧栏 */
   showKnowledgeSub?: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
 }
 
 /** 左侧图标侧边栏 —— 对齐 intro5 设计稿 */
@@ -58,25 +61,29 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
   activeSection,
   onNavigate,
   showKnowledgeSub,
+  isExpanded,
+  onToggle,
 }) => {
   return (
     <Flex
       direction="column"
-      w="60px"
+      w={isExpanded ? '168px' : '64px'}
       bg="white"
       borderRight="1px solid"
       borderColor="gray.100"
       flexShrink={0}
       h="full"
+      transition="width 0.18s ease"
     >
       {/* ── 品牌标识（顶部）── */}
       <Flex
-        justify="center"
+        justify={isExpanded ? 'space-between' : 'center'}
         align="center"
         h="52px"
         borderBottom="1px solid"
         borderColor="gray.50"
         cursor="default"
+        px={isExpanded ? 3 : 0}
       >
         <Box
           w="30px"
@@ -92,6 +99,17 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             YB
           </Text>
         </Box>
+        {isExpanded && <Text fontWeight={800} color="gray.700" fontSize="13px">迎波智能客服</Text>}
+        <Box
+          as="button"
+          aria-label="收起导航"
+          onClick={onToggle}
+          color="gray.400"
+          _hover={{ color: 'gray.700' }}
+          _focusVisible={{ boxShadow: '0 0 0 2px rgba(66, 99, 235, 0.4)' }}
+        >
+          <FiMenu size={18} />
+        </Box>
       </Flex>
 
       {/* ── 主导航区 ── */}
@@ -105,6 +123,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               key={item.key}
               label={item.label}
               placement="right"
+              isDisabled={isExpanded}
               hasArrow
               offset={[0, 8]}
               openDelay={300}
@@ -117,12 +136,14 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                     : onNavigate(item.key)
                 }
                 display="flex"
-                flexDirection="column"
+                flexDirection={isExpanded ? 'row' : 'column'}
                 alignItems="center"
-                justifyContent="center"
-                w="42px"
-                h="42px"
+                justifyContent={isExpanded ? 'flex-start' : 'center'}
+                w={isExpanded ? 'calc(100% - 16px)' : '42px'}
+                h={isExpanded ? '44px' : '42px'}
                 mx="auto"
+                px={isExpanded ? 3 : 0}
+                gap={isExpanded ? 3 : 0}
                 borderRadius="xl"
                 transition="all 0.18s ease"
                 cursor="pointer"
@@ -150,7 +171,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                   _before: {
                     content: '""',
                     position: 'absolute',
-                    left: '-10px',
+                    left: isExpanded ? '0' : '-10px',
                     top: '8px',
                     bottom: '8px',
                     w: '3px',
@@ -160,6 +181,15 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
                 })}
               >
                 <Icon>{item.icon}</Icon>
+                {isExpanded && <Text
+                  mt={1}
+                  fontSize="10px"
+                  lineHeight="1.2"
+                  fontWeight={isActive ? 700 : 500}
+                  whiteSpace="nowrap"
+                >
+                  {item.label}
+                </Text>}
               </Box>
             </Tooltip>
           );

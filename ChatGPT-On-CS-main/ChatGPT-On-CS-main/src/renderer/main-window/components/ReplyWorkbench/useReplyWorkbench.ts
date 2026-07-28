@@ -26,7 +26,7 @@ function extractErrorMessage(error: unknown): string {
   return String(error);
 }
 
-export function useReplyWorkbench() {
+export function useReplyWorkbench(storeId = 'all') {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { registerEventHandler } = useWebSocketContext();
@@ -97,14 +97,14 @@ export function useReplyWorkbench() {
 
   const suggestions = useMemo(
     () =>
-      activePlatformId === 'all'
+      (activePlatformId === 'all'
         ? allSuggestions.filter((item) =>
             activePlatformIds.includes(item.platform_id),
           )
         : allSuggestions.filter(
             (item) => item.platform_id === activePlatformId,
-          ),
-    [activePlatformId, activePlatformIds, allSuggestions],
+          )).filter((item) => storeId === 'all' || item.store_id === storeId),
+    [activePlatformId, activePlatformIds, allSuggestions, storeId],
   );
 
   const pending = useMemo(
@@ -223,7 +223,7 @@ export function useReplyWorkbench() {
     }
     setBatchWorking(true);
     try {
-      await clearSuggestions('handled', targetPlatform);
+      await clearSuggestions('handled', targetPlatform, storeId);
       toast({
         title: `已清空 ${count} 条已处理记录`,
         status: 'success',
@@ -240,7 +240,7 @@ export function useReplyWorkbench() {
     } finally {
       setBatchWorking(false);
     }
-  }, [activePlatformId, handled, toast, refresh]);
+  }, [activePlatformId, handled, storeId, toast, refresh]);
 
   const changeMode = useCallback(
     async (nextMode: QianniuReplyMode) => {
@@ -365,6 +365,7 @@ export function useReplyWorkbench() {
     pending,
     handled,
     suggestionsLoading: suggestionsQuery.isLoading,
+    suggestionsError: suggestionsQuery.isError,
     // health
     collectorHealth: healthQuery.data?.data,
     qianniuCollectorHealth: qianniuHealthQuery.data?.data,

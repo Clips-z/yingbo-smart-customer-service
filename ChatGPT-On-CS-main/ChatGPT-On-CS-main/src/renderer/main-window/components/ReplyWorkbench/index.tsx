@@ -14,7 +14,7 @@ import {
   Flex,
   Heading,
   HStack,
-  Spinner,
+  Skeleton,
   Text,
   Textarea,
   Tooltip,
@@ -478,8 +478,10 @@ const ConversationDetail = React.memo(
             </Box>
           </Flex>
           {item.retrieval_status && item.retrieval_status !== 'disabled' && (
-            <Box borderWidth="1px" borderColor="blue.100" bg="blue.50" borderRadius="lg" p={3} mb={4}>
-              <Flex justify="space-between"><Text fontSize="11px" fontWeight="800" color="blue.700">回复依据</Text><Badge colorScheme={item.retrieval_status === 'hit' ? 'green' : 'orange'}>{item.retrieval_status}</Badge></Flex>
+            <Box as="details" borderWidth="1px" borderColor="blue.100" bg="blue.50" borderRadius="lg" p={3} mb={4}>
+              <Box as="summary" cursor="pointer" listStyleType="none" _focusVisible={{ outline: '2px solid', outlineColor: 'blue.400', borderRadius: 'sm' }}>
+                <Flex justify="space-between"><Text fontSize="11px" fontWeight="800" color="blue.700">回复依据（展开核验）</Text><Badge colorScheme={item.retrieval_status === 'hit' ? 'green' : 'orange'}>{item.retrieval_status}</Badge></Flex>
+              </Box>
               {evidence.length === 0 ? <Text mt={2} fontSize="xs" color="gray.500">没有可引用的知识片段，建议人工核对后再发送。</Text> : evidence.map((entry) => (
                 <Box key={entry.id} mt={2} pt={2} borderTopWidth="1px" borderColor="blue.100">
                   <Flex gap={2} justify="space-between"><Text fontSize="xs" fontWeight="700">#{entry.rank} {entry.source}</Text><Button size="xs" variant="link" colorScheme="red" isDisabled={entry.relevance_feedback === 'irrelevant'} onClick={async () => { await markSuggestionEvidence(entry.id, false); setEvidence((rows) => rows.map((row) => row.id === entry.id ? { ...row, relevance_feedback: 'irrelevant' } : row)); }}>不相关</Button></Flex>
@@ -617,6 +619,14 @@ const EmptyState = ({ tabKey }: { tabKey: string }) => {
   );
 };
 
+const ReplyListSkeleton = () => (
+  <VStack align="stretch" spacing={2} py={1} aria-label="正在加载回复列表">
+    {[0, 1, 2, 3].map((item) => (
+      <Skeleton key={item} h="76px" borderRadius="md" startColor="gray.50" endColor="gray.100" />
+    ))}
+  </VStack>
+);
+
 // ── 主组件 ─────────────────────────────────────────
 
 const focusLabels: Record<ReplyFocus, string> = {
@@ -624,6 +634,7 @@ const focusLabels: Record<ReplyFocus, string> = {
 };
 
 const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus = 'all' }) => {
+  const [storeFilter, setStoreFilter] = useState('all');
   const {
     activePlatformId,
     activePlatformIds,
@@ -644,6 +655,7 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
     pending,
     handled,
     suggestionsLoading,
+    suggestionsError,
     collectorHealth,
     qianniuCollectorHealth,
     wecomCollectorHealth,
@@ -660,7 +672,7 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
     handleClearHandled,
     changeMode,
     emergencyStop,
-  } = useReplyWorkbench();
+  } = useReplyWorkbench(storeFilter);
 
   const cancelConfirmationRef = useRef<HTMLButtonElement>(null);
   const [confirmation, setConfirmation] = useState<{
@@ -720,6 +732,22 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
   const [sortMode, setSortMode] = useState<'priority' | 'newest' | 'oldest'>('priority');
   const [focus, setFocus] = useState<ReplyFocus>(initialFocus);
 
+  const storeOptions = useMemo(
+    () => Array.from(new Set(
+      allSuggestions
+        .filter((item) => activePlatformId === 'all' || item.platform_id === activePlatformId)
+        .map((item) => item.store_id)
+        .filter((storeId): storeId is string => Boolean(storeId)),
+    )).sort(),
+    [activePlatformId, allSuggestions],
+  );
+
+  React.useEffect(() => {
+    if (storeFilter !== 'all' && !storeOptions.includes(storeFilter)) {
+      setStoreFilter('all');
+    }
+  }, [storeFilter, storeOptions]);
+
   React.useEffect(() => {
     setFocus(initialFocus);
     if (initialFocus !== 'all') setTabKey('all');
@@ -739,6 +767,7 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
     const handler = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
       if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName) || !listData.length) return;
+      if (!document.activeElement?.closest('[data-reply-list]')) return;
       if (!['j', 'k'].includes(event.key.toLowerCase())) return;
       event.preventDefault();
       const current = Math.max(0, listData.findIndex((item) => item.id === activeItemId));
@@ -948,6 +977,19 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
       )}
 
       {/* ── 批量操作栏 ── */}
+      {suggestionsError && (
+        <Alert status="error" mb={3} borderRadius="lg">
+          <AlertIcon />
+          <Box flex="1">
+            <Text fontSize="13px" fontWeight={700}>回复列表暂时无法加载</Text>
+            <Text fontSize="12px">请检查本地服务和平台连接后重试。</Text>
+          </Box>
+          <Button size="xs" variant="outline" colorScheme="red" onClick={refresh}>
+            重新加载
+          </Button>
+        </Alert>
+      )}
+
       <BatchActionBar
         suggestions={suggestions}
         pending={pending}
@@ -988,17 +1030,28 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
             </Button>
           );
         })}
-        <Select ml="auto" size="xs" w="130px" value={sortMode} onChange={(event) => setSortMode(event.target.value as typeof sortMode)} aria-label="回复排序">
+        <Select
+          ml="auto"
+          size="xs"
+          w="150px"
+          value={storeFilter}
+          onChange={(event) => setStoreFilter(event.target.value)}
+          aria-label="店铺筛选"
+        >
+          <option value="all">全部店铺</option>
+          {storeOptions.map((storeId) => (
+            <option key={storeId} value={storeId}>{storeId}</option>
+          ))}
+        </Select>
+        <Select size="xs" w="130px" value={sortMode} onChange={(event) => setSortMode(event.target.value as typeof sortMode)} aria-label="回复排序">
           <option value="priority">优先级排序</option><option value="newest">最新优先</option><option value="oldest">最早优先</option>
         </Select>
-        <Text fontSize="10px" color="gray.400" alignSelf="center">J/K 切换</Text>
+        <Text fontSize="10px" color="gray.400" alignSelf="center">列表聚焦后 J/K 切换</Text>
       </Flex>
 
       {/* 双栏布局：左列表 + 右详情 */}
       {suggestionsLoading ? (
-        <Flex justify="center" py={8}>
-          <Spinner color="brand.500" thickness="3px" />
-        </Flex>
+        <ReplyListSkeleton />
       ) : listData.length === 0 ? (
         <EmptyState tabKey={tabKey} />
       ) : (
@@ -1011,6 +1064,10 @@ const ReplyWorkbench: React.FC<{ initialFocus?: ReplyFocus }> = ({ initialFocus 
           <Box
             flex="1"
             minW={0}
+            data-reply-list
+            tabIndex={0}
+            aria-label="回复消息列表，聚焦后可使用 J 和 K 切换"
+            _focusVisible={{ outline: '2px solid', outlineColor: 'brand.400', borderRadius: 'lg' }}
             maxH={{ base: '300px', lg: 'calc(100vh - 420px)' }}
             overflowY="auto"
             pr={1}

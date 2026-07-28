@@ -285,10 +285,14 @@ export class QianniuCompatService {
   public async clearSuggestions(options?: {
     status?: ReplySuggestionStatus | 'handled';
     platformId?: string;
+    storeId?: string;
   }): Promise<number> {
     const where: Record<string, unknown> = {};
     if (options?.platformId && options.platformId !== 'all') {
       where.platform_id = options.platformId;
+    }
+    if (options?.storeId && options.storeId !== 'all') {
+      where.store_id = options.storeId;
     }
     if (options?.status === 'handled') {
       // 已处理 = 非 pending/failed

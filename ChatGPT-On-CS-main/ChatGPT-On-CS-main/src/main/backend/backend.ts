@@ -350,6 +350,15 @@ class BKServer {
       }),
     );
     this.app.get(
+      '/api/v1/quality/metrics/daily',
+      asyncHandler(async (req, res) => {
+        res.json({
+          success: true,
+          data: await this.replyFeedbackService.getDailyMetrics(Number(req.query.days) || 7),
+        });
+      }),
+    );
+    this.app.get(
       '/api/v1/quality/feedback/variants',
       asyncHandler(async (req, res) => {
         res.json({ success: true, data: await this.replyFeedbackService.getVariantMetrics(Number(req.query.days) || 30) });
@@ -2159,9 +2168,11 @@ class BKServer {
       asyncHandler(async (req, res) => {
         const status = String(req.body.status || 'handled'); // 'handled'=已处理, 或具体状态
         const platformId = String(req.query.platformId || req.body.platformId || 'all');
+        const storeId = String(req.query.storeId || req.body.storeId || 'all');
         const count = await this.qianniuCompatService.clearSuggestions({
           status: status as ReplySuggestionStatus | 'handled',
           platformId,
+          storeId,
         });
         res.json({ success: true, data: { cleared: count } });
       }),

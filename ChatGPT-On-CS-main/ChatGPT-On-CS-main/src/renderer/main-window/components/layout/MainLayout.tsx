@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Flex, IconButton, Text, Tooltip, VStack } from '@chakra-ui/react';
+import { Alert, AlertIcon, Box, Flex, IconButton, Text, Tooltip, VStack } from '@chakra-ui/react';
 import { FiSidebar } from 'react-icons/fi';
 import AppSidebar, { NavSection, KnowledgeSubKey } from './AppSidebar';
 import KnowledgeSubSidebar from './KnowledgeSubSidebar';
@@ -101,6 +101,18 @@ const MainLayout = () => {
   const [activeKnowledgeSub, setActiveKnowledgeSub] =
     useState<KnowledgeSubKey>('product-qa');
   const [replyFocus, setReplyFocus] = useState<ReplyFocus>('all');
+  const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+
+  React.useEffect(() => {
+    const updateOnlineState = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateOnlineState);
+    window.addEventListener('offline', updateOnlineState);
+    return () => {
+      window.removeEventListener('online', updateOnlineState);
+      window.removeEventListener('offline', updateOnlineState);
+    };
+  }, []);
 
   // 暴露全局导航函数（供截图脚本 / 调试用）
   React.useEffect(() => {
@@ -124,6 +136,8 @@ const MainLayout = () => {
         activeSection={activeSection}
         onNavigate={(section) => setActiveSection(section)}
         showKnowledgeSub={showKnowledgeSub}
+        isExpanded={isSidebarExpanded}
+        onToggle={() => setIsSidebarExpanded((expanded) => !expanded)}
       />
 
       {/* ═══ 知识管理子侧栏（条件渲染） ═══ */}
@@ -142,6 +156,12 @@ const MainLayout = () => {
         flexDirection="column"
         overflow="hidden"
       >
+        {!isOnline && (
+          <Alert status="warning" borderRadius={0} fontSize="13px">
+            <AlertIcon />
+            当前处于离线状态：新消息、知识检索和平台同步将在网络恢复后继续。
+          </Alert>
+        )}
         <Box flex="1" minH="0" overflowY="auto" px={5} pb={6}>
           {(() => {
             switch (activeSection) {

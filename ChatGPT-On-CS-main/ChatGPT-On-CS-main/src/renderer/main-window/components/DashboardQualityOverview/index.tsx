@@ -4,7 +4,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   getConfig, getDouyinCollectorHealth, getJinmaiCollectorHealth,
   getPddCollectorHealth, getQianniuCollectorHealth, getQianniuSuggestions,
-  getWechatCollectorHealth, getWecomCollectorHealth,
+  getReplyQualityMetrics, getReplyQualityTrend, getWechatCollectorHealth, getWecomCollectorHealth,
 } from '../../../common/services/platform/controller';
 import { fetchKnowledgeCandidates } from '../../../common/services/knowledge/candidates';
 import { GET } from '../../../common/services/common/api/request';
@@ -27,6 +27,8 @@ const DashboardQualityOverview: React.FC = () => {
   const candidatesQuery = useQuery(['dashboard-candidates'], () => fetchKnowledgeCandidates({ status: 'pending', pageSize: 1 }), { refetchInterval: 15000 });
   const configQuery = useQuery(['dashboard-llm-config'], () => getConfig({ type: 'llm' }));
   const ragQuery = useQuery(['dashboard-rag-health'], () => GET<{ data: { state: string; totalChunks?: number; lastError?: string } }>('/api/v1/rag/health'), { refetchInterval: 10000 });
+  const feedbackQuery = useQuery(['dashboard-reply-quality'], () => getReplyQualityMetrics(7), { refetchInterval: 15000 });
+  const trendQuery = useQuery(['dashboard-reply-quality-trend'], () => getReplyQualityTrend(7), { refetchInterval: 15000 });
   const healthPlatformIds = activePlatformIds.filter((id) => HEALTH_LOADERS[id]);
   const healthQueries = useQueries({
     queries: healthPlatformIds.map((id) => ({
@@ -56,13 +58,23 @@ const DashboardQualityOverview: React.FC = () => {
   const candidates = candidatesQuery.data?.total || 0;
   const rag = ragQuery.data?.data;
   const llm = configQuery.data?.data as any;
+  const feedback = feedbackQuery.data?.data;
+  const acceptanceRate = feedback?.totalActions
+    ? Math.round((feedback.accepted / feedback.totalActions) * 100)
+    : null;
+  const editRate = feedback?.totalActions
+    ? Math.round((feedback.edited / feedback.totalActions) * 100)
+    : null;
+  const trend = trendQuery.data?.data ?? [];
+  const maxTrendActions = Math.max(...trend.map((item) => item.totalActions), 1);
   const navigate = (section: string, sub?: string, focus?: string) => (window as any).__navigateTo?.(section, sub, focus);
   const openAiSettings = () => window.electron.ipcRenderer.sendMessage('open-settings-window', { tab: 'ai' });
   const steps = [
     { label: '启用至少一个客服平台', done: activePlatformIds.length > 0, action: () => document.getElementById('platform-manager')?.scrollIntoView({ behavior: 'smooth' }), actionLabel: '去启用' },
     { label: '配置并启用回复模型', done: Boolean(llm?.model && llm?.key), action: openAiSettings, actionLabel: '去配置' },
-    { label: '启动知识检索服务', done: rag?.state === 'running', action: openAiSettings, actionLabel: '去检查' },
+    { label: '导入首批店铺知识', done: Boolean(rag?.totalChunks), action: () => navigate('knowledge', 'store-kb'), actionLabel: '去导入' },
     { label: '完成一次测试回复', done: suggestions.length > 0, action: () => navigate('service', undefined, 'pending'), actionLabel: '去测试' },
+    { label: '完成第一次辅助填入', done: Boolean(feedback?.accepted), action: () => navigate('service', undefined, 'pending'), actionLabel: '去处理' },
   ];
 
   useEffect(() => {
@@ -102,6 +114,19 @@ const DashboardQualityOverview: React.FC = () => {
             </Button>
           ))}
         </SimpleGrid>
+        <Flex mt={3} gap={4} fontSize="xs" color="gray.500" wrap="wrap">
+          <Text>近 7 天采用率：<Text as="span" fontWeight={700} color="gray.700">{acceptanceRate == null ? '暂无数据' : `${acceptanceRate}%`}</Text></Text>
+          <Text>编辑率：<Text as="span" fontWeight={700} color="gray.700">{editRate == null ? '暂无数据' : `${editRate}%`}</Text></Text>
+          {feedback?.failed ? <Text color="red.500">失败反馈：{feedback.failed}</Text> : null}
+        </Flex>
+        <Flex mt={3} h="56px" gap={2} align="end" aria-label="近七天回复采用趋势">
+          {trend.map((item) => (
+            <Flex key={item.date} flex="1" h="full" minW="0" direction="column" justify="end" align="center" title={`${item.date}：${item.accepted}/${item.totalActions}`}>
+              <Box w="full" maxW="28px" h={`${Math.max(6, Math.round((item.accepted / maxTrendActions) * 100))}%`} bg="brand.400" borderRadius="sm" />
+              <Text mt={1} fontSize="9px" color="gray.400">{item.date.slice(5)}</Text>
+            </Flex>
+          ))}
+        </Flex>
       </Box>
       <Box bg="white" borderRadius="xl" borderWidth="1px" borderColor="gray.100" p={4}>
         <Flex justify="space-between" align="center" mb={3}><Text fontWeight="800">开始使用</Text><Text fontSize="xs" color="gray.400">{steps.filter((step) => step.done).length}/{steps.length}</Text></Flex>

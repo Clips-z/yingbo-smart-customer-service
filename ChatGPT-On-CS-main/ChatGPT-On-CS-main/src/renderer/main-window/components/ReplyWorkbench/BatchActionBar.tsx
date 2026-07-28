@@ -5,10 +5,14 @@ import {
   ButtonGroup,
   Flex,
   HStack,
+  Menu,
+  MenuButton,
+  MenuItem,
+  MenuList,
   Spacer,
   Tooltip,
 } from '@chakra-ui/react';
-import { FiTrash, FiTrash2, FiCheck } from 'react-icons/fi';
+import { FiTrash, FiTrash2, FiCheck, FiMoreHorizontal } from 'react-icons/fi';
 import { ReplySuggestion } from '../../../common/services/platform/platform';
 
 interface BatchActionBarProps {
@@ -114,37 +118,39 @@ const BatchActionBar = React.memo(
               一键已处理 ({batchCount})
             </Button>
           </Tooltip>
-          {hasSelection && (
-            <Tooltip label={`删除选中的 ${selectedIds.size} 条记录`}>
-              <Button
-                leftIcon={<FiTrash />}
-                colorScheme="red"
-                variant="outline"
-                isLoading={batchWorking}
-                onClick={onBatchDelete}
-                size="xs"
-                borderRadius="md"
-                fontSize="11px"
-              >
-                删除选中
-              </Button>
-            </Tooltip>
-          )}
-          <Tooltip label={`清空所有 ${handled.length} 条已处理记录`}>
-            <Button
-              leftIcon={<FiTrash2 />}
-              colorScheme="red"
+          <Menu placement="bottom-end">
+            <MenuButton
+              as={Button}
+              leftIcon={<FiMoreHorizontal />}
               variant="ghost"
-              isLoading={batchWorking}
-              isDisabled={handled.length === 0}
-              onClick={onClearHandled}
+              isDisabled={
+                batchWorking || (!hasSelection && handled.length === 0)
+              }
               size="xs"
-              borderRadius="md"
-              fontSize="11px"
+              color="gray.500"
             >
-              清空已处理
-            </Button>
-          </Tooltip>
+              更多
+            </MenuButton>
+            <MenuList minW="176px" fontSize="12px">
+              {hasSelection && (
+                <MenuItem
+                  icon={<FiTrash />}
+                  color="red.600"
+                  onClick={onBatchDelete}
+                >
+                  删除选中（{selectedIds.size}）
+                </MenuItem>
+              )}
+              <MenuItem
+                icon={<FiTrash2 />}
+                color="red.600"
+                isDisabled={handled.length === 0}
+                onClick={onClearHandled}
+              >
+                清空已处理（{handled.length}）
+              </MenuItem>
+            </MenuList>
+          </Menu>
         </ButtonGroup>
       </Flex>
     );

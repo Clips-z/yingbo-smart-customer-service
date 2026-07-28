@@ -78,7 +78,7 @@ export function createCompanionWindow(): BrowserWindow {
       preload:
         app.isPackaged || process.env.NODE_ENV === 'production'
           ? path.join(__dirname, 'preload.js')
-          : path.join(__dirname, '../../.erb/dll/preload.js'),
+          : path.join(__dirname, '../../../../.erb/dll/preload.js'),
     },
   });
 
