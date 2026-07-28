@@ -22,8 +22,9 @@ const root = path.resolve(__dirname, '..');
 const srcNodeModules = path.join(root, 'node_modules');
 const appNodeModules = path.join(root, 'release', 'app', 'node_modules');
 
-// 需要 copy 到 release/app/node_modules 的运行时依赖（包名 -> 目录名）
-const REQUIRED_PACKAGES = ['sqlite3', '@mapbox/node-pre-gyp'];
+// sqlite3 5.1.7 uses `bindings` at runtime. The older mapbox loader is no
+// longer a dependency, so copy the actual pnpm-resolved dependency chain.
+const REQUIRED_PACKAGES = ['sqlite3', 'bindings', 'file-uri-to-path'];
 
 function copyDirSync(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
@@ -49,6 +50,11 @@ function dirSize(p) {
 }
 
 function ensureNapiBindings(sqlite3Dir) {
+  // sqlite3 >= 5.1.7 loads the binary through `bindings` from build/Release.
+  // electron-builder unpacks *.node files, so no N-API path shim is needed.
+  if (fs.existsSync(path.join(sqlite3Dir, 'build', 'Release', 'node_sqlite3.node'))) {
+    return;
+  }
   // sqlite3 通过 node-pre-gyp 按 napi 版本查找二进制：
   //   lib/binding/napi-v{napi_build_version}-{platform}-{libc}-{arch}/node_sqlite3.node
   // Electron 26 使用 N-API v8，预编译包仅到 v6；v6 二进制对 v8 向后兼容，
@@ -75,8 +81,20 @@ function main() {
   }
   fs.mkdirSync(appNodeModules, { recursive: true });
 
+  const sqliteDir = fs.realpathSync(path.join(srcNodeModules, 'sqlite3'));
+  const sqliteDeps = path.dirname(sqliteDir);
+  const bindingsDir = fs.realpathSync(path.join(sqliteDeps, 'bindings'));
+  const bindingsDeps = path.dirname(bindingsDir);
+  const sources = {
+    sqlite3: sqliteDir,
+    bindings: bindingsDir,
+    'file-uri-to-path': fs.realpathSync(
+      path.join(bindingsDeps, 'file-uri-to-path'),
+    ),
+  };
+
   for (const pkg of REQUIRED_PACKAGES) {
-    const src = path.join(srcNodeModules, pkg);
+    const src = sources[pkg];
     const dest = path.join(appNodeModules, pkg);
     if (!fs.existsSync(src)) {
       throw new Error(`源依赖缺失: ${src}`);
