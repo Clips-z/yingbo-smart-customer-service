@@ -1207,6 +1207,7 @@ docs: document realtime capture recovery and operations
 - Decision: PASS
 - Passed: `pnpm.cmd test -- --runInBand` (58 suites, 218 tests), `pnpm.cmd typecheck`, `pnpm.cmd build`, `pnpm.cmd package`, `pnpm.cmd check:package`, and `git diff --check`.
 - Local artifact: `release/build/yingbo-smart-customer-service_v2.5.0_windows_x64_setup.exe` (330,510,054 bytes) and its blockmap; unpacked application is also present at `release/build/win-unpacked`.
+- Desktop runtime sync: `D:\yingbokefu\yingbo-smart-customer-service-runtime\迎波智能客服.exe` was replaced from the unpacked build; SHA-256 matches `D8303385F8CD43A3EF7B2D34C65D241B33B4D883C96E18593966C6E6FD0F7A7D`. Previous file retained as `.bak-20260803`.
 - Runtime evidence: packaged Python runtime check passed for RapidOCR, WeChat and RAG dependencies using the short-path fallback verifier.
 - Packaging fix: artifact verification now accepts the configured `artifactName` and automatically retries native Python DLL imports through a temporary Windows SUBST drive when the checkout path exceeds DLL loader limits.
 - Remaining manual gate: install and exercise the EXE against logged-in Taobao/JD clients; the automated release artifact and source validation are complete.
