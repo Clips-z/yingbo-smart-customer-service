@@ -1219,6 +1219,12 @@ docs: document realtime capture recovery and operations
 - Fixed: PDD/Douyin skip the unsupported Qianniu draft autosave endpoint, preventing repeated 404 retries while preserving direct sidecar fill.
 - Evidence: `pnpm.cmd typecheck`; 3 targeted suites / 20 tests passed; direct Windows window probe returned active Qianniu, WeChat and WeCom targets.
 
+#### Follow-up verification — 2026-08-03
+
+- Full regression after platform routing fix: 58 suites, 219 tests passed; typecheck and `git diff --check` passed.
+- `pnpm.cmd package` and `pnpm.cmd check:package` passed again.
+- Updated desktop runtime at `D:\yingbokefu\yingbo-smart-customer-service-runtime\迎波智能客服.exe`; pre-fix executable retained as `.bak-20260803-pre-platform-fix`.
+
 ### 已完成 Gate 记录
 
 #### Gate 0 — 2026-08-03
