@@ -1115,10 +1115,10 @@ docs: document realtime capture recovery and operations
 
 | Task | 状态 | 提交 | 测试/证据 | 备注 |
 |---:|---|---|---|---|
-| 0 | DONE | pending | `docs/architecture/realtime-capture-baseline.md` | 工作区保护与基线；未创建全量 checkpoint commit，保留原有脏改动 |
-| 1 | DONE | pending | `captureTrace.test.ts`、`captureMetrics.test.ts`、`pnpm.cmd typecheck` | 增加脱敏延迟 trace 和 baseline 输出脚本 |
-| 2 | DONE | pending | `capture` 套件 3 tests、typecheck | 统一事件、会话键和 adapter contract |
-| 3 | DONE | pending | `capture` 套件 8 tests、typecheck、diff check | 去重、单主通道路由、health/stale 状态 |
+| 0 | DONE | `847c14f` | `docs/architecture/realtime-capture-baseline.md` | 工作区保护与基线；未创建全量 checkpoint commit，保留原有脏改动 |
+| 1 | DONE | `847c14f` | `captureTrace.test.ts`、`captureMetrics.test.ts`、`pnpm.cmd typecheck` | 增加脱敏延迟 trace 和 baseline 输出脚本 |
+| 2 | DONE | `847c14f` | `capture` 套件 3 tests、typecheck | 统一事件、会话键和 adapter contract |
+| 3 | DONE | `847c14f` | `capture` 套件 8 tests、typecheck、diff check | 去重、单主通道路由、health/stale 状态 |
 | 4 | PENDING | - | - | OCR adapter |
 | 5 | PENDING | - | - | 千牛只读探针与 ADR |
 | 6 | PENDING | - | - | 选定结构化 adapter |
@@ -1145,7 +1145,7 @@ docs: document realtime capture recovery and operations
 - Metrics: 6 suites passed, 40 tests passed
 - Failures observed: PowerShell 直接执行 `pnpm` 被执行策略阻止，改用 `pnpm.cmd`
 - Selected next task: Task 1
-- Commit: pending（工作区包含既有未提交改动，Task 0 未创建全量 checkpoint）
+- Commit: `847c14f`（工作区包含既有未提交改动，Task 0 未创建全量 checkpoint）
 
 #### Gate 1 — 2026-08-03
 
@@ -1154,7 +1154,7 @@ docs: document realtime capture recovery and operations
 - Metrics: 2 suites passed, 3 tests passed
 - Evidence: `CaptureTrace` 只保存阶段和耗时；`benchmark-qianniu-capture.ts` 输出脱敏 snapshot
 - Selected next task: Task 2
-- Commit: pending
+- Commit: `847c14f`
 
 #### Gate 2 — 2026-08-03
 
@@ -1163,7 +1163,7 @@ docs: document realtime capture recovery and operations
 - Metrics: 2 suites passed, 3 tests passed
 - Evidence: 统一事件、会话键和 adapter contract 已建立
 - Selected next task: Task 3
-- Commit: pending
+- Commit: `847c14f`
 
 #### Gate 3 — 2026-08-03
 
@@ -1172,7 +1172,7 @@ docs: document realtime capture recovery and operations
 - Metrics: 5 suites passed, 8 tests passed
 - Evidence: 真实 message ID 去重、无 ID 指纹去重、影子事件不进入业务、recovering 状态阻止投递、health stale 检测
 - Selected next task: Task 4
-- Commit: pending
+- Commit: `847c14f`
 
 ## 15. 实测指标台账模板
 
