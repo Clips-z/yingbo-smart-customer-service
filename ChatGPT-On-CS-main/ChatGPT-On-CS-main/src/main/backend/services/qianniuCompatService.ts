@@ -46,6 +46,7 @@ import {
 } from './qianniuFillResult';
 import { QianniuContextTracker } from './qianniuContextTracker';
 import { assertDeliveryContext } from './deliveryContextGuard';
+import { prepareDraftDelivery } from './conversationDraftDelivery';
 import { extractQianniuContextEvidence } from './qianniuContextEvidence';
 import { sanitizeQianniuRecentMessages } from './qianniuRecentMessages';
 import { RecordReplyFeedbackInput } from './replyFeedbackService';
@@ -263,10 +264,30 @@ export class QianniuCompatService {
       });
     }
     const replyContent = editedContent?.trim() || suggestion.reply_content;
+    const verifiedReplyContent = suggestion.conversation_key
+      ? prepareDraftDelivery({
+          content: replyContent,
+          draft: {
+        conversationKey: suggestion.conversation_key || '',
+        draftKey: suggestion.draft_key || '',
+        platformId: suggestion.platform_id,
+        storeId: suggestion.store_id || '',
+        accountId: suggestion.account_id || '',
+        contactId: suggestion.contact_id || suggestion.sender,
+        chatFingerprint: suggestion.chat_fingerprint || '',
+        productId: suggestion.product_id,
+        incomingMessageFingerprint: suggestion.incoming_message_fingerprint,
+        contextRevision: suggestion.context_revision || 0,
+        state: suggestion.status === 'sent' ? 'sent' : suggestion.status === 'cancelled' ? 'cancelled' : suggestion.draft_state === 'expired' ? 'expired' : suggestion.status === 'failed' ? 'failed' : 'draft',
+          },
+          live: this.contextTracker.getSnapshot(),
+          action: 'fill',
+        })
+      : replyContent.trim().slice(0, 300);
     const requestId = await reserveSuggestionDelivery(id, 'prepare');
     const fillStartedAt = Date.now();
     try {
-      await this.sendReply(replyContent, false, suggestion.sender);
+      await this.sendReply(verifiedReplyContent, false, suggestion.sender);
       this.captureMetrics.record({
         name: 'draft_fill',
         durationMs: Date.now() - fillStartedAt,
@@ -1007,7 +1028,27 @@ export class QianniuCompatService {
       ) {
         const requestId = await reserveSuggestionDelivery(suggestion.id, 'send');
         try {
-          await this.sendReply(reply.content, true, sender);
+          const verifiedAutoContent = suggestion.conversation_key
+            ? prepareDraftDelivery({
+                content: reply.content,
+                draft: {
+                  conversationKey: suggestion.conversation_key,
+                  draftKey: suggestion.draft_key || '',
+                  platformId: suggestion.platform_id,
+                  storeId: suggestion.store_id || '',
+                  accountId: suggestion.account_id || '',
+                  contactId: suggestion.contact_id || suggestion.sender,
+                  chatFingerprint: suggestion.chat_fingerprint || '',
+                  productId: suggestion.product_id,
+                  incomingMessageFingerprint: suggestion.incoming_message_fingerprint,
+                  contextRevision: suggestion.context_revision || 0,
+                  state: 'draft',
+                },
+                live: this.contextTracker.getSnapshot(),
+                action: 'send',
+              })
+            : reply.content.trim().slice(0, 300);
+          await this.sendReply(verifiedAutoContent, true, sender);
           const completed = await finishSuggestionDelivery({
             id: suggestion.id,
             requestId,
@@ -1018,7 +1059,7 @@ export class QianniuCompatService {
               suggestionId: suggestion.id,
               eventKey: `suggestion:${suggestion.id}:sent:${requestId}`,
               action: 'sent',
-              finalContent: reply.content,
+              finalContent: verifiedAutoContent,
             }).catch((error) => this.log.warn(`回复反馈保存失败：${String(error)}`));
         } catch (error) {
           await finishSuggestionDelivery({

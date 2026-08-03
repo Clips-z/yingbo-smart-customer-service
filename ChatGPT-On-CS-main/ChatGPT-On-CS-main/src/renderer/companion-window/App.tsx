@@ -17,7 +17,6 @@ import {
   Spinner,
   Stack,
   Text,
-  Textarea,
   Tooltip,
 } from '@chakra-ui/react';
 import {
@@ -816,77 +815,6 @@ function CompanionSurfaceContent() {
             )}
           </Box>
 
-          <Box display="none" bg="#182230" color="white" borderRadius="14px" p={3}>
-            <HStack mb={2}>
-              <FiMessageCircle color="#8FA8FF" />
-              <Text fontSize="10px" color="whiteAlpha.700">
-                客户最新问题
-              </Text>
-            </HStack>
-            <Text fontSize="13px">
-              {suggestion?.incoming_content || '正在等待当前会话的新问题…'}
-            </Text>
-          </Box>
-
-          <Box display="none" bg="white" borderRadius="14px" p={3} border="1px solid #E6EAF0">
-            <Flex justify="space-between" mb={2}>
-              <Text fontSize="11px" fontWeight="900">
-                AI 回复草稿
-              </Text>
-              <Badge colorScheme={suggestion ? 'green' : 'gray'}>
-                {history.length
-                  ? `历史 ${history.length}`
-                  : suggestion
-                    ? '已保存'
-                    : '等待生成'}
-              </Badge>
-            </Flex>
-            <Textarea
-              value={content}
-              onClick={() => void fill()}
-              onChange={(event) => setContent(event.target.value)}
-              placeholder="识别到客户问题后，AI 回复会显示在这里"
-              minH="120px"
-              maxLength={300}
-              isDisabled={!suggestion || suggestion.status === 'sent'}
-            />
-            <Flex mt={1} justify="space-between">
-              <Text fontSize="9px" color="#849598">
-                切换客户自动保存，返回时恢复
-              </Text>
-              <Text fontSize="9px" color="#849598">
-                {content.length}/300
-              </Text>
-            </Flex>
-            {notice && (
-              <Text
-                mt={2}
-                fontSize="10px"
-                color={notice.startsWith('已') ? '#08785d' : '#b45d29'}
-              >
-                {notice}
-              </Text>
-            )}
-            {history.length > 0 && (
-              <Box as="details" open mt={3} pt={2} borderTop="1px solid #E6EAF0">
-                <Text as="summary" cursor="pointer" fontSize="10px" fontWeight="700" color="gray.500">
-                  查看当前客户历史回复（{history.length}）
-                </Text>
-                <Stack mt={2} spacing={1.5}>
-                  {history.map((item) => (
-                    <Box key={item.id} bg="#F7F8FA" borderRadius="10px" p={2}>
-                      <Text fontSize="9px" noOfLines={1}>
-                        客户：{item.incoming_content}
-                      </Text>
-                      <Text fontSize="10px" noOfLines={2}>
-                        回复：{item.draft_content || item.reply_content}
-                      </Text>
-                    </Box>
-                  ))}
-                </Stack>
-              </Box>
-            )}
-          </Box>
         </Stack>
       </Box>
 

@@ -1126,8 +1126,8 @@ docs: document realtime capture recovery and operations
 | 8 | FALLBACK_DONE | pending | `QIANNIU_CAPTURE_ROUTER=1` 可选接入、health route 输出、typecheck | 结构化主链路不可用；OCR adapter 可进入统一 router，未宣称实时结构化通过 |
 | 9 | DONE | pending | `conversationTimelineService.test.ts`、timeline API、typecheck | 使用现有 ReplySuggestion 持久化客户问题/回答，按客户上下文隔离并显示状态 |
 | 10 | DONE | pending | `focusConversation`、delivery/context tests、typecheck | 左侧聚合跳转增加店铺/账号/客户二次校验；仍使用现有 OCR 坐标兼容动作 |
-| 11 | PENDING | - | - | 点击回答填入 |
-| 12 | PENDING | - | - | 自动发送 |
+| 11 | IN_PROGRESS | pending | `conversationDraftDelivery.test.ts`、delivery/context tests、typecheck | 点击回答已改为先校验草稿绑定与当前客户，再填入；真实千牛 100 次 Gate 尚未执行 |
+| 12 | IN_PROGRESS | pending | `automaticDeliverySafety.test.ts`、`conversationDraftDelivery.test.ts`、typecheck | 自动发送复用同一校验与幂等状态；真实千牛 8 小时稳定性 Gate 尚未执行 |
 | 13 | PENDING | - | - | 伴随助手 UI |
 | 14 | PENDING | - | - | 左侧工作台和多屏 |
 | 15 | PENDING | - | - | 商品上下文 |
@@ -1171,6 +1171,16 @@ docs: document realtime capture recovery and operations
 - Limitation: 普通 CDP 不可用，因此 Task 8 的 structured-active 指标仍未达成
 - Selected next task: Task 11（点击回答填入与交付幂等）
 - Commit: pending
+
+#### Task 11–12 implementation checkpoint — 2026-08-03
+
+- Decision: IN_PROGRESS
+- Implemented: `prepareDraftDelivery` bounds reply content to 300 characters and rejects empty or switched conversations before fill/send; unattended send now uses the same verified content and existing atomic delivery reservation.
+- UI: removed the hidden duplicate AI draft textarea; the visible answer card remains the single click-to-fill entry point.
+- Test commands: `pnpm.cmd typecheck`; `pnpm.cmd test -- --runInBand src/__tests__/services/conversationDraftDelivery.test.ts src/__tests__/services/automaticDeliverySafety.test.ts src/__tests__/services/deliveryContextGuard.test.ts`
+- Metrics: 3 suites passed, 11 tests passed; typecheck passed.
+- Limitation: live千牛点击填入/自动发送 Gate 11/12 still requires a real-client run; ordinary external CDP remains unavailable and OCR coordinates remain the fallback action channel.
+- Selected next task: Task 13（伴随助手 UI 与商品上下文）
 
 ### 已完成 Gate 记录
 
