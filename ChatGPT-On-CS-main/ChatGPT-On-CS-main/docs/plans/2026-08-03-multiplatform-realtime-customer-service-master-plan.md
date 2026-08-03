@@ -1119,10 +1119,10 @@ docs: document realtime capture recovery and operations
 | 1 | DONE | `847c14f` | `captureTrace.test.ts`、`captureMetrics.test.ts`、`pnpm.cmd typecheck` | 增加脱敏延迟 trace 和 baseline 输出脚本 |
 | 2 | DONE | `847c14f` | `capture` 套件 3 tests、typecheck | 统一事件、会话键和 adapter contract |
 | 3 | DONE | `847c14f` | `capture` 套件 8 tests、typecheck、diff check | 去重、单主通道路由、health/stale 状态 |
-| 4 | DONE | pending | `qianniuOcrAdapter.test.ts`、capture/cdp tests、typecheck | 复用常驻 worker 的 snapshot adapter；路由通过 `QIANNIU_CAPTURE_ROUTER=1` 选择性启用 |
-| 5 | DONE | pending | `probe-qianniu-structure.ps1`、`probe-qianniu-process-tree.ps1`、ADR-002 | 普通外部 CDP 四端口均拒绝；AliRender 未继承调试参数 |
-| 6 | FALLBACK_DONE | pending | ADR-002；13 suites/51 tests；typecheck | 不进入私有注入/竞品协议；千牛当前保留 OCR fallback，等待官方/公开插件接口证据 |
-| 7 | PENDING | - | - | shadow 8 小时 |
+| 4 | DONE | `4fd48d9` + existing service diff | `qianniuOcrAdapter.test.ts`、capture/cdp tests、typecheck | 复用常驻 worker 的 snapshot adapter；路由通过 `QIANNIU_CAPTURE_ROUTER=1` 选择性启用 |
+| 5 | DONE | `4fd48d9` | `probe-qianniu-structure.ps1`、`probe-qianniu-process-tree.ps1`、ADR-002 | 普通外部 CDP 四端口均拒绝；AliRender 未继承调试参数 |
+| 6 | FALLBACK_DONE | `4fd48d9` + ADR-002 | 13 suites/51 tests；typecheck | 不进入私有注入/竞品协议；千牛当前保留 OCR fallback，等待官方/公开插件接口 |
+| 7 | DONE | pending | `shadowComparator.test.ts`、capture tests、typecheck | 通用影子比较器和脱敏报告脚本已完成；当前无千牛结构化样本，因此不宣称影子 Gate 通过 |
 | 8 | PENDING | - | - | 结构化主链路 + OCR fallback |
 | 9 | PENDING | - | - | 会话时间线和问答配对 |
 | 10 | PENDING | - | - | 精确跳转客户 |
@@ -1143,7 +1143,7 @@ docs: document realtime capture recovery and operations
 - Test commands: adapter、capture、CDP、千牛策略、context、delivery tests
 - Metrics: 13 suites passed, 51 tests passed；typecheck passed
 - Selected next task: Task 5
-- Commit: pending
+- Commit: `4fd48d9`（`qianniuCompatService.ts` 的既有混合改动仍保持未提交，未覆盖）
 
 #### Gate 5 / 6 — 2026-08-03
 
@@ -1151,6 +1151,15 @@ docs: document realtime capture recovery and operations
 - Evidence: `AliWorkbench.exe` PID 144 包含 `--remote-debugging-port=9333`，但 `AliRender.exe` 未继承；9222/9229/9333/9515 均 `ECONNREFUSED`
 - Decision: 不进入进程注入、私有 Mojo/IPC 逆向或竞品二进制复用；完成 OCR fallback adapter
 - Selected next task: Task 7（OCR fallback 影子指标与统一上下文验证）
+- Commit: `4fd48d9`
+
+#### Gate 7 — 2026-08-03
+
+- Decision: FALLBACK_FOUNDATION
+- Evidence: comparator 能按会话、message ID/时间桶比对 structured/OCR，报告只保留计数、冲突和延迟；当前千牛没有 structured source 可做 8 小时实测
+- Test commands: `pnpm.cmd test -- --runInBand src/__tests__/services/capture`; `pnpm.cmd typecheck`
+- Metrics: 6 suites passed, 10 tests passed
+- Selected next task: Task 9（问答时间线；Task 8 的 structured-active 暂不启用）
 - Commit: pending
 
 ### 已完成 Gate 记录
