@@ -1133,8 +1133,8 @@ docs: document realtime capture recovery and operations
 | 15 | DONE | pending | typecheck；商品上下文组件 | 当前商品、知识问答数量、详情打开和一键发送链接；无商品时明确降级提示 |
 | 16 | DONE | pending | knowledge governance/export routes、candidate feedback flow | 仅对已填入/已发送反馈进入候选；候选可人工审核、编辑、拒绝；知识库可导出/导入 |
 | 17 | DONE | pending | capture health tests、typecheck | 伴随助手展示采集源、状态、扫描耗时、错误和当前会话；支持刷新恢复 |
-| 18 | PENDING | - | - | 其他平台逐个迁移 |
-| 19 | PENDING | - | - | 验收、打包、发布准备 |
+| 18 | FALLBACK_DONE | pending | `platformHealth.test.ts`、全量 58 suites/218 tests、typecheck/build | 京麦、微信、企微、拼多多、抖音继续使用各自 sidecar/UIA/OCR 适配；未因千牛 CDP 失败强行共用私有协议 |
+| 19 | IN_PROGRESS | pending | 58 suites/218 tests、typecheck、build、git diff check passed；package blocked | 应用已生成 `release/build/win-unpacked`；NSIS/portable 安装包因本机缺少 `makensis.exe` 无法生成 |
 
 #### Gate 4 — 2026-08-03
 
@@ -1193,6 +1193,22 @@ docs: document realtime capture recovery and operations
 - Test command: `pnpm.cmd typecheck` passed; targeted timeline/delivery tests passed.
 - Limitation: live client acceptance and other-platform per-adapter gates are still pending.
 - Selected next task: Task 18（其他平台逐个迁移与回归）
+
+#### Gate 18 — 2026-08-03
+
+- Decision: FALLBACK_DONE
+- Evidence: all existing non-QianNiu adapters remain isolated through `BaseSidecarService`; companion platform health routing continues to select the corresponding adapter. No unsupported cross-platform CDP assumptions were introduced.
+- Test command: `pnpm.cmd test -- --runInBand` — 58 suites, 218 tests passed; `pnpm.cmd typecheck`; `pnpm.cmd build`.
+- Limitation: real logged-in acceptance for each external client is still a release-time manual gate, not something the local test suite can prove.
+- Selected next task: Task 19（全量验收和发布准备）
+
+#### Gate 19 packaging checkpoint — 2026-08-03
+
+- Decision: IN_PROGRESS / PACKAGE_BLOCKED
+- Passed: `pnpm.cmd test -- --runInBand` (58 suites, 218 tests), `pnpm.cmd typecheck`, `pnpm.cmd build`, and `git diff --check`.
+- Local artifact: Electron unpacked application exists at `release/build/win-unpacked`.
+- Blocker: `electron-builder` cannot create NSIS or portable EXE because `C:\Users\Administrator\AppData\Local\electron-builder\Cache\nsis\nsis-3.0.4.1\Bin\makensis.exe` is absent (`spawnSync ... ENOENT`). This is a packaging-tool cache/environment issue, not an application build failure.
+- Next safe action: restore/download the electron-builder NSIS cache or run packaging on a machine with NSIS available, then rerun `pnpm.cmd package` and `pnpm.cmd check:package`.
 
 ### 已完成 Gate 记录
 
