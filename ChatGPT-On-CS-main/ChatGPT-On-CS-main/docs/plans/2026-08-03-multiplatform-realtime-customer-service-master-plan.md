@@ -1119,9 +1119,9 @@ docs: document realtime capture recovery and operations
 | 1 | DONE | `847c14f` | `captureTrace.test.ts`、`captureMetrics.test.ts`、`pnpm.cmd typecheck` | 增加脱敏延迟 trace 和 baseline 输出脚本 |
 | 2 | DONE | `847c14f` | `capture` 套件 3 tests、typecheck | 统一事件、会话键和 adapter contract |
 | 3 | DONE | `847c14f` | `capture` 套件 8 tests、typecheck、diff check | 去重、单主通道路由、health/stale 状态 |
-| 4 | PENDING | - | - | OCR adapter |
-| 5 | PENDING | - | - | 千牛只读探针与 ADR |
-| 6 | PENDING | - | - | 选定结构化 adapter |
+| 4 | DONE | pending | `qianniuOcrAdapter.test.ts`、capture/cdp tests、typecheck | 复用常驻 worker 的 snapshot adapter；路由通过 `QIANNIU_CAPTURE_ROUTER=1` 选择性启用 |
+| 5 | DONE | pending | `probe-qianniu-structure.ps1`、`probe-qianniu-process-tree.ps1`、ADR-002 | 普通外部 CDP 四端口均拒绝；AliRender 未继承调试参数 |
+| 6 | FALLBACK_DONE | pending | ADR-002；13 suites/51 tests；typecheck | 不进入私有注入/竞品协议；千牛当前保留 OCR fallback，等待官方/公开插件接口证据 |
 | 7 | PENDING | - | - | shadow 8 小时 |
 | 8 | PENDING | - | - | 结构化主链路 + OCR fallback |
 | 9 | PENDING | - | - | 会话时间线和问答配对 |
@@ -1135,6 +1135,23 @@ docs: document realtime capture recovery and operations
 | 17 | PENDING | - | - | 诊断与自愈 |
 | 18 | PENDING | - | - | 其他平台逐个迁移 |
 | 19 | PENDING | - | - | 验收、打包、发布准备 |
+
+#### Gate 4 — 2026-08-03
+
+- Decision: PASS
+- Evidence: `QianniuOcrAdapter` 复用现有 resident worker，不创建第二个 OCR loop；默认 flag 关闭，开启后才进入 router
+- Test commands: adapter、capture、CDP、千牛策略、context、delivery tests
+- Metrics: 13 suites passed, 51 tests passed；typecheck passed
+- Selected next task: Task 5
+- Commit: pending
+
+#### Gate 5 / 6 — 2026-08-03
+
+- Decision: FALLBACK
+- Evidence: `AliWorkbench.exe` PID 144 包含 `--remote-debugging-port=9333`，但 `AliRender.exe` 未继承；9222/9229/9333/9515 均 `ECONNREFUSED`
+- Decision: 不进入进程注入、私有 Mojo/IPC 逆向或竞品二进制复用；完成 OCR fallback adapter
+- Selected next task: Task 7（OCR fallback 影子指标与统一上下文验证）
+- Commit: pending
 
 ### 已完成 Gate 记录
 
