@@ -370,6 +370,8 @@ export async function getReplyMode(platformId: string) {
       ? 'wechat'
       : platformId === 'win_wecom'
         ? 'wecom'
+        : platformId === 'win_jinmai'
+          ? 'jinmai'
         : 'qianniu';
   return GET<{ data: { mode: QianniuReplyMode } }>(
     `/api/v1/compat/${platform}/mode`,
@@ -382,6 +384,8 @@ export async function setReplyMode(platformId: string, mode: QianniuReplyMode) {
       ? 'wechat'
       : platformId === 'win_wecom'
         ? 'wecom'
+        : platformId === 'win_jinmai'
+          ? 'jinmai'
         : 'qianniu';
   return POST<{ data: { mode: QianniuReplyMode } }>(
     `/api/v1/compat/${platform}/mode`,
@@ -425,9 +429,30 @@ export async function getCompanionContext(platformId: string) {
   );
 }
 
+export async function getCompanionTimeline(platformId: string, limit = 50) {
+  return GET<{
+    data: Array<{
+      id: number;
+      platformId: string;
+      storeId: string | null;
+      accountId: string | null;
+      contactId: string;
+      question: string;
+      answer: string;
+      finalAnswer: string | null;
+      state: string;
+      productId: string | null;
+      productTitle: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+  }>('/api/v1/compat/companion/timeline', { platformId, limit });
+}
+
 export async function getCompanionCollectorHealth(platformId: string) {
   if (platformId === 'win_wechat') return getWechatCollectorHealth();
   if (platformId === 'win_wecom') return getWecomCollectorHealth();
+  if (platformId === 'win_jinmai') return getJinmaiCollectorHealth();
   return getQianniuCollectorHealth();
 }
 
@@ -455,6 +480,12 @@ export async function getQianniuSuggestions(
     '/api/v1/compat/qianniu/suggestions',
     { status, platformId },
   );
+}
+
+export async function focusReplySuggestion(id: number) {
+  return POST<{
+    data: { id: number; platformId: string; sender: string };
+  }>('/api/v1/compat/suggestions/focus', { id });
 }
 
 export type ReplyFeedbackAction =
@@ -538,6 +569,9 @@ export async function fillCompanionSuggestion(
 ) {
   if (platformId === 'win_wechat') return fillWechatSuggestion(id, content);
   if (platformId === 'win_wecom') return fillWecomSuggestion(id, content);
+  if (platformId === 'win_jinmai') {
+    return POST<{ data: ReplySuggestion }>('/api/v1/compat/jinmai/suggestions/fill', { id, content });
+  }
   return fillQianniuSuggestion(id, content);
 }
 

@@ -1123,9 +1123,9 @@ docs: document realtime capture recovery and operations
 | 5 | DONE | `4fd48d9` | `probe-qianniu-structure.ps1`、`probe-qianniu-process-tree.ps1`、ADR-002 | 普通外部 CDP 四端口均拒绝；AliRender 未继承调试参数 |
 | 6 | FALLBACK_DONE | `4fd48d9` + ADR-002 | 13 suites/51 tests；typecheck | 不进入私有注入/竞品协议；千牛当前保留 OCR fallback，等待官方/公开插件接口 |
 | 7 | DONE | pending | `shadowComparator.test.ts`、capture tests、typecheck | 通用影子比较器和脱敏报告脚本已完成；当前无千牛结构化样本，因此不宣称影子 Gate 通过 |
-| 8 | PENDING | - | - | 结构化主链路 + OCR fallback |
-| 9 | PENDING | - | - | 会话时间线和问答配对 |
-| 10 | PENDING | - | - | 精确跳转客户 |
+| 8 | FALLBACK_DONE | pending | `QIANNIU_CAPTURE_ROUTER=1` 可选接入、health route 输出、typecheck | 结构化主链路不可用；OCR adapter 可进入统一 router，未宣称实时结构化通过 |
+| 9 | DONE | pending | `conversationTimelineService.test.ts`、timeline API、typecheck | 使用现有 ReplySuggestion 持久化客户问题/回答，按客户上下文隔离并显示状态 |
+| 10 | DONE | pending | `focusConversation`、delivery/context tests、typecheck | 左侧聚合跳转增加店铺/账号/客户二次校验；仍使用现有 OCR 坐标兼容动作 |
 | 11 | PENDING | - | - | 点击回答填入 |
 | 12 | PENDING | - | - | 自动发送 |
 | 13 | PENDING | - | - | 伴随助手 UI |
@@ -1160,6 +1160,16 @@ docs: document realtime capture recovery and operations
 - Test commands: `pnpm.cmd test -- --runInBand src/__tests__/services/capture`; `pnpm.cmd typecheck`
 - Metrics: 6 suites passed, 10 tests passed
 - Selected next task: Task 9（问答时间线；Task 8 的 structured-active 暂不启用）
+- Commit: pending
+
+#### Gate 8–10 — 2026-08-03
+
+- Decision: FALLBACK_DONE / PASS
+- Evidence: OCR adapter 可选进入 router；timeline endpoint 查询当前 conversation；千牛 focusConversation 在选择后复核客户、店铺和账号
+- Test commands: `pnpm.cmd typecheck`; `pnpm.cmd test -- --runInBand src/__tests__/services/conversationTimelineService.test.ts src/__tests__/services/deliveryContextGuard.test.ts`
+- Metrics: 9 tests passed；typecheck passed
+- Limitation: 普通 CDP 不可用，因此 Task 8 的 structured-active 指标仍未达成
+- Selected next task: Task 11（点击回答填入与交付幂等）
 - Commit: pending
 
 ### 已完成 Gate 记录

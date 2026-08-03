@@ -67,6 +67,7 @@ import { BackupService } from './services/backupService';
 import { appendAuditEvent, AuditExportFormat, listAuditEvents, serializeAuditExport } from './services/auditService';
 import { deleteReplayFixture, listReplayFixtures, replaySanitizedFixtures, saveReplayFixture } from './services/replayService';
 import { CompanionContextRegistry } from './services/companionContextRegistry';
+import { ConversationTimelineService } from './services/conversationTimelineService';
 import { Config } from './entities/config';
 import {
   CTX_APP_ID,
@@ -127,6 +128,8 @@ class BKServer {
   private douyinSidecarService: DouyinSidecarService;
 
   private companionContextRegistry = new CompanionContextRegistry(1);
+
+  private conversationTimelineService = new ConversationTimelineService();
 
   constructor(port: number, mainWindow: BrowserWindow) {
     this.app = express();
@@ -1390,6 +1393,25 @@ class BKServer {
       });
     });
 
+    this.app.get(
+      '/api/v1/compat/companion/timeline',
+      asyncHandler(async (req, res) => {
+        const platformId = String(req.query.platformId || 'win_qianniu');
+        const context = platformId === 'win_qianniu'
+          ? this.qianniuCompatService.getContext()
+          : this.companionContextRegistry.get(platformId);
+        if (!context) {
+          res.json({ success: true, data: [] });
+          return;
+        }
+        const data = await this.conversationTimelineService.listForContext(
+          context,
+          Number(req.query.limit) || 50,
+        );
+        res.json({ success: true, data });
+      }),
+    );
+
     this.app.post('/api/v1/compat/:platform/context', (req, res) => {
       const platformId =
         req.params.platform === 'wechat'
@@ -1584,6 +1606,61 @@ class BKServer {
           platformId,
         );
         res.json({ success: true, data });
+      }),
+    );
+
+    this.app.post(
+      '/api/v1/compat/suggestions/focus',
+      asyncHandler(async (req, res) => {
+        const id = Number(req.body.id);
+        if (!Number.isInteger(id) || id <= 0) {
+          res
+            .status(400)
+            .json({ success: false, message: 'Invalid suggestion id' });
+          return;
+        }
+        const suggestion = await ReplySuggestion.findByPk(id);
+        if (!suggestion) {
+          res.status(404).json({ success: false, message: '待回复记录不存在' });
+          return;
+        }
+        const sender = suggestion.contact_id || suggestion.sender;
+        try {
+          if (suggestion.platform_id === 'win_qianniu') {
+            await this.qianniuCompatService.focusConversation({
+              storeId: suggestion.store_id,
+              accountId: suggestion.account_id,
+              contactId: sender,
+            });
+          } else if (suggestion.platform_id === 'win_jinmai') {
+            await this.jinmaiSidecarService.focusContact(sender);
+          } else if (suggestion.platform_id === 'win_wechat') {
+            await this.wechatSidecarService.focusContact(sender);
+          } else if (suggestion.platform_id === 'win_wecom') {
+            await this.wecomSidecarService.focusContact(sender);
+          } else if (suggestion.platform_id === 'win_pdd') {
+            await this.pddSidecarService.focusContact(sender);
+          } else if (suggestion.platform_id === 'win_douyin') {
+            await this.douyinSidecarService.focusContact(sender);
+          } else {
+            throw new Error('当前平台暂不支持一键定位客户');
+          }
+          res.json({
+            success: true,
+            data: {
+              id: suggestion.id,
+              platformId: suggestion.platform_id,
+              sender,
+            },
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          this.loggerService.warn(
+            `聚合接待定位失败 [${suggestion.platform_id}/${sender}]: ${message}`,
+          );
+          res.status(409).json({ success: false, message });
+        }
       }),
     );
 

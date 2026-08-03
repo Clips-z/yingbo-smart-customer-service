@@ -33,6 +33,7 @@ import {
   FiMessageCircle,
   FiMove,
   FiPackage,
+  FiExternalLink,
   FiRefreshCw,
   FiSend,
   FiUser,
@@ -42,6 +43,7 @@ import {
   fillCompanionSuggestion,
   getCompanionCollectorHealth,
   getCompanionContext,
+  getCompanionTimeline,
   getQianniuSuggestions,
   getReplyMode,
   refreshQianniuCompanion,
@@ -56,10 +58,12 @@ import theme from '../common/styles/theme';
 import '../common/App.css';
 import {
   selectCompanionHistory,
+  selectCompanionProduct,
   selectCompanionSuggestion,
 } from './companionSelection';
+import { fetchProductQAList, productPlaceholderImage } from '../common/services/knowledge/productQA';
 
-type PlatformId = 'win_qianniu' | 'win_wechat' | 'win_wecom';
+type PlatformId = 'win_qianniu' | 'win_jinmai' | 'win_wechat' | 'win_wecom';
 type TargetMode = 'follow' | PlatformId;
 type DockState = {
   attached?: boolean;
@@ -71,8 +75,18 @@ type DockState = {
   activePlatformId?: PlatformId;
 };
 
+type ReplyGenerationState = {
+  state: 'generating' | 'ready' | 'discarded' | 'failed';
+  platformId: PlatformId;
+  contextRevision?: number;
+  chatFingerprint: string;
+  startedAt?: number;
+  error?: string;
+};
+
 const PLATFORM: Record<PlatformId, { name: string; short: string }> = {
   win_qianniu: { name: '千牛', short: '千' },
+  win_jinmai: { name: '京麦', short: '京' },
   win_wechat: { name: '微信', short: '微' },
   win_wecom: { name: '企业微信', short: '企' },
 };
@@ -114,28 +128,39 @@ function CompanionSurfaceContent() {
   const [content, setContent] = useState('');
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState('');
+  const [generation, setGeneration] = useState<ReplyGenerationState>();
   const platformId = dockState.activePlatformId || 'win_qianniu';
   const platform = PLATFORM[platformId];
 
   const contextQuery = useQuery(
     ['companion-context', platformId],
     () => getCompanionContext(platformId),
-    { refetchInterval: 1000 },
+    { refetchInterval: 5000 },
   );
   const healthQuery = useQuery(
     ['companion-health', platformId],
     () => getCompanionCollectorHealth(platformId),
-    { refetchInterval: 2000 },
+    { refetchInterval: 5000 },
   );
   const suggestionsQuery = useQuery(
     ['companion-suggestions', platformId],
     () => getQianniuSuggestions('all', platformId),
-    { refetchInterval: 1500 },
+    { refetchInterval: 5000 },
+  );
+  const timelineQuery = useQuery(
+    ['companion-timeline', platformId, contextQuery.data?.data?.conversationKey],
+    () => getCompanionTimeline(platformId, 50),
+    { enabled: Boolean(contextQuery.data?.data?.contactId), refetchInterval: 5000 },
   );
   const modeQuery = useQuery(
     ['companion-mode', platformId],
     () => getReplyMode(platformId),
-    { refetchInterval: 4000 },
+    { refetchInterval: 5000 },
+  );
+  const productsQuery = useQuery(
+    ['companion-products', contextQuery.data?.data?.storeId || '', contextQuery.data?.data?.productId || ''],
+    () => fetchProductQAList({ shop: contextQuery.data?.data?.storeId, page: 1, pageSize: 40 }),
+    { enabled: Boolean(contextQuery.data?.data?.storeId), refetchInterval: 15000 },
   );
 
   const context = contextQuery.data?.data;
@@ -150,9 +175,16 @@ function CompanionSurfaceContent() {
     () => selectCompanionSuggestion(context, suggestions),
     [context, suggestions],
   );
+  const currentQuestionIsLink = /^https?:\/\//i.test(
+    suggestion?.incoming_content?.trim() || '',
+  );
   const history = useMemo(
     () => selectCompanionHistory(context, suggestions, suggestion?.id),
     [context, suggestion?.id, suggestions],
+  );
+  const currentProduct = useMemo(
+    () => selectCompanionProduct(context, productsQuery.data?.list || []),
+    [context, productsQuery.data?.list],
   );
   const mode = modeQuery.data?.data.mode || 'assist';
   const activeSuggestionRef = useRef<ReplySuggestion>();
@@ -214,6 +246,49 @@ function CompanionSurfaceContent() {
     [],
   );
 
+  useEffect(() => {
+    const unsubscribe = window.electron.ipcRenderer.on('broadcast', (message) => {
+      const event = (message as { event?: string })?.event || '';
+      const payload = (message as { data?: ReplyGenerationState })?.data;
+      if (
+        event === 'qianniu_reply_generation_changed' &&
+        payload?.platformId === platformId
+      ) {
+        setGeneration(payload);
+      }
+      if (
+        ![
+          'qianniu_context_changed',
+          'qianniu_suggestion_created',
+          'qianniu_suggestion_updated',
+          'qianniu_reply_mode_changed',
+          'jinmai_reply_mode_changed',
+          'jinmai_suggestion_created',
+          'jinmai_suggestion_updated',
+          'jinmai_collector_health_changed',
+          'wechat_reply_mode_changed',
+          'wecom_reply_mode_changed',
+          'wechat_collector_health_changed',
+          'wecom_collector_health_changed',
+        ].includes(event)
+      ) return;
+      void Promise.all([
+        contextQuery.refetch(),
+        healthQuery.refetch(),
+        suggestionsQuery.refetch(),
+        timelineQuery.refetch(),
+        modeQuery.refetch(),
+      ]);
+    });
+    return () => unsubscribe();
+  }, [contextQuery, healthQuery, modeQuery, suggestionsQuery, timelineQuery]);
+
+  useEffect(() => {
+    if (platformId === 'win_qianniu') {
+      void refreshQianniuCompanion().catch(() => undefined);
+    }
+  }, [platformId]);
+
   const stable = context?.state === 'stable';
   const collectorReady =
     health?.state === 'running' &&
@@ -222,21 +297,65 @@ function CompanionSurfaceContent() {
     suggestion &&
     context &&
     suggestion.platform_id === platformId &&
-    (suggestion.context_revision == null ||
-      suggestion.context_revision === context.contextRevision) &&
     (suggestion.conversation_key
       ? suggestion.conversation_key === context.conversationKey
       : suggestion.sender === context.contactId),
   );
   const safeToFill =
-    stable && collectorReady && matchesLiveContext && mode === 'assist';
+    mode === 'assist' &&
+    !currentQuestionIsLink &&
+    (platformId === 'win_jinmai'
+      ? Boolean(suggestion) && collectorReady
+      : stable && collectorReady && matchesLiveContext);
   const attached = dockState.attached !== false;
   const collapsed = Boolean(dockState.collapsed);
   const side =
     dockState.sideByPlatform?.[platformId] || dockState.side || 'right';
+  const generationMatchesContext = Boolean(
+    generation &&
+      context &&
+      generation.contextRevision === context.contextRevision &&
+      generation.chatFingerprint === context.chatFingerprint,
+  );
+  const pipeline = !context
+    ? '等待打开客服会话'
+    : !stable
+      ? '正在切换客户与店铺'
+      : generationMatchesContext && generation?.state === 'generating'
+        ? '正在生成 AI 回复'
+        : generationMatchesContext && generation?.state === 'failed'
+          ? generation.error || '生成失败，可点击刷新重试'
+          : !collectorReady
+            ? '正在读取当前会话'
+            : suggestion
+              ? '回复草稿已就绪'
+              : '已识别会话，等待客户新问题';
 
   const fill = async () => {
-    if (!suggestion || !content.trim() || !safeToFill) return;
+    if (!suggestion) {
+      setNotice('尚未生成当前客户的回复，请稍候或点击刷新');
+      return;
+    }
+    if (!content.trim()) {
+      setNotice('当前回复内容为空，暂时无法填入');
+      return;
+    }
+    if (currentQuestionIsLink) {
+      setNotice('客户刚发送的是商品链接，请等待其具体问题后再回复');
+      return;
+    }
+    if (mode !== 'assist') {
+      setNotice('请先在底部切换到“辅助”模式，再点击回复');
+      return;
+    }
+    if (!collectorReady) {
+      setNotice(`${platform.name}采集仍在连接，请点击刷新后重试`);
+      return;
+    }
+    if (!safeToFill) {
+      setNotice('当前客户或会话刚刚发生变化，已阻止填入旧回复');
+      return;
+    }
     setWorking(true);
     setNotice('');
     try {
@@ -260,6 +379,7 @@ function CompanionSurfaceContent() {
       contextQuery.refetch(),
       healthQuery.refetch(),
       suggestionsQuery.refetch(),
+      timelineQuery.refetch(),
     ]);
     setNotice(`已重新读取当前${platform.name}会话`);
   };
@@ -321,7 +441,7 @@ function CompanionSurfaceContent() {
         minH="58px"
         px={3}
         align="center"
-        bg="#111C2E"
+        bg="#11A8B8"
         color="white"
         gap={2}
         flexShrink={0}
@@ -331,7 +451,7 @@ function CompanionSurfaceContent() {
           w="28px"
           h="28px"
           borderRadius="9px"
-          bg="#5B7CFA"
+          bg="whiteAlpha.250"
           color="white"
           align="center"
           justify="center"
@@ -341,7 +461,19 @@ function CompanionSurfaceContent() {
           YB
         </Flex>
         <Box flex="1" minW={0}>
-          <Text fontSize="12px" fontWeight="800">
+          <Text fontSize="12px" fontWeight="900" noOfLines={1}>
+            {(context?.storeName || context?.storeId || platform.name) +
+              (context?.accountName || context?.accountId
+                ? `:${context?.accountName || context?.accountId}`
+                : '')}
+          </Text>
+          <Text fontSize="10px" fontWeight="700" color="whiteAlpha.800" noOfLines={1}>
+            {context?.contactId || '等待识别客户 ID'}
+          </Text>
+          <Text hidden display="none" fontSize="12px" fontWeight="900" noOfLines={1}>
+            {context?.contactId || `等待识别 ${platform.name} 客户`}
+          </Text>
+          <Text hidden display="none" fontSize="12px" fontWeight="800">
             迎波 · {platform.name}
           </Text>
           <Text fontSize="9px" color="whiteAlpha.600" noOfLines={1}>
@@ -468,7 +600,7 @@ function CompanionSurfaceContent() {
             />
           </Flex>
 
-          <Box bg="white" borderRadius="14px" p={3} border="1px solid #E6EAF0">
+          <Box display="none" bg="white" borderRadius="14px" p={3} border="1px solid #E6EAF0">
             <Flex align="center" gap={2.5}>
               <Flex
                 w="38px"
@@ -498,6 +630,26 @@ function CompanionSurfaceContent() {
             </Flex>
           </Box>
 
+          <Flex
+            bg="#EEF4FF"
+            border="1px solid #D8E5FF"
+            borderRadius="12px"
+            px={3}
+            py={2}
+            align="center"
+            gap={2}
+          >
+            {!stable || !collectorReady ? <Spinner size="xs" color="#4667D9" /> : <Box w="7px" h="7px" borderRadius="full" bg="#36D399" />}
+            <Box minW={0}>
+              <Text fontSize="10px" fontWeight="800" color="#29469B">
+                实时处理状态 · {pipeline}
+              </Text>
+              <Text fontSize="9px" color="#60749A" noOfLines={1}>
+                切换客户会立即中止旧会话生成，只保留当前窗口的回复
+              </Text>
+            </Box>
+          </Flex>
+
           {platformId === 'win_qianniu' && (
             <Box
               as="details"
@@ -512,12 +664,24 @@ function CompanionSurfaceContent() {
                   当前咨询商品
                 </Text>
               </HStack>
-              <Text mt={2} fontSize="11px" color="#667085">
-                {context?.productTitle ||
+              <Flex mt={2} gap={2} align="center">
+                {currentProduct && <Box as="img" src={productPlaceholderImage(currentProduct.name, currentProduct.hue)} w="40px" h="40px" borderRadius="8px" />}
+                <Box minW={0} flex="1">
+                <Text fontSize="11px" color="#667085" noOfLines={2}>
+                {currentProduct?.name || context?.productTitle ||
                   (context?.productId
                     ? `商品 ID ${context.productId}`
                     : '尚未识别商品，将使用店铺知识和聊天上下文')}
-              </Text>
+                </Text>
+                {currentProduct && <Text mt={1} fontSize="9px" color="#81919B">知识库 {currentProduct.qaCount} 条问答 · {currentProduct.shopName}</Text>}
+                </Box>
+              </Flex>
+              {(currentProduct?.platformProductId || context?.productId) && (
+                <Button mt={2} size="xs" leftIcon={<FiExternalLink />} onClick={() => {
+                  const id = currentProduct?.platformProductId || context?.productId;
+                  window.electron.ipcRenderer.sendMessage('open-external', `https://item.taobao.com/item.htm?id=${id}`);
+                }}>查看商品详情</Button>
+              )}
             </Box>
           )}
 
@@ -566,7 +730,93 @@ function CompanionSurfaceContent() {
             </Box>
           )}
 
-          <Box bg="#182230" color="white" borderRadius="14px" p={3}>
+          {Boolean(timelineQuery.data?.data?.length) && (
+            <Box bg="white" borderRadius="12px" p={3} border="1px solid #E6EAF0">
+              <Flex align="center" justify="space-between" mb={2}>
+                <Text fontSize="11px" fontWeight="900">一问一答历史</Text>
+                <Badge>{timelineQuery.data?.data?.length || 0} 条</Badge>
+              </Flex>
+              <Stack spacing={2}>
+                {timelineQuery.data?.data?.slice(-5).map((item) => (
+                  <Box key={item.id} border="1px solid #E8EDF1" borderRadius="9px" overflow="hidden">
+                    <Box px={2} py={1.5} bg="#F7FAFC">
+                      <Flex gap={1.5} align="flex-start">
+                        <Badge colorScheme="blue" borderRadius="4px">问</Badge>
+                        <Text flex="1" fontSize="10px" whiteSpace="pre-wrap">{item.question}</Text>
+                      </Flex>
+                    </Box>
+                    <Box px={2} py={1.5} bg={item.state === 'sent' ? '#F1FFF4' : '#FFFDF5'}>
+                      <Flex gap={1.5} align="flex-start">
+                        <Badge colorScheme="orange" borderRadius="4px">答</Badge>
+                        <Text flex="1" fontSize="10px" whiteSpace="pre-wrap">{item.finalAnswer || item.answer}</Text>
+                      </Flex>
+                      <Text mt={1} fontSize="9px" color="#84949E">
+                        {item.state === 'sent' ? '已发送' : item.state === 'filled' ? '已填入' : '建议回复'}
+                      </Text>
+                    </Box>
+                  </Box>
+                ))}
+              </Stack>
+            </Box>
+          )}
+
+          <Box bg="white" borderRadius="10px" border="1px solid #DCE4EA" overflow="hidden">
+            <Flex px={2.5} py={2} gap={2} align="flex-start" borderBottom="1px solid #E8EDF1">
+              <Badge colorScheme="blue" borderRadius="4px">问</Badge>
+              <Box flex="1" minW={0}>
+                <Text fontSize="12px" fontWeight="700">
+                  {currentQuestionIsLink
+                    ? '客户发送的商品链接'
+                    : suggestion?.incoming_content || '正在识别当前客户的问题…'}
+                </Text>
+                {currentQuestionIsLink && (
+                  <Text mt={1} fontSize="10px" color="#2670C8" noOfLines={1}>
+                    {suggestion?.incoming_content}
+                  </Text>
+                )}
+                <Text mt={1} fontSize="9px" color="#8A9AA5">客户问题 · 当前会话</Text>
+              </Box>
+            </Flex>
+            <Box
+              role="button"
+              tabIndex={0}
+              px={2.5}
+              py={2}
+              cursor={safeToFill && content.trim() ? 'pointer' : 'default'}
+              bg={safeToFill && content.trim() ? '#F1FFF4' : '#FAFCFD'}
+              onClick={() => void fill()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') void fill();
+              }}
+            >
+              <Flex gap={2} align="flex-start">
+                <Badge colorScheme="orange" borderRadius="4px">答</Badge>
+                <Box flex="1" minW={0}>
+                  <Text fontSize="12px" whiteSpace="pre-wrap" color={content ? '#2D4137' : '#84949E'}>
+                    {content || '正在生成对应回复…'}
+                  </Text>
+                  {safeToFill && content.trim() && (
+                    <Text mt={1} fontSize="9px" color="#16803C">点击这条回复，直接填入当前客户输入框</Text>
+                  )}
+                </Box>
+              </Flex>
+            </Box>
+            {notice && (
+              <Text
+                px={2.5}
+                py={1.5}
+                borderTop="1px solid #E8EDF1"
+                bg={notice.startsWith('已填入') ? '#ECFDF3' : '#FFF7ED'}
+                color={notice.startsWith('已填入') ? '#08785D' : '#B54708'}
+                fontSize="10px"
+                fontWeight="700"
+              >
+                {notice}
+              </Text>
+            )}
+          </Box>
+
+          <Box display="none" bg="#182230" color="white" borderRadius="14px" p={3}>
             <HStack mb={2}>
               <FiMessageCircle color="#8FA8FF" />
               <Text fontSize="10px" color="whiteAlpha.700">
@@ -578,7 +828,7 @@ function CompanionSurfaceContent() {
             </Text>
           </Box>
 
-          <Box bg="white" borderRadius="14px" p={3} border="1px solid #E6EAF0">
+          <Box display="none" bg="white" borderRadius="14px" p={3} border="1px solid #E6EAF0">
             <Flex justify="space-between" mb={2}>
               <Text fontSize="11px" fontWeight="900">
                 AI 回复草稿
@@ -593,6 +843,7 @@ function CompanionSurfaceContent() {
             </Flex>
             <Textarea
               value={content}
+              onClick={() => void fill()}
               onChange={(event) => setContent(event.target.value)}
               placeholder="识别到客户问题后，AI 回复会显示在这里"
               minH="120px"
@@ -617,7 +868,7 @@ function CompanionSurfaceContent() {
               </Text>
             )}
             {history.length > 0 && (
-              <Box as="details" mt={3} pt={2} borderTop="1px solid #E6EAF0">
+              <Box as="details" open mt={3} pt={2} borderTop="1px solid #E6EAF0">
                 <Text as="summary" cursor="pointer" fontSize="10px" fontWeight="700" color="gray.500">
                   查看当前客户历史回复（{history.length}）
                 </Text>
@@ -654,7 +905,7 @@ function CompanionSurfaceContent() {
               size="xs"
               bg={mode === value ? '#182230' : 'transparent'}
               color={mode === value ? 'white' : '#667d80'}
-              isDisabled={working || value === 'unattended'}
+              isDisabled={working}
               onClick={() =>
                 void setReplyMode(platformId, value).then(() =>
                   modeQuery.refetch(),
@@ -667,6 +918,7 @@ function CompanionSurfaceContent() {
         </Flex>
         <Button
           w="full"
+          display="none"
           leftIcon={<FiSend />}
           bg="#4667D9"
           color="white"
@@ -677,7 +929,7 @@ function CompanionSurfaceContent() {
           填入当前客户的{platform.name}输入框
         </Button>
         <Text mt={1.5} textAlign="center" fontSize="9px" color="#829396">
-          辅助模式只填入，不会自动发送；会话不匹配时自动禁用
+          自动模式会在识别到当前客户的新问题后直接发送；切换客户时旧草稿会自动丢弃
         </Text>
       </Box>
     </Flex>
