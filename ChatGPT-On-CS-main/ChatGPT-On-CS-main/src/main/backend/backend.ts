@@ -1727,6 +1727,22 @@ class BKServer {
     );
 
     this.app.post(
+      '/api/v1/compat/companion/send-text',
+      asyncHandler(async (req, res) => {
+        const platformId = String(req.body.platformId || 'win_qianniu');
+        if (platformId !== 'win_qianniu') {
+          res.status(400).json({ success: false, message: '当前平台暂不支持商品链接一键发送' });
+          return;
+        }
+        await this.qianniuCompatService.sendCompanionText(
+          String(req.body.content || ''),
+          req.body.contactId ? String(req.body.contactId) : undefined,
+        );
+        res.json({ success: true });
+      }),
+    );
+
+    this.app.post(
       '/api/v1/compat/wechat/suggestions/fill',
       asyncHandler(async (req, res) => {
         try {

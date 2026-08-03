@@ -8,6 +8,7 @@ import {
   FiMenu,
   FiSettings,
   FiShield,
+  FiSidebar,
   FiShoppingBag,
 } from 'react-icons/fi';
 
@@ -258,6 +259,34 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             {isExpanded && (
               <Text fontSize="13px" fontWeight="600">
                 系统设置
+              </Text>
+            )}
+          </Box>
+        </Tooltip>
+        <Tooltip label="切换为左侧聚合接待台" placement="right" isDisabled={isExpanded} hasArrow>
+          <Box
+            as="button"
+            onClick={() =>
+              window.electron.ipcRenderer.sendMessage('main-window-command', {
+                action: 'dock-left',
+              })
+            }
+            display="flex"
+            alignItems="center"
+            gap={3}
+            h="42px"
+            w="full"
+            mt={1}
+            px={isExpanded ? 3 : 0}
+            justifyContent={isExpanded ? 'flex-start' : 'center'}
+            borderRadius="10px"
+            color="whiteAlpha.650"
+            _hover={{ bg: 'whiteAlpha.100', color: 'white' }}
+          >
+            <FiSidebar size={17} />
+            {isExpanded && (
+              <Text fontSize="13px" fontWeight="600">
+                左侧接待台
               </Text>
             )}
           </Box>

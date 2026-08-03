@@ -326,6 +326,19 @@ export class QianniuCompatService {
     return suggestion;
   }
 
+  /** Send a short operator-provided message to the currently verified QianNiu contact. */
+  public async sendCompanionText(content: string, expectedContactId?: string): Promise<void> {
+    const live = this.contextTracker.getSnapshot();
+    const contactId = live?.contactId?.trim();
+    if (!contactId) throw new Error('当前尚未识别千牛客户');
+    if (expectedContactId && expectedContactId.trim() !== contactId) {
+      throw new Error(`客户已切换：目标 ${expectedContactId}，当前 ${contactId}`);
+    }
+    const reply = content.trim().slice(0, 300);
+    if (!reply) throw new Error('发送内容不能为空');
+    await this.sendReply(reply, true, contactId);
+  }
+
   public async updateSuggestionStatus(
     id: number,
     status: ReplySuggestionStatus,

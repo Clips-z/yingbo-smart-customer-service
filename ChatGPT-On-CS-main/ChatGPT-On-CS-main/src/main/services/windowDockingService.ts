@@ -1,12 +1,10 @@
-import { execFile } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 import { BrowserWindow, Rectangle, screen } from 'electron';
-import { promisify } from 'util';
+import readline from 'readline';
 import { runtimePath } from '../backend/services/runtimePaths';
 
-const execFileAsync = promisify(execFile);
-
 export type DockSide = 'left' | 'right';
-export type CompanionPlatformId = 'win_qianniu' | 'win_wechat' | 'win_wecom';
+export type CompanionPlatformId = 'win_qianniu' | 'win_jinmai' | 'win_wechat' | 'win_wecom';
 export type CompanionTargetMode = 'follow' | CompanionPlatformId;
 
 export interface CompanionTargetWindow extends Rectangle {
@@ -28,6 +26,7 @@ export interface CompanionDockState {
 
 const PLATFORM_PRIORITY: CompanionPlatformId[] = [
   'win_qianniu',
+  'win_jinmai',
   'win_wechat',
   'win_wecom',
 ];
@@ -115,16 +114,20 @@ export function calculateDockedBounds(args: {
 }): Rectangle {
   const width = Math.min(args.panelWidth, args.workArea.width);
   const height = Math.min(args.target.height, args.workArea.height);
-  const preferredX =
-    args.side === 'right'
-      ? args.target.x + args.target.width
-      : args.target.x - width;
+  const rightX = args.target.x + args.target.width;
+  const leftX = args.target.x - width;
   const minX = args.workArea.x;
   const maxX = args.workArea.x + args.workArea.width - width;
+  // Preserve the selected side even at a desktop edge. Windows clips the
+  // overflow, keeping the other side free for a second workbench.
+  const preferredX =
+    args.side === 'right'
+      ? rightX
+      : leftX;
   const minY = args.workArea.y;
   const maxY = args.workArea.y + args.workArea.height - height;
   return {
-    x: Math.max(minX, Math.min(preferredX, maxX)),
+    x: preferredX,
     y: Math.max(minY, Math.min(args.target.y, maxY)),
     width,
     height,
@@ -160,26 +163,104 @@ function parseTarget(value: unknown): CompanionTargetWindow | undefined {
   };
 }
 
+type PendingProbe = {
+  afterSequence: number;
+  resolve: (targets: CompanionTargetWindow[]) => void;
+  timer: NodeJS.Timeout;
+};
+
+class CompanionWindowProbe {
+  private process?: ChildProcess;
+
+  private sequence = 0;
+
+  private pending = new Set<PendingProbe>();
+
+  public locate(): Promise<CompanionTargetWindow[]> {
+    if (process.platform !== 'win32') return Promise.resolve([]);
+    this.ensureProcess();
+    const afterSequence = this.sequence;
+    return new Promise<CompanionTargetWindow[]>((resolve) => {
+      const timer = setTimeout(() => {
+        const pending = [...this.pending].find(
+          (item) => item.resolve === resolve,
+        );
+        if (pending) this.pending.delete(pending);
+        resolve([]);
+      }, 2_500);
+      this.pending.add({ afterSequence, resolve, timer });
+    });
+  }
+
+  public stop(): void {
+    this.reset();
+  }
+
+  private ensureProcess(): void {
+    if (this.process && !this.process.killed) return;
+    const script = runtimePath('scripts', 'companion-target-window.ps1');
+    const worker = spawn(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        script,
+        '-Watch',
+        '-IntervalMs',
+        '150',
+      ],
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    this.process = worker;
+    const output = readline.createInterface({ input: worker.stdout! });
+    output.on('line', (line) => this.handleLine(line));
+    worker.on('error', () => this.reset());
+    worker.on('exit', () => {
+      if (this.process === worker) this.reset();
+    });
+  }
+
+  private handleLine(line: string): void {
+    try {
+      const payload = JSON.parse(line) as { targets?: unknown[] } | unknown[];
+      const values = Array.isArray(payload) ? payload : payload.targets;
+      const targets = (values || [])
+        .map(parseTarget)
+        .filter((target): target is CompanionTargetWindow => Boolean(target));
+      this.sequence += 1;
+      for (const pending of [...this.pending]) {
+        if (this.sequence <= pending.afterSequence) continue;
+        clearTimeout(pending.timer);
+        this.pending.delete(pending);
+        pending.resolve(targets);
+      }
+    } catch {
+      // Ignore one malformed helper line and wait for the next snapshot.
+    }
+  }
+
+  private reset(): void {
+    const worker = this.process;
+    this.process = undefined;
+    if (worker && !worker.killed) worker.kill();
+    for (const pending of this.pending) {
+      clearTimeout(pending.timer);
+      pending.resolve([]);
+    }
+    this.pending.clear();
+  }
+}
+
+const companionWindowProbe = new CompanionWindowProbe();
+
 export async function locateCompanionWindows(): Promise<
   CompanionTargetWindow[]
 > {
-  const script = runtimePath('scripts', 'companion-target-window.ps1');
-  try {
-    const { stdout } = await execFileAsync(
-      'powershell.exe',
-      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', script],
-      { windowsHide: true, timeout: 10000, encoding: 'utf8' },
-    );
-    const line = stdout.trim().split(/\r?\n/).pop();
-    if (!line) return [];
-    const payload = JSON.parse(line) as { targets?: unknown[] } | unknown[];
-    const targets = Array.isArray(payload) ? payload : payload.targets;
-    return (targets || [])
-      .map(parseTarget)
-      .filter((target): target is CompanionTargetWindow => Boolean(target));
-  } catch {
-    return [];
-  }
+  // Keep the native probe loaded. Spawning PowerShell and compiling the C# P/
+  // Invoke bridge for each dock tick cost 600–750 ms by itself.
+  return companionWindowProbe.locate();
 }
 
 /** Backward-compatible helper used by older callers and diagnostics. */
@@ -215,8 +296,12 @@ export class WindowDockingService {
     private panel: BrowserWindow,
     initial?: Partial<CompanionDockState>,
     private locateTargets = locateCompanionWindows,
-    private switchDelayMs = 800,
+    // A platform window is already verified as foreground by the native probe.
+    // Keep a short debounce for accidental focus flashes, not the old nearly
+    // one-second wait that made the assistant visibly trail the operator.
+    private switchDelayMs = 180,
     private onStateChange?: (state: CompanionDockState) => void,
+    private expandedWidth = 372,
   ) {
     this.state = normalizeCompanionDockState(initial);
   }
@@ -228,12 +313,15 @@ export class WindowDockingService {
   public start(): void {
     if (this.timer) return;
     void this.sync();
-    this.timer = setInterval(() => void this.sync(), 1000);
+    this.timer = setInterval(() => void this.sync(), 250);
   }
 
   public stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = undefined;
+    // The default locator owns a persistent PowerShell watcher. Do not leave
+    // it behind after the companion window has closed.
+    if (this.locateTargets === locateCompanionWindows) companionWindowProbe.stop();
   }
 
   public setAttached(attached: boolean): void {
@@ -263,7 +351,11 @@ export class WindowDockingService {
     this.state.collapsed = collapsed;
     this.publishState();
     if (this.state.attached) void this.sync();
-    else this.panel.setSize(collapsed ? 56 : 372, this.panel.getSize()[1]);
+    else
+      this.panel.setSize(
+        collapsed ? 56 : this.expandedWidth,
+        this.panel.getSize()[1],
+      );
   }
 
   private commitStableTarget(
@@ -339,7 +431,7 @@ export class WindowDockingService {
     const display = screen.getDisplayMatching(target);
     const bounds = calculateDockedBounds({
       target,
-      panelWidth: this.state.collapsed ? 56 : 372,
+      panelWidth: this.state.collapsed ? 56 : this.expandedWidth,
       side: resolveDockSide(this.state, target.platformId),
       workArea: display.workArea,
     });

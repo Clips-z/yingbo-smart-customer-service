@@ -43,6 +43,7 @@ import {
   getCompanionCollectorHealth,
   getCompanionContext,
   getCompanionTimeline,
+  sendCompanionText,
   getQianniuSuggestions,
   getReplyMode,
   refreshQianniuCompanion,
@@ -127,6 +128,7 @@ function CompanionSurfaceContent() {
   const [content, setContent] = useState('');
   const [working, setWorking] = useState(false);
   const [notice, setNotice] = useState('');
+  const [sendingProductLink, setSendingProductLink] = useState(false);
   const [generation, setGeneration] = useState<ReplyGenerationState>();
   const platformId = dockState.activePlatformId || 'win_qianniu';
   const platform = PLATFORM[platformId];
@@ -164,7 +166,13 @@ function CompanionSurfaceContent() {
 
   const context = contextQuery.data?.data;
   const health = healthQuery.data?.data as
-    | { state?: string; phase?: string; lastScanDurationMs?: number }
+    | {
+        state?: string;
+        phase?: string;
+        lastScanDurationMs?: number;
+        lastError?: string;
+        captureRoute?: { source?: string; state?: string; stale?: boolean; lastError?: string };
+      }
     | undefined;
   const suggestions = useMemo(
     () => suggestionsQuery.data?.data ?? [],
@@ -649,6 +657,20 @@ function CompanionSurfaceContent() {
             </Box>
           </Flex>
 
+          <Box as="details" borderRadius="10px" border="1px solid #E6EAF0" bg="#FAFCFF">
+            <Text as="summary" cursor="pointer" px={3} py={2} fontSize="10px" fontWeight="800" color="#60749A">
+              采集诊断 · {health?.captureRoute?.source || 'ocr'} · {health?.captureRoute?.stale ? '等待新事件' : '最近有事件'}
+            </Text>
+            <Stack px={3} pb={2} spacing={1} fontSize="9px" color="#718096">
+              <Text>采集状态：{health?.state || '未连接'} / {health?.phase || '未知'}</Text>
+              <Text>最近扫描：{health?.lastScanDurationMs ?? '-'} ms</Text>
+              {(health?.lastError || health?.captureRoute?.lastError) && (
+                <Text color="#B54708" noOfLines={2}>原因：{health.lastError || health.captureRoute?.lastError}</Text>
+              )}
+              <Text>当前会话：{context?.storeName || context?.storeId || '-'} · {context?.contactId || '-'}</Text>
+            </Stack>
+          </Box>
+
           {platformId === 'win_qianniu' && (
             <Box
               as="details"
@@ -676,10 +698,34 @@ function CompanionSurfaceContent() {
                 </Box>
               </Flex>
               {(currentProduct?.platformProductId || context?.productId) && (
-                <Button mt={2} size="xs" leftIcon={<FiExternalLink />} onClick={() => {
+                <Flex mt={2} gap={2}>
+                <Button size="xs" leftIcon={<FiExternalLink />} onClick={() => {
                   const id = currentProduct?.platformProductId || context?.productId;
                   window.electron.ipcRenderer.sendMessage('open-external', `https://item.taobao.com/item.htm?id=${id}`);
-                }}>查看商品详情</Button>
+                }}>查看详情</Button>
+                <Button
+                  size="xs"
+                  colorScheme="blue"
+                  isLoading={sendingProductLink}
+                  onClick={async () => {
+                    const id = currentProduct?.platformProductId || context?.productId;
+                    if (!id || !context?.contactId) return;
+                    setSendingProductLink(true);
+                    try {
+                      await sendCompanionText(
+                        platformId,
+                        `商品链接：https://item.taobao.com/item.htm?id=${id}`,
+                        context.contactId,
+                      );
+                      setNotice('商品链接已发送给当前客户');
+                    } catch (error) {
+                      setNotice(error instanceof Error ? error.message : String(error));
+                    } finally {
+                      setSendingProductLink(false);
+                    }
+                  }}
+                >一键发送链接</Button>
+                </Flex>
               )}
             </Box>
           )}

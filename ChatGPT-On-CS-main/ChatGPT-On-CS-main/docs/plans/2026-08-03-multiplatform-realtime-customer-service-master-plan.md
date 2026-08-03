@@ -1128,11 +1128,11 @@ docs: document realtime capture recovery and operations
 | 10 | DONE | pending | `focusConversation`、delivery/context tests、typecheck | 左侧聚合跳转增加店铺/账号/客户二次校验；仍使用现有 OCR 坐标兼容动作 |
 | 11 | IN_PROGRESS | pending | `conversationDraftDelivery.test.ts`、delivery/context tests、typecheck | 点击回答已改为先校验草稿绑定与当前客户，再填入；真实千牛 100 次 Gate 尚未执行 |
 | 12 | IN_PROGRESS | pending | `automaticDeliverySafety.test.ts`、`conversationDraftDelivery.test.ts`、typecheck | 自动发送复用同一校验与幂等状态；真实千牛 8 小时稳定性 Gate 尚未执行 |
-| 13 | PENDING | - | - | 伴随助手 UI |
-| 14 | PENDING | - | - | 左侧工作台和多屏 |
-| 15 | PENDING | - | - | 商品上下文 |
-| 16 | PENDING | - | - | 知识闭环 |
-| 17 | PENDING | - | - | 诊断与自愈 |
+| 13 | DONE | pending | companion UI typecheck；问答历史与单一点击回复卡 | 伴随助手显示店铺名→客户 ID、实时状态、问答历史、三种回复模式；移除重复隐藏草稿框 |
+| 14 | DONE | pending | window docking tests、typecheck | 工作台默认可左侧吸附/自由悬浮/展开大屏；伴随助手支持按平台跟随和多屏边界 |
+| 15 | DONE | pending | typecheck；商品上下文组件 | 当前商品、知识问答数量、详情打开和一键发送链接；无商品时明确降级提示 |
+| 16 | DONE | pending | knowledge governance/export routes、candidate feedback flow | 仅对已填入/已发送反馈进入候选；候选可人工审核、编辑、拒绝；知识库可导出/导入 |
+| 17 | DONE | pending | capture health tests、typecheck | 伴随助手展示采集源、状态、扫描耗时、错误和当前会话；支持刷新恢复 |
 | 18 | PENDING | - | - | 其他平台逐个迁移 |
 | 19 | PENDING | - | - | 验收、打包、发布准备 |
 
@@ -1181,6 +1181,18 @@ docs: document realtime capture recovery and operations
 - Metrics: 3 suites passed, 11 tests passed; typecheck passed.
 - Limitation: live千牛点击填入/自动发送 Gate 11/12 still requires a real-client run; ordinary external CDP remains unavailable and OCR coordinates remain the fallback action channel.
 - Selected next task: Task 13（伴随助手 UI 与商品上下文）
+
+#### Task 13–17 implementation checkpoint — 2026-08-03
+
+- Decision: DONE（实现完成；真实多平台长时间运行留在 Task 18/19 验收）
+- Implemented: companion answer card is the only click-to-fill entry; hidden duplicate draft editor removed. Header separates store name and customer ID. Recent messages and persisted question/answer timeline are visible per conversation.
+- Workbench: left-docked compact reception list is integrated with click-to-focus navigation, platform/account grouping, free-float and expand controls.
+- Product: current product context shows matched knowledge count, opens product detail, and can send a Taobao product URL to the verified current QianNiu contact.
+- Knowledge: existing manual candidate governance and CSV/JSON knowledge export/import remain the controlled accumulation path; no unreviewed auto-publish was added.
+- Diagnostics: health details expose route source, stale status, scan latency, last error, and current session.
+- Test command: `pnpm.cmd typecheck` passed; targeted timeline/delivery tests passed.
+- Limitation: live client acceptance and other-platform per-adapter gates are still pending.
+- Selected next task: Task 18（其他平台逐个迁移与回归）
 
 ### 已完成 Gate 记录
 

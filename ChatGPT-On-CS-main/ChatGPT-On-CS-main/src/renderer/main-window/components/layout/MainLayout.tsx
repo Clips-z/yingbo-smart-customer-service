@@ -24,6 +24,10 @@ import KnowledgeCandidates from '../KnowledgeCandidates';
 import DashboardQualityOverview from '../DashboardQualityOverview';
 import KnowledgeGovernance from '../KnowledgeGovernance';
 import { ReplyFocus } from '../ReplyWorkbench/replyPriority';
+import CompactReceptionWorkbench from '../CompactReceptionWorkbench';
+
+type MainWindowMode = 'full' | 'docked' | 'floating';
+type MainWindowState = { mode?: MainWindowMode };
 
 const DashboardContent = () => (
   <VStack spacing={5} align="stretch">
@@ -143,6 +147,18 @@ const MainLayout = () => {
   const [replyFocus, setReplyFocus] = useState<ReplyFocus>('all');
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(true);
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [windowMode, setWindowMode] = useState<MainWindowMode>(() => {
+    try {
+      const state = window.electron.ipcRenderer.get(
+        'get-main-window-state',
+      ) as MainWindowState;
+      return ['docked', 'floating'].includes(state?.mode || '')
+        ? (state.mode as MainWindowMode)
+        : 'full';
+    } catch {
+      return 'full';
+    }
+  });
 
   React.useEffect(() => {
     const updateOnlineState = () => setIsOnline(navigator.onLine);
@@ -153,6 +169,19 @@ const MainLayout = () => {
       window.removeEventListener('offline', updateOnlineState);
     };
   }, []);
+
+  React.useEffect(
+    () =>
+      window.electron.ipcRenderer.on('main-window-state', (value) => {
+        const state = value as MainWindowState;
+        setWindowMode(
+          ['docked', 'floating'].includes(state?.mode || '')
+            ? (state.mode as MainWindowMode)
+            : 'full',
+        );
+      }),
+    [],
+  );
 
   React.useEffect(() => {
     (window as any).__navigateTo = (
@@ -210,6 +239,10 @@ const MainLayout = () => {
         return <ProductQALibrary />;
     }
   })();
+
+  if (windowMode !== 'full') {
+    return <CompactReceptionWorkbench windowMode={windowMode} />;
+  }
 
   return (
     <Flex h="100vh" bg="ui.canvas" overflow="hidden">

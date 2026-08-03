@@ -575,6 +575,18 @@ export async function fillCompanionSuggestion(
   return fillQianniuSuggestion(id, content);
 }
 
+export async function sendCompanionText(
+  platformId: string,
+  content: string,
+  contactId?: string,
+) {
+  return POST<{ success: boolean }>('/api/v1/compat/companion/send-text', {
+    platformId,
+    content,
+    contactId,
+  });
+}
+
 export async function updateQianniuSuggestionStatus(
   id: number,
   status: ReplySuggestionStatus,

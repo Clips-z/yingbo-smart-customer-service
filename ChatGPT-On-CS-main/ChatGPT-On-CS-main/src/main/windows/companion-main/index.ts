@@ -143,7 +143,7 @@ export function handleCompanionCommand(command: CompanionCommand): void {
   }
   if (command.action === 'target-mode') {
     if (
-      ['follow', 'win_qianniu', 'win_wechat', 'win_wecom'].includes(
+      ['follow', 'win_qianniu', 'win_jinmai', 'win_wechat', 'win_wecom'].includes(
         command.targetMode,
       )
     ) {
@@ -158,6 +158,10 @@ export function setupCompanionIpc(): void {
   if (ipcRegistered) return;
   ipcRegistered = true;
   ipcMain.on('open-companion-window', () => createCompanionWindow());
+  ipcMain.on('open-external', (_event, value) => {
+    const url = String(value || '');
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  });
   ipcMain.on('companion-command', (_event, command: CompanionCommand) => {
     handleCompanionCommand(command);
   });
