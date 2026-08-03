@@ -63,7 +63,13 @@ import {
 } from './companionSelection';
 import { fetchProductQAList, productPlaceholderImage } from '../common/services/knowledge/productQA';
 
-type PlatformId = 'win_qianniu' | 'win_jinmai' | 'win_wechat' | 'win_wecom';
+type PlatformId =
+  | 'win_qianniu'
+  | 'win_jinmai'
+  | 'win_wechat'
+  | 'win_wecom'
+  | 'win_pdd'
+  | 'win_douyin';
 type TargetMode = 'follow' | PlatformId;
 type DockState = {
   attached?: boolean;
@@ -89,6 +95,8 @@ const PLATFORM: Record<PlatformId, { name: string; short: string }> = {
   win_jinmai: { name: '京麦', short: '京' },
   win_wechat: { name: '微信', short: '微' },
   win_wecom: { name: '企业微信', short: '企' },
+  win_pdd: { name: '拼多多', short: '拼' },
+  win_douyin: { name: '抖店', short: '抖' },
 };
 
 const queryClient = new QueryClient({
@@ -203,6 +211,9 @@ function CompanionSurfaceContent() {
     async (target: ReplySuggestion, value: string) => {
       const trimmed = value.trim();
       if (!trimmed || target.status === 'sent') return;
+      // PDD/Douyin sidecars expose fill/focus but do not expose the Qianniu
+      // draft persistence endpoint. Avoid a noisy 404 retry loop for them.
+      if (['win_pdd', 'win_douyin'].includes(target.platform_id)) return;
       if (
         savedRef.current.id === target.id &&
         savedRef.current.content === trimmed
@@ -273,6 +284,14 @@ function CompanionSurfaceContent() {
           'jinmai_suggestion_created',
           'jinmai_suggestion_updated',
           'jinmai_collector_health_changed',
+          'pdd_reply_mode_changed',
+          'pdd_suggestion_created',
+          'pdd_suggestion_updated',
+          'pdd_collector_health_changed',
+          'douyin_reply_mode_changed',
+          'douyin_suggestion_created',
+          'douyin_suggestion_updated',
+          'douyin_collector_health_changed',
           'wechat_reply_mode_changed',
           'wecom_reply_mode_changed',
           'wechat_collector_health_changed',
@@ -311,7 +330,7 @@ function CompanionSurfaceContent() {
   const safeToFill =
     mode === 'assist' &&
     !currentQuestionIsLink &&
-    (platformId === 'win_jinmai'
+    (['win_jinmai', 'win_pdd', 'win_douyin'].includes(platformId)
       ? Boolean(suggestion) && collectorReady
       : stable && collectorReady && matchesLiveContext);
   const attached = dockState.attached !== false;
@@ -589,8 +608,11 @@ function CompanionSurfaceContent() {
                 {attached ? '自动跟随当前平台窗口' : '自动识别当前平台（悬浮）'}
               </option>
               <option value="win_qianniu">固定跟随千牛</option>
+              <option value="win_jinmai">固定跟随京麦</option>
               <option value="win_wechat">固定跟随微信</option>
               <option value="win_wecom">固定跟随企业微信</option>
+              <option value="win_pdd">固定跟随拼多多</option>
+              <option value="win_douyin">固定跟随抖店</option>
             </Select>
             <Badge
               bg={collectorReady ? '#ECFDF3' : '#FFF7ED'}

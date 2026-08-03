@@ -1212,6 +1212,13 @@ docs: document realtime capture recovery and operations
 - Packaging fix: artifact verification now accepts the configured `artifactName` and automatically retries native Python DLL imports through a temporary Windows SUBST drive when the checkout path exceeds DLL loader limits.
 - Remaining manual gate: install and exercise the EXE against logged-in Taobao/JD clients; the automated release artifact and source validation are complete.
 
+#### Post-release platform routing fix — 2026-08-03
+
+- Fixed: the companion target selector now exposes 京麦、拼多多、抖店; the docking probe recognizes their process names and window titles.
+- Fixed: PDD/Douyin health and reply-mode requests route to their own sidecars; clicking a reply no longer falls through to the Qianniu fill endpoint.
+- Fixed: PDD/Douyin skip the unsupported Qianniu draft autosave endpoint, preventing repeated 404 retries while preserving direct sidecar fill.
+- Evidence: `pnpm.cmd typecheck`; 3 targeted suites / 20 tests passed; direct Windows window probe returned active Qianniu, WeChat and WeCom targets.
+
 ### 已完成 Gate 记录
 
 #### Gate 0 — 2026-08-03

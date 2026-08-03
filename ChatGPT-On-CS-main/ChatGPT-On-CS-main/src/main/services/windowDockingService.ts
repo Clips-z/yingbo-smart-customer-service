@@ -4,7 +4,13 @@ import readline from 'readline';
 import { runtimePath } from '../backend/services/runtimePaths';
 
 export type DockSide = 'left' | 'right';
-export type CompanionPlatformId = 'win_qianniu' | 'win_jinmai' | 'win_wechat' | 'win_wecom';
+export type CompanionPlatformId =
+  | 'win_qianniu'
+  | 'win_jinmai'
+  | 'win_wechat'
+  | 'win_wecom'
+  | 'win_pdd'
+  | 'win_douyin';
 export type CompanionTargetMode = 'follow' | CompanionPlatformId;
 
 export interface CompanionTargetWindow extends Rectangle {
@@ -29,6 +35,8 @@ const PLATFORM_PRIORITY: CompanionPlatformId[] = [
   'win_jinmai',
   'win_wechat',
   'win_wecom',
+  'win_pdd',
+  'win_douyin',
 ];
 
 function isDockSide(value: unknown): value is DockSide {

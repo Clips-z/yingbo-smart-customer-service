@@ -40,7 +40,7 @@ describe('calculateDockedBounds', () => {
         side: 'right',
         workArea: { x: -1920, y: 0, width: 1920, height: 1040 },
       }),
-    ).toEqual({ x: -372, y: 0, width: 372, height: 1040 });
+    ).toEqual({ x: -100, y: 0, width: 372, height: 1040 });
   });
 
   test('supports a collapsed rail', () => {
@@ -52,6 +52,17 @@ describe('calculateDockedBounds', () => {
         workArea,
       }).width,
     ).toBe(56);
+  });
+
+  test('keeps the selected side and lets the desktop clip an edge overflow', () => {
+    expect(
+      calculateDockedBounds({
+        target: { x: 900, y: 50, width: 1000, height: 800 },
+        panelWidth: 372,
+        side: 'right',
+        workArea,
+      }),
+    ).toMatchObject({ x: 1900, y: 50 });
   });
 });
 
@@ -88,6 +99,17 @@ describe('chooseCompanionTarget', () => {
         'win_wechat',
       )?.platformId,
     ).toBe('win_wecom');
+  });
+
+  test('supports locking to JD, Pinduoduo, or Douyin targets', () => {
+    const targets = [
+      target('win_jinmai'),
+      target('win_pdd'),
+      target('win_douyin'),
+    ];
+    expect(chooseCompanionTarget(targets, 'win_jinmai')?.platformId).toBe('win_jinmai');
+    expect(chooseCompanionTarget(targets, 'win_pdd')?.platformId).toBe('win_pdd');
+    expect(chooseCompanionTarget(targets, 'win_douyin')?.platformId).toBe('win_douyin');
   });
 
   test('keeps the previous platform while a non-platform window is foreground', () => {
@@ -170,5 +192,29 @@ describe('WindowDockingService floating mode', () => {
     expect(service.getState().targetFound).toBe(true);
     expect(service.getState().activePlatformId).toBe('win_wechat');
     expect(panel.setBounds).not.toHaveBeenCalled();
+  });
+
+  test('uses the configured compact width when expanding a workbench', () => {
+    const panel = {
+      isDestroyed: () => false,
+      setSize: jest.fn(),
+      getSize: () => [56, 760],
+    };
+    const service = new WindowDockingService(
+      panel as never,
+      {
+        attached: false,
+        side: 'left',
+        targetMode: 'follow',
+      },
+      jest.fn(),
+      0,
+      undefined,
+      320,
+    );
+
+    service.setCollapsed(false);
+
+    expect(panel.setSize).toHaveBeenCalledWith(320, 760);
   });
 });

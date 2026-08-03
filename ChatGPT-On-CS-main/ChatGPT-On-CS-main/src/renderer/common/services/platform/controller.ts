@@ -370,9 +370,13 @@ export async function getReplyMode(platformId: string) {
       ? 'wechat'
       : platformId === 'win_wecom'
         ? 'wecom'
-        : platformId === 'win_jinmai'
-          ? 'jinmai'
-        : 'qianniu';
+      : platformId === 'win_jinmai'
+        ? 'jinmai'
+        : platformId === 'win_pdd'
+          ? 'pdd'
+          : platformId === 'win_douyin'
+            ? 'douyin'
+            : 'qianniu';
   return GET<{ data: { mode: QianniuReplyMode } }>(
     `/api/v1/compat/${platform}/mode`,
   );
@@ -384,9 +388,13 @@ export async function setReplyMode(platformId: string, mode: QianniuReplyMode) {
       ? 'wechat'
       : platformId === 'win_wecom'
         ? 'wecom'
-        : platformId === 'win_jinmai'
-          ? 'jinmai'
-        : 'qianniu';
+      : platformId === 'win_jinmai'
+        ? 'jinmai'
+        : platformId === 'win_pdd'
+          ? 'pdd'
+          : platformId === 'win_douyin'
+            ? 'douyin'
+            : 'qianniu';
   return POST<{ data: { mode: QianniuReplyMode } }>(
     `/api/v1/compat/${platform}/mode`,
     { mode },
@@ -453,6 +461,8 @@ export async function getCompanionCollectorHealth(platformId: string) {
   if (platformId === 'win_wechat') return getWechatCollectorHealth();
   if (platformId === 'win_wecom') return getWecomCollectorHealth();
   if (platformId === 'win_jinmai') return getJinmaiCollectorHealth();
+  if (platformId === 'win_pdd') return getPddCollectorHealth();
+  if (platformId === 'win_douyin') return getDouyinCollectorHealth();
   return getQianniuCollectorHealth();
 }
 
@@ -562,6 +572,20 @@ export async function fillWecomSuggestion(id: number, content: string) {
   );
 }
 
+export async function fillPddSuggestion(id: number, content: string) {
+  return POST<{ data: ReplySuggestion }>(
+    '/api/v1/compat/pdd/suggestions/fill',
+    { id, content },
+  );
+}
+
+export async function fillDouyinSuggestion(id: number, content: string) {
+  return POST<{ data: ReplySuggestion }>(
+    '/api/v1/compat/douyin/suggestions/fill',
+    { id, content },
+  );
+}
+
 export async function fillCompanionSuggestion(
   platformId: string,
   id: number,
@@ -572,6 +596,8 @@ export async function fillCompanionSuggestion(
   if (platformId === 'win_jinmai') {
     return POST<{ data: ReplySuggestion }>('/api/v1/compat/jinmai/suggestions/fill', { id, content });
   }
+  if (platformId === 'win_pdd') return fillPddSuggestion(id, content);
+  if (platformId === 'win_douyin') return fillDouyinSuggestion(id, content);
   return fillQianniuSuggestion(id, content);
 }
 

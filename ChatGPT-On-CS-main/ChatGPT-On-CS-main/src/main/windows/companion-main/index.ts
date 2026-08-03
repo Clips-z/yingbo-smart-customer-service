@@ -143,7 +143,15 @@ export function handleCompanionCommand(command: CompanionCommand): void {
   }
   if (command.action === 'target-mode') {
     if (
-      ['follow', 'win_qianniu', 'win_jinmai', 'win_wechat', 'win_wecom'].includes(
+      [
+        'follow',
+        'win_qianniu',
+        'win_jinmai',
+        'win_wechat',
+        'win_wecom',
+        'win_pdd',
+        'win_douyin',
+      ].includes(
         command.targetMode,
       )
     ) {

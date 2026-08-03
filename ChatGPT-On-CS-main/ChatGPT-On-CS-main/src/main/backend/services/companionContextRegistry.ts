@@ -12,7 +12,10 @@ import {
 export type SupportedCompanionPlatform =
   | 'win_qianniu'
   | 'win_wechat'
-  | 'win_wecom';
+  | 'win_wecom'
+  | 'win_jinmai'
+  | 'win_pdd'
+  | 'win_douyin';
 
 export class CompanionContextRegistry {
   private trackers = new Map<string, QianniuContextTracker>();
