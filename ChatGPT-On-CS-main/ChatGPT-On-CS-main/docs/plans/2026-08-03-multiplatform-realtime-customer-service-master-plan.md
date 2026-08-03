@@ -1134,7 +1134,7 @@ docs: document realtime capture recovery and operations
 | 16 | DONE | pending | knowledge governance/export routes、candidate feedback flow | 仅对已填入/已发送反馈进入候选；候选可人工审核、编辑、拒绝；知识库可导出/导入 |
 | 17 | DONE | pending | capture health tests、typecheck | 伴随助手展示采集源、状态、扫描耗时、错误和当前会话；支持刷新恢复 |
 | 18 | FALLBACK_DONE | pending | `platformHealth.test.ts`、全量 58 suites/218 tests、typecheck/build | 京麦、微信、企微、拼多多、抖音继续使用各自 sidecar/UIA/OCR 适配；未因千牛 CDP 失败强行共用私有协议 |
-| 19 | IN_PROGRESS | pending | 58 suites/218 tests、typecheck、build、git diff check passed；package blocked | 应用已生成 `release/build/win-unpacked`；NSIS/portable 安装包因本机缺少 `makensis.exe` 无法生成 |
+| 19 | DONE | pending | 58 suites/218 tests、typecheck、build、package、check:package、git diff check passed | 已生成并校验 `release/build/yingbo-smart-customer-service_v2.5.0_windows_x64_setup.exe`；运行时依赖检查通过 |
 
 #### Gate 4 — 2026-08-03
 
@@ -1204,11 +1204,12 @@ docs: document realtime capture recovery and operations
 
 #### Gate 19 packaging checkpoint — 2026-08-03
 
-- Decision: IN_PROGRESS / PACKAGE_BLOCKED
-- Passed: `pnpm.cmd test -- --runInBand` (58 suites, 218 tests), `pnpm.cmd typecheck`, `pnpm.cmd build`, and `git diff --check`.
-- Local artifact: Electron unpacked application exists at `release/build/win-unpacked`.
-- Blocker: `electron-builder` cannot create NSIS or portable EXE because `C:\Users\Administrator\AppData\Local\electron-builder\Cache\nsis\nsis-3.0.4.1\Bin\makensis.exe` is absent (`spawnSync ... ENOENT`). This is a packaging-tool cache/environment issue, not an application build failure.
-- Next safe action: restore/download the electron-builder NSIS cache or run packaging on a machine with NSIS available, then rerun `pnpm.cmd package` and `pnpm.cmd check:package`.
+- Decision: PASS
+- Passed: `pnpm.cmd test -- --runInBand` (58 suites, 218 tests), `pnpm.cmd typecheck`, `pnpm.cmd build`, `pnpm.cmd package`, `pnpm.cmd check:package`, and `git diff --check`.
+- Local artifact: `release/build/yingbo-smart-customer-service_v2.5.0_windows_x64_setup.exe` (330,510,054 bytes) and its blockmap; unpacked application is also present at `release/build/win-unpacked`.
+- Runtime evidence: packaged Python runtime check passed for RapidOCR, WeChat and RAG dependencies using the short-path fallback verifier.
+- Packaging fix: artifact verification now accepts the configured `artifactName` and automatically retries native Python DLL imports through a temporary Windows SUBST drive when the checkout path exceeds DLL loader limits.
+- Remaining manual gate: install and exercise the EXE against logged-in Taobao/JD clients; the automated release artifact and source validation are complete.
 
 ### 已完成 Gate 记录
 
