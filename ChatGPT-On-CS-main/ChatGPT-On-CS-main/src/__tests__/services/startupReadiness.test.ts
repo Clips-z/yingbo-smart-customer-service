@@ -24,17 +24,30 @@ describe('startup readiness', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1);
   });
 
-  test('uses the synchronous ready state without registering a listener', () => {
+  test('uses the synchronous ready state and keeps monitoring later failures', () => {
+    let healthListener: ((health: unknown) => void) | undefined;
     const onReady = jest.fn();
+    const onUnavailable = jest.fn();
     const ipc = {
       get: jest.fn(() => true),
-      on: jest.fn(),
+      on: jest.fn((_channel: string, listener: (health: unknown) => void) => {
+        healthListener = listener;
+        return jest.fn();
+      }),
     };
 
-    const cleanup = subscribeToStartupReadiness(ipc, onReady);
+    const cleanup = subscribeToStartupReadiness(
+      ipc,
+      onReady,
+      onUnavailable,
+    );
 
     expect(onReady).toHaveBeenCalledTimes(1);
-    expect(ipc.on).not.toHaveBeenCalled();
+    expect(ipc.on).toHaveBeenCalledTimes(1);
+    healthListener?.(false);
+    expect(onUnavailable).toHaveBeenCalledTimes(1);
+    healthListener?.(true);
+    expect(onReady).toHaveBeenCalledTimes(2);
     expect(cleanup).toEqual(expect.any(Function));
   });
 
@@ -58,4 +71,3 @@ describe('startup readiness', () => {
     },
   );
 });
-

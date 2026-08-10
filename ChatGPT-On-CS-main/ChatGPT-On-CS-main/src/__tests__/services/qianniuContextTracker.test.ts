@@ -162,4 +162,63 @@ describe('QianniuContextTracker', () => {
     });
     expect(tracker.keys()).toBeUndefined();
   });
+
+  test('marks the previous draft unavailable as soon as a new chat fingerprint appears', () => {
+    const tracker = new QianniuContextTracker(1);
+    tracker.observe(observation());
+    const switching = tracker.markSwitching(
+      'chat-b',
+      '2026-07-16T10:00:01.000Z',
+    );
+    expect(switching).toMatchObject({
+      chatFingerprint: 'chat-b',
+      state: 'switching',
+    });
+    expect(tracker.keys()).toBeUndefined();
+  });
+
+  test('publishes official buyer identity immediately without leaking previous chat data', () => {
+    const tracker = new QianniuContextTracker(2);
+    tracker.observe(
+      observation({
+        recentMessages: [{ direction: 'incoming', content: 'A 的问题' }],
+      }),
+    );
+    tracker.observe(
+      observation({
+        recentMessages: [{ direction: 'incoming', content: 'A 的问题' }],
+        capturedAt: '2026-07-16T10:00:01.000Z',
+      }),
+    );
+
+    const switched = tracker.markOfficialContactSwitch(
+      'buyer-b',
+      'taobao:secure-b',
+      '2026-07-16T10:00:02.000Z',
+    );
+
+    expect(switched).toMatchObject({
+      contactId: 'buyer-b',
+      chatFingerprint: 'official:taobao:secure-b',
+      state: 'switching',
+      recentMessages: [],
+      productId: null,
+      incomingMessageFingerprint: null,
+    });
+    expect(tracker.keys()).toBeUndefined();
+  });
+
+  test('does not disturb a stable context when the official event repeats the same buyer', () => {
+    const tracker = new QianniuContextTracker(1);
+    const stable = tracker.observe(observation()).snapshot;
+
+    const repeated = tracker.markOfficialContactSwitch(
+      'buyer-a',
+      'taobao:secure-a',
+      '2026-07-16T10:00:01.000Z',
+    );
+
+    expect(repeated).toEqual(stable);
+    expect(tracker.keys()).toBeDefined();
+  });
 });

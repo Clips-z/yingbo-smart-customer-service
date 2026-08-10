@@ -58,7 +58,7 @@ export function toTimelineEntry(suggestion: SuggestionShape): ConversationTimeli
 }
 
 export class ConversationTimelineService {
-  public async listForContext(context: CompanionContextSnapshot, limit = 50): Promise<ConversationTimelineEntry[]> {
+  public async listForContext(context: CompanionContextSnapshot, limit = 5): Promise<ConversationTimelineEntry[]> {
     const conversationKey = buildConversationKey(context);
     const where = {
       [Op.or]: [

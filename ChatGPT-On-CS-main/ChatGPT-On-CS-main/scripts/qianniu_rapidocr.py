@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import logging
+import ctypes
 from contextlib import redirect_stdout
 from pathlib import Path
 
@@ -12,7 +13,20 @@ logging.basicConfig(level=logging.WARNING, format="[%(levelname)s] %(message)s")
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-RUNTIME_DIR = PROJECT_ROOT / "tools" / "rapidocr-py311"
+
+
+def _short_windows_path(path: Path) -> Path:
+    """Use the 8.3 path for native wheels when the checkout path is deep."""
+    if os.name != "nt":
+        return path
+    buffer = ctypes.create_unicode_buffer(32768)
+    length = ctypes.windll.kernel32.GetShortPathNameW(
+        str(path), buffer, len(buffer)
+    )
+    return Path(buffer.value) if length else path
+
+
+RUNTIME_DIR = _short_windows_path(PROJECT_ROOT / "tools" / "rapidocr-py311")
 sys.path.insert(0, str(RUNTIME_DIR))
 os.environ.setdefault("PYTHONIOECODING", "utf-8")
 
@@ -37,14 +51,17 @@ class LayoutConfig:
     """千牛工作台布局比例配置（相对于完整窗口截图）"""
 
     # 截图裁剪区域（识别区域）
-    # Keep store/account tabs and the right-side product panel in the OCR
-    # evidence. Candidate selection below still limits messages to the chat
-    # column, so scanning the full window does not turn panel text into replies.
+    # The full reception window contains a dense product/order column that is
+    # irrelevant to choosing the current buyer and dominates OCR time. Keep
+    # the conversation list, active-account tabs and chat column in the fast
+    # path; product enrichment is optional and must never delay a reply.
+    # Include the full tab strip so the active shop can be resolved. The old
+    # crop clipped the leftmost tab and made the rightmost shop look active.
     CROP_LEFT = 0.0
     CROP_TOP = 0.0
-    CROP_RIGHT = 1.0
-    CROP_BOTTOM = 1.0
-    OCR_SCALE = 0.75
+    CROP_RIGHT = 0.78
+    CROP_BOTTOM = 0.82
+    OCR_SCALE = 0.55
 
     # 气泡蓝色偏移检测区域
     BUBBLE_X_START = 0.223     # 原 305
@@ -61,12 +78,12 @@ class LayoutConfig:
     OUTGOING_X_END = 0.614     # 原 838
 
     # 发送者名称区域
-    SENDER_X_MIN = 0.234       # 原 320
-    SENDER_X_MAX = 0.454       # 原 620
+    SENDER_X_MIN = 0.32
+    SENDER_X_MAX = 0.62
     # Buyer names stay near the header while the window height changes with
     # DPI and client chrome. The old lower bound excluded valid names.
-    SENDER_Y_MIN = 0.130
-    SENDER_Y_MAX = 0.241       # 原 185
+    SENDER_Y_MIN = 0.18
+    SENDER_Y_MAX = 0.28
 
     # 候选消息气泡区域
     CANDIDATE_X_MIN = 0.249    # 原 340
@@ -156,17 +173,27 @@ def extract_candidate(
     sender_y_min = int(height * cfg.SENDER_Y_MIN)
     sender_y_max = int(height * cfg.SENDER_Y_MAX)
 
-    sender_line = next(
-        (
-            line
-            for line in lines
-            if sender_x_min <= line["x"] <= sender_x_max
-            and sender_y_min <= line["y"] <= sender_y_max
-            and re.search(r"(?:[A-Za-z0-9_]{5,}|[\u4e00-\u9fff]{2,})", line["text"])
-            and len(re.sub(r"\s+", "", line["text"])) >= 2
-            and not re.match(r"^20\d\d", line["text"])
+    sender_candidates = [
+        line
+        for line in lines
+        if sender_x_min <= line["x"] <= sender_x_max
+        and sender_y_min <= line["y"] <= sender_y_max
+        and re.search(r"(?:[A-Za-z0-9_]{5,}|[\u4e00-\u9fff]{2,})", line["text"])
+        and len(re.sub(r"\s+", "", line["text"])) >= 2
+        and not re.match(r"^20\d\d", line["text"])
+        and not re.search(
+            r"今日接待|未下单|未付款|已付款|查看摘要|联系人|聊天记录",
+            line["text"],
+        )
+    ]
+    sender_line = max(
+        sender_candidates,
+        key=lambda line: (
+            1 if re.search(r"tb[A-Za-z0-9]{5,}", line["text"], re.I) else 0,
+            float(line["score"]),
+            -abs(line["y"] - int(height * 0.22)),
         ),
-        None,
+        default=None,
     )
 
     cand_x_min = int(width * 0.240)
@@ -212,7 +239,7 @@ def extract_candidate(
             continue
         if "买家30天内" in text or "才能给买家发消息" in text:
             continue
-        if "转交给" in text or "商品详情页" in text or re.search(r"[¥￥]\s*\d", text):
+        if re.search(r"转交给|指派给|智能质检|商品详情页", text) or re.search(r"[¥￥]\s*\d", text):
             continue
         if re.match(r"^\s*(月销|销量|库存)\s*\d", text):
             continue
@@ -391,7 +418,7 @@ class QianniuRapidOcr:
                     if peer is not line
                 )
                 or re.match(r"^(已读|未读|月销|销量|库存)", text)
-                or re.search(r"https?://|买家30天内|才能给买家发消息|转交给|商品详情页|[¥￥]\s*\d", text)
+                or re.search(r"https?://|买家30天内|才能给买家发消息|转交给|指派给|智能质检|商品详情页|[¥￥]\s*\d", text)
                 or any(abs(line["y"] - y) <= 85 for y in card_y)
             ):
                 continue

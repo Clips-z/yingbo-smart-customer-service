@@ -5,6 +5,8 @@ import {
   BrowserWindow,
   app,
   Notification,
+  Rectangle,
+  screen,
 } from 'electron';
 import Store from 'electron-store';
 import os from 'os';
@@ -14,8 +16,21 @@ import { getBrowserVersionFromOS } from './system/chrome';
 import { createWindow as createSettingsWindow } from './windows/settings-main';
 import { createWindow as createDataviewWindow } from './windows/dataview-main';
 import { setupCompanionIpc } from './windows/companion-main';
+import { WindowDockingService } from './services/windowDockingService';
 
 const store = new Store();
+const MAIN_WINDOW_BOUNDS_KEY = 'main-window-normal-bounds';
+const MAIN_WINDOW_DOCKED_WIDTH_KEY = 'main-window-docked-width';
+
+type MainWindowMode = 'full' | 'docked' | 'floating';
+
+function isUsableBounds(value: unknown): value is Rectangle {
+  if (!value || typeof value !== 'object') return false;
+  const bounds = value as Partial<Rectangle>;
+  return [bounds.x, bounds.y, bounds.width, bounds.height].every(
+    (item) => typeof item === 'number' && Number.isFinite(item),
+  );
+}
 
 // ⭐ 跟踪服务就绪状态，用于同步响应 renderer 的健康状态查询
 let _serverReadyState: boolean | null = null;
@@ -31,6 +46,146 @@ const setupIpcHandlers = (
   bsm: BackendServiceManager,
 ) => {
   setupCompanionIpc();
+  // Every new application session starts as the left reception workbench.
+  // Full-screen and floating are deliberate, session-level operator choices.
+  let mainWindowMode: MainWindowMode = 'docked';
+  const mainDockingService = new WindowDockingService(
+    mainWindow,
+    {
+      attached: true,
+      side: 'left',
+      sideByPlatform: {
+        win_qianniu: 'left',
+        win_jinmai: 'left',
+        win_wechat: 'left',
+        win_wecom: 'left',
+      },
+      collapsed: false,
+      targetFound: false,
+      targetMode: 'follow',
+    },
+    undefined,
+    180,
+    () => {
+      if (mainWindowMode === 'docked') publishMainWindowState();
+    },
+    Math.max(
+      300,
+      Math.min(720, Number(store.get(MAIN_WINDOW_DOCKED_WIDTH_KEY)) || 320),
+    ),
+    300,
+  );
+
+  const publishMainWindowState = () => {
+    const dockingState = mainDockingService.getState();
+    mainWindow.webContents.send('main-window-state', {
+      mode: mainWindowMode,
+      targetFound: dockingState.targetFound,
+      activePlatformId: dockingState.activePlatformId,
+    });
+  };
+
+  const dockMainWindow = () => {
+    if (mainWindowMode !== 'docked') {
+      const current = mainWindow.getBounds();
+      if (current.width >= 760) store.set(MAIN_WINDOW_BOUNDS_KEY, current);
+    }
+    const display = screen.getDisplayMatching(mainWindow.getBounds());
+    const { workArea } = display;
+    mainWindowMode = 'docked';
+    mainWindow.unmaximize();
+    mainWindow.setResizable(true);
+    mainWindow.setMinimumSize(300, 520);
+    const dockedWidth = Math.max(
+      300,
+      Math.min(
+        720,
+        workArea.width,
+        Number(store.get(MAIN_WINDOW_DOCKED_WIDTH_KEY)) || 320,
+      ),
+    );
+    mainDockingService.setExpandedWidth(dockedWidth);
+    mainWindow.setBounds(
+      {
+        x: workArea.x,
+        y: workArea.y,
+        width: dockedWidth,
+        height: workArea.height,
+      },
+      true,
+    );
+    mainDockingService.setSide('left');
+    mainDockingService.setTargetMode('follow');
+    mainDockingService.setAttached(true);
+    mainWindow.show();
+    mainWindow.focus();
+    publishMainWindowState();
+  };
+
+  const floatMainWindow = () => {
+    mainWindowMode = 'floating';
+    mainDockingService.setAttached(false);
+    mainWindow.unmaximize();
+    mainWindow.setResizable(true);
+    mainWindow.setMinimumSize(300, 520);
+    const [width, height] = mainWindow.getSize();
+    if (width > 480) {
+      mainWindow.setSize(320, Math.max(620, Math.min(height, 820)), true);
+    }
+    mainWindow.show();
+    mainWindow.focus();
+    publishMainWindowState();
+  };
+
+  const restoreMainWindow = () => {
+    const savedBounds = store.get(MAIN_WINDOW_BOUNDS_KEY);
+    const display = screen.getDisplayMatching(mainWindow.getBounds());
+    const fallback = {
+      x: Math.round(
+        display.workArea.x + Math.max(0, (display.workArea.width - 1180) / 2),
+      ),
+      y: Math.round(
+        display.workArea.y + Math.max(0, (display.workArea.height - 820) / 2),
+      ),
+      width: Math.min(1180, display.workArea.width),
+      height: Math.min(820, display.workArea.height),
+    };
+    mainWindowMode = 'full';
+    mainDockingService.setAttached(false);
+    mainWindow.setResizable(true);
+    mainWindow.setMinimumSize(760, 680);
+    mainWindow.setBounds(
+      isUsableBounds(savedBounds) ? savedBounds : fallback,
+      true,
+    );
+    mainWindow.show();
+    mainWindow.focus();
+    publishMainWindowState();
+  };
+
+  ipcMain.on('main-window-command', (_event, value) => {
+    const action = (value as { action?: unknown } | undefined)?.action;
+    if (action === 'dock-left') dockMainWindow();
+    if (action === 'float') floatMainWindow();
+    if (action === 'restore') restoreMainWindow();
+  });
+  ipcMain.on('get-main-window-state', (event) => {
+    event.returnValue = { mode: mainWindowMode };
+  });
+
+  mainWindow.webContents.once('did-finish-load', () => {
+    dockMainWindow();
+    mainDockingService.start();
+  });
+  mainWindow.on('resize', () => {
+    if (mainWindowMode !== 'docked') return;
+    const { width } = mainWindow.getBounds();
+    if (width < 300) return;
+    mainDockingService.setExpandedWidth(width);
+    store.set(MAIN_WINDOW_DOCKED_WIDTH_KEY, width);
+  });
+  mainWindow.once('closed', () => mainDockingService.stop());
+
   ipcMain.on('get-env', async (event, key) => {
     event.returnValue = process.env[key];
   });

@@ -1,3 +1,4 @@
+/* eslint-disable no-void, no-nested-ternary */
 import React, { useMemo, useState } from 'react';
 import {
   Badge,
@@ -18,21 +19,30 @@ import {
   FiMessageCircle,
   FiMove,
   FiRefreshCw,
+  FiX,
 } from 'react-icons/fi';
 import {
   getPlatformList,
-  getQianniuSuggestions,
+  getAllReplySuggestions,
   getTasks,
   focusReplySuggestion,
+  refreshQianniuCompanion,
+  updateQianniuSuggestionStatus,
 } from '../../common/services/platform/controller';
 import {
   App,
   Instance,
   ReplySuggestion,
 } from '../../common/services/platform/platform';
+import {
+  customerIdentity,
+  ReceptionFilter,
+  receptionStatusLabel,
+  selectReceptionRows,
+  storeLabel,
+} from './compactReceptionModel';
 
 type CompactTab = 'reception' | 'accounts';
-type ReceptionFilter = 'pending' | 'handled';
 
 const PLATFORM_META: Record<
   string,
@@ -68,6 +78,16 @@ function ageLabel(value: string) {
   return `${Math.floor(seconds / 86400)}d`;
 }
 
+function receptionDismissKey(item: ReplySuggestion): string {
+  const identity = customerIdentity(item);
+  return [
+    item.platform_id,
+    storeLabel(item.store_id || item.store) || 'unknown-store',
+    item.account_id || '',
+    identity.label,
+  ].join('|').toLowerCase();
+}
+
 function restoreFull(section?: 'service' | 'platforms') {
   if (section) {
     (window as any).__navigateTo?.(
@@ -88,41 +108,49 @@ function ReceptionList({
   suggestions: ReplySuggestion[];
   loading: boolean;
 }) {
-  const [filter, setFilter] = useState<ReceptionFilter>('pending');
+  const [filter, setFilter] = useState<ReceptionFilter>('all');
   const [focusingId, setFocusingId] = useState<number>();
+  const [dismissingId, setDismissingId] = useState<number>();
+  const [hiddenIds, setHiddenIds] = useState<Set<number>>(() => new Set());
+  const [hiddenKeys, setHiddenKeys] = useState<Set<string>>(() => new Set());
   const [focusNotice, setFocusNotice] = useState<{
     ok: boolean;
     text: string;
   }>();
   const rows = useMemo(
     () =>
-      suggestions
-        .filter((item) =>
-          filter === 'pending'
-            ? ['pending', 'failed'].includes(item.status)
-            : !['pending', 'failed'].includes(item.status),
-        )
-        .sort(
-          (left, right) =>
-            new Date(right.created_at).getTime() -
-            new Date(left.created_at).getTime(),
-        )
+      selectReceptionRows(suggestions, filter)
+        .filter((item) => !hiddenIds.has(item.id))
+        .filter((item) => !hiddenKeys.has(receptionDismissKey(item)))
         .slice(0, 60),
-    [filter, suggestions],
+    [filter, hiddenIds, hiddenKeys, suggestions],
   );
 
-  const pendingCount = suggestions.filter((item) =>
-    ['pending', 'failed'].includes(item.status),
+  const pendingCount = selectReceptionRows(suggestions, 'manual').filter(
+    (item) => !hiddenIds.has(item.id),
+  ).filter((item) => !hiddenKeys.has(receptionDismissKey(item))
   ).length;
   const focusCustomer = async (item: ReplySuggestion) => {
     if (focusingId) return;
+    const identity = customerIdentity(item);
+    if (!identity.reliable) {
+      const platform = meta(item.platform_id);
+      setFocusNotice({
+        ok: false,
+        text: `${platform.name}客户尚未可靠识别，请先在${platform.name}中打开该客户`,
+      });
+      return;
+    }
     setFocusingId(item.id);
     setFocusNotice(undefined);
     try {
       await focusReplySuggestion(item.id);
+      // Ask the companion to refresh immediately; waiting for its polling
+      // interval makes a successful customer switch look like a hang.
+      void refreshQianniuCompanion().catch(() => undefined);
       setFocusNotice({
         ok: true,
-        text: `已切换到 ${item.contact_id || item.sender}，输入框已聚焦`,
+        text: `已切换到 ${identity.label}，输入框已聚焦`,
       });
     } catch (error) {
       setFocusNotice({
@@ -131,6 +159,23 @@ function ReceptionList({
       });
     } finally {
       setFocusingId(undefined);
+    }
+  };
+
+  const dismissCustomer = async (item: ReplySuggestion) => {
+    if (dismissingId || focusingId) return;
+    setDismissingId(item.id);
+    try {
+      await updateQianniuSuggestionStatus(item.id, 'dismissed');
+      setHiddenIds((current) => new Set(current).add(item.id));
+      setHiddenKeys((current) => new Set(current).add(receptionDismissKey(item)));
+    } catch (error) {
+      setFocusNotice({
+        ok: false,
+        text: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setDismissingId(undefined);
     }
   };
 
@@ -146,8 +191,9 @@ function ReceptionList({
       >
         {(
           [
-            ['pending', `待回复 ${pendingCount}`],
-            ['handled', '已回复'],
+            ['all', '全部'],
+            ['manual', `待人工回复${pendingCount ? ` ${pendingCount}` : ''}`],
+            ['replied', '已回复'],
           ] as Array<[ReceptionFilter, string]>
         ).map(([value, label]) => (
           <Box
@@ -189,7 +235,11 @@ function ReceptionList({
           <Flex h="180px" direction="column" align="center" justify="center">
             <FiMessageCircle color="#AAB4C3" size={24} />
             <Text mt={2} fontSize="12px" color="#7A8798">
-              {filter === 'pending' ? '当前没有待回复客户' : '还没有已处理记录'}
+              {filter === 'manual'
+                ? '当前没有待人工回复客户'
+                : filter === 'replied'
+                  ? '还没有已回复记录'
+                  : '当前没有接待记录'}
             </Text>
           </Flex>
         ) : (
@@ -197,11 +247,13 @@ function ReceptionList({
             {rows.map((item) => {
               const platform = meta(item.platform_id);
               const failed = item.status === 'failed';
+              const identity = customerIdentity(item);
+              const statusLabel = receptionStatusLabel(item);
+              const replied = item.status === 'sent';
               return (
                 <Flex
                   key={item.id}
-                  as="button"
-                  type="button"
+                  className="group"
                   w="full"
                   minH="62px"
                   p={2}
@@ -215,8 +267,37 @@ function ReceptionList({
                   _hover={{ borderColor: '#B9CCFF', bg: '#F2F6FF' }}
                   cursor={focusingId ? 'wait' : 'pointer'}
                   opacity={focusingId && focusingId !== item.id ? 0.65 : 1}
+                  role="button"
+                  tabIndex={0}
+                  position="relative"
+                  sx={{ '&:hover': { borderColor: '#B9CCFF', bg: '#F2F6FF' } }}
                   onClick={() => void focusCustomer(item)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      void focusCustomer(item);
+                    }
+                  }}
                 >
+                  <IconButton
+                    aria-label={`移除 ${identity.label} 待回复项`}
+                    icon={<FiX />}
+                    variant="ghost"
+                    color="#98A2B3"
+                    opacity={0}
+                    w="24px"
+                    minW="24px"
+                    h="24px"
+                    p={0}
+                    fontSize="17px"
+                    sx={{ '.group:hover &': { opacity: 1, color: '#D92D20' } }}
+                    _hover={{ bg: '#FEE4E2', color: '#B42318' }}
+                    isLoading={dismissingId === item.id}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void dismissCustomer(item);
+                    }}
+                  />
                   <Flex
                     w="32px"
                     h="32px"
@@ -238,11 +319,35 @@ function ReceptionList({
                       color={platform.color}
                       noOfLines={1}
                     >
-                      {item.store_id || item.store || platform.name}
+                      {storeLabel(item.store_id || item.store) ||
+                        (item.platform_id === 'win_qianniu'
+                          ? '店铺识别中'
+                          : platform.name)}
                     </Text>
-                    <Text fontSize="11px" color="#344054" noOfLines={1}>
-                      {item.contact_id || item.sender}
-                    </Text>
+                    <Flex align="center" minW={0} gap={1}>
+                      <IconButton
+                        aria-label={`移除 ${identity.label} 待回复项`}
+                        icon={<FiX />}
+                        size="xs"
+                        display="none"
+                        minW="16px"
+                        h="16px"
+                        p={0}
+                        variant="ghost"
+                        color="#98A2B3"
+                        opacity={0}
+                        sx={{ '.group:hover &': { opacity: 1, color: '#D92D20' } }}
+                        _hover={{ bg: '#FEE4E2', color: '#B42318' }}
+                        isLoading={dismissingId === item.id}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void dismissCustomer(item);
+                        }}
+                      />
+                      <Text flex="1" minW={0} fontSize="11px" color="#344054" noOfLines={1}>
+                        {identity.label}
+                      </Text>
+                    </Flex>
                     <Text fontSize="10px" color="#8A94A3" noOfLines={1}>
                       “{item.incoming_content || '等待客户消息'}”
                     </Text>
@@ -250,15 +355,23 @@ function ReceptionList({
                   {focusingId === item.id ? (
                     <Spinner size="xs" color="#2774FF" />
                   ) : (
-                    <Text
-                      alignSelf="flex-start"
-                      pt={0.5}
-                      fontSize="10px"
-                      color={failed ? '#D92D20' : '#667085'}
-                      fontWeight="800"
-                    >
-                      {ageLabel(item.created_at)}
-                    </Text>
+                    <Stack align="flex-end" spacing={0.5} alignSelf="flex-start" pt={0.5}>
+                      <Text
+                        fontSize="10px"
+                        color={failed ? '#D92D20' : '#667085'}
+                        fontWeight="800"
+                      >
+                        {ageLabel(item.created_at)}
+                      </Text>
+                      <Badge
+                        fontSize="8px"
+                        px={1.5}
+                        borderRadius="full"
+                        colorScheme={replied ? 'green' : failed ? 'red' : 'orange'}
+                      >
+                        {statusLabel}
+                      </Badge>
+                    </Stack>
                   )}
                 </Flex>
               );
@@ -376,9 +489,9 @@ export default function CompactReceptionWorkbench({
 }) {
   const [tab, setTab] = useState<CompactTab>('reception');
   const suggestionsQuery = useQuery(
-    ['compact-reception-suggestions'],
-    () => getQianniuSuggestions('all', 'all'),
-    { refetchInterval: 1500 },
+    ['compact-reception-suggestions', 'all-platforms'],
+    () => getAllReplySuggestions('all'),
+    { refetchInterval: 1000, staleTime: 500, keepPreviousData: true },
   );
   const platformsQuery = useQuery(['compact-platforms'], getPlatformList, {
     refetchInterval: 3000,
@@ -387,9 +500,7 @@ export default function CompactReceptionWorkbench({
     refetchInterval: 3000,
   });
   const suggestions = suggestionsQuery.data?.data || [];
-  const pendingCount = suggestions.filter((item) =>
-    ['pending', 'failed'].includes(item.status),
-  ).length;
+  const pendingCount = selectReceptionRows(suggestions, 'manual').length;
 
   return (
     <Flex h="100vh" direction="column" bg="#F7F8FA" overflow="hidden">

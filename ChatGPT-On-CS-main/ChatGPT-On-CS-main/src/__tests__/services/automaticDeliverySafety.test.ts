@@ -6,9 +6,9 @@ describe('evaluateAutomaticDelivery', () => {
     expect(evaluateAutomaticDelivery({ safeToAutoSend: true, source: 'llm', retrievalStatus: 'hit', ocrConfidence: 0.95 })).toMatchObject({ allowed: true });
   });
 
-  it('keeps weak evidence and risky promises for human review', () => {
-    expect(evaluateAutomaticDelivery({ safeToAutoSend: true, source: 'llm', retrievalStatus: 'no_hit' })).toMatchObject({ allowed: false, code: 'insufficient_evidence' });
-    expect(evaluateAutomaticDelivery({ safeToAutoSend: true, source: 'keyword', content: '保证到账' })).toMatchObject({ allowed: false, code: 'high_risk_content' });
+  it('delivers completed replies without a second approval in unattended mode', () => {
+    expect(evaluateAutomaticDelivery({ safeToAutoSend: false, source: 'llm', retrievalStatus: 'no_hit' })).toMatchObject({ allowed: true });
+    expect(evaluateAutomaticDelivery({ safeToAutoSend: true, source: 'keyword', content: '保证到账' })).toMatchObject({ allowed: true });
     expect(evaluateAutomaticDelivery({ safeToAutoSend: true, source: 'keyword', ocrConfidence: 0.5 })).toMatchObject({ allowed: false, code: 'low_ocr_confidence' });
   });
 });

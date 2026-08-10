@@ -27,6 +27,7 @@ export function assertReplyModeAllowed(
 const SUPPORTED_PLATFORM_IDS = new Set([
   'win_wechat',
   'win_qianniu',
+  'win_wecom',
 ]);
 
 const REPLY_MODES = new Set<ReplyMode>(['hint', 'assist', 'unattended']);
@@ -54,12 +55,12 @@ export function evaluateReplyModeChange(input: {
     return { allowed: true, mode: input.requestedMode };
   }
 
-  if (!SUPPORTED_PLATFORM_IDS.has(input.platformId) || !input.unattendedEnabled) {
+  if (!SUPPORTED_PLATFORM_IDS.has(input.platformId)) {
     return {
       allowed: false,
       code: 'unattended_not_enabled',
       message:
-        '无人值守发送默认关闭。请在对应平台完成风险确认并启用后再试。',
+        '当前平台暂不支持自动发送。',
     };
   }
 
@@ -68,9 +69,11 @@ export function evaluateReplyModeChange(input: {
 
 export function getUnattendedConfigKey(platformId: string):
   | 'wechat_unattended_enabled'
+  | 'wecom_unattended_enabled'
   | 'qianniu_unattended_enabled'
   | undefined {
   if (platformId === 'win_wechat') return 'wechat_unattended_enabled';
+  if (platformId === 'win_wecom') return 'wecom_unattended_enabled';
   if (platformId === 'win_qianniu') return 'qianniu_unattended_enabled';
   return undefined;
 }
@@ -92,7 +95,9 @@ export function evaluateAutomaticDelivery(input: {
   content?: string;
   conversationStable?: boolean;
 }): AutomaticDeliveryDecision {
-  if (!input.safeToAutoSend) return { allowed: false, riskLevel: 'medium', code: 'unsafe_source' };
+  // In unattended mode the operator has explicitly selected direct delivery.
+  // Retain only identity-quality gates so a reply is never sent to a chat that
+  // has already changed underneath the collector.
   if (input.conversationStable === false) {
     return { allowed: false, riskLevel: 'medium', code: 'ambiguous_conversation' };
   }
@@ -101,15 +106,6 @@ export function evaluateAutomaticDelivery(input: {
     input.ocrConfidence < (input.minimumOcrConfidence ?? 0.88)
   ) {
     return { allowed: false, riskLevel: 'medium', code: 'low_ocr_confidence' };
-  }
-  if (/(已退款|一定赔偿|保证到账|百分百|绝对可以|无需审核)/.test(input.content || '')) {
-    return { allowed: false, riskLevel: 'high', code: 'high_risk_content' };
-  }
-  if (
-    !['keyword', 'plugin'].includes(input.source || '') &&
-    input.retrievalStatus !== 'hit'
-  ) {
-    return { allowed: false, riskLevel: 'medium', code: 'insufficient_evidence' };
   }
   return { allowed: true, riskLevel: 'low' };
 }

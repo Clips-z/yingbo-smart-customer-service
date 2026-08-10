@@ -138,6 +138,8 @@ try {
   }
 
   if ($SelectOnly) {
+    [QianniuReplyInput]::FocusEditor($hwnd)
+    Start-Sleep -Milliseconds 150
     [ordered]@{
       success = $true
       selected = $true

@@ -3,6 +3,7 @@ import {
   chooseCompanionTarget,
   CompanionTargetWindow,
   normalizeCompanionDockState,
+  resolveDockedPanelWidth,
   resolveDockSide,
   WindowDockingService,
 } from '../../main/services/windowDockingService';
@@ -10,6 +11,11 @@ import {
 const workArea = { x: 0, y: 0, width: 1920, height: 1040 };
 
 describe('calculateDockedBounds', () => {
+  test('keeps the width selected by the operator while attached', () => {
+    expect(resolveDockedPanelWidth(446, 320, false)).toBe(446);
+    expect(resolveDockedPanelWidth(56, 372, false)).toBe(372);
+    expect(resolveDockedPanelWidth(446, 320, true)).toBe(56);
+  });
   test('attaches to the right edge of Qianniu', () => {
     expect(
       calculateDockedBounds({
@@ -69,16 +75,21 @@ describe('calculateDockedBounds', () => {
 const target = (
   platformId: CompanionTargetWindow['platformId'],
   foreground = false,
-): CompanionTargetWindow => ({
+): CompanionTargetWindow => {
+  const handles = { win_qianniu: 1, win_wechat: 2 } as const;
+  return {
   platformId,
-  hwnd: platformId === 'win_qianniu' ? 1 : platformId === 'win_wechat' ? 2 : 3,
+  hwnd: platformId in handles
+    ? handles[platformId as keyof typeof handles]
+    : 3,
   x: 100,
   y: 100,
   width: 900,
   height: 700,
   minimized: false,
   foreground,
-});
+  };
+};
 
 describe('chooseCompanionTarget', () => {
   test('follows the foreground supported platform', () => {
@@ -129,6 +140,12 @@ describe('chooseCompanionTarget', () => {
         'follow',
       )?.platformId,
     ).toBe('win_qianniu');
+  });
+
+  test('does not switch automatic mode to a minimized client', () => {
+    const minimized = { ...target('win_wecom'), minimized: true };
+    expect(chooseCompanionTarget([minimized], 'follow', 'win_wechat')).toBeUndefined();
+    expect(chooseCompanionTarget([minimized], 'win_wecom')?.platformId).toBe('win_wecom');
   });
 });
 
@@ -199,6 +216,9 @@ describe('WindowDockingService floating mode', () => {
       isDestroyed: () => false,
       setSize: jest.fn(),
       getSize: () => [56, 760],
+      setResizable: jest.fn(),
+      setMinimumSize: jest.fn(),
+      getMinimumSize: () => [56, 520],
     };
     const service = new WindowDockingService(
       panel as never,

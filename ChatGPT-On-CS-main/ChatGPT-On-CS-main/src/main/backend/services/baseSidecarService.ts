@@ -1,3 +1,4 @@
+/* eslint-disable lines-between-class-members, no-void, no-nested-ternary */
 import { ChildProcess, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
@@ -52,6 +53,8 @@ export interface SidecarConfig {
   modeEventName: string;
   /** Config 表中存储 reply_mode 的字段名（snake_case） */
   configModeKey: string;
+  /** Whether the platform must also be manually enabled in Settings. */
+  requireActive?: boolean;
 }
 
 // ========== 抽象基类 ==========
@@ -198,6 +201,21 @@ export abstract class BaseSidecarService {
     if (this.replyMode !== 'assist') {
       throw new Error('请先切换到辅助回复模式');
     }
+    await this.dispatchContactCommand(sender, content, false);
+  }
+
+  /**
+   * 聚合接待台：只切换到目标联系人并聚焦输入框，不写入或发送内容。
+   */
+  public async focusContact(sender: string): Promise<void> {
+    await this.dispatchContactCommand(sender, '', true);
+  }
+
+  private async dispatchContactCommand(
+    sender: string,
+    content: string,
+    focusOnly: boolean,
+  ): Promise<void> {
     if (this.commandBusy) {
       throw new Error(
         `${this.config.platformName}正在定位另一个联系人，请稍后再试`,
@@ -216,12 +234,21 @@ export abstract class BaseSidecarService {
       if (fs.existsSync(resultFile)) fs.unlinkSync(resultFile);
       fs.writeFileSync(
         tempFile,
-        JSON.stringify({ requestId, sender, content, createdAt: Date.now() }),
+        JSON.stringify({
+          requestId,
+          sender,
+          content,
+          focusOnly,
+          createdAt: Date.now(),
+        }),
         'utf8',
       );
       fs.renameSync(tempFile, commandFile);
 
-      const deadline = Date.now() + 30000;
+      // A failed list lookup must never freeze the aggregate reception desk.
+      // Filling may legitimately need longer; focus-only is a fast navigation
+      // action and returns control promptly when the contact cannot be found.
+      const deadline = Date.now() + (focusOnly ? 6000 : 30000);
       while (Date.now() < deadline) {
         if (fs.existsSync(resultFile)) {
           const result = JSON.parse(fs.readFileSync(resultFile, 'utf8')) as {
@@ -289,7 +316,7 @@ export abstract class BaseSidecarService {
     try {
       const running = await isPlatformRunning(this.config.platformId);
       const active = await isPlatformActive(this.config.platformId);
-      const shouldRun = running && active;
+      const shouldRun = running && (this.config.requireActive !== false ? active : true);
 
       // ===== 心跳看门狗：检测死掉的子进程并强制重启 =====
       if (shouldRun && this.child) {

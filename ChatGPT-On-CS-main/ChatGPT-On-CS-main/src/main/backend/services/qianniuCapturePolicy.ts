@@ -15,7 +15,51 @@ export type QianniuCaptureDecision =
 export function normalizeQianniuContact(value?: string): string {
   const raw = value?.replace(/\s+/g, '').replace(/(?:已读|未读)$/u, '') || '';
   if (!raw || /https?:\/\/|买家30天内|才能给买家发消息/u.test(raw)) return '';
-  return raw.match(/tb[A-Za-z0-9]{5,}/i)?.[0] || raw;
+  const taobaoId = raw.match(/tb[A-Za-z0-9]{5,}/i)?.[0];
+  if (taobaoId) {
+    const tail = taobaoId.slice(2);
+    const digitCount = (tail.match(/\d/g) || []).length;
+    if (
+      tail.length >= 8 &&
+      digitCount >= Math.ceil(tail.length / 2) &&
+      /^[0-9OISBZ]+$/i.test(tail)
+    ) {
+      const numericTail = tail.replace(/[OISBZ]/gi, (character) => ({
+        O: '0',
+        I: '1',
+        S: '5',
+        B: '8',
+        Z: '2',
+      }[character.toUpperCase()] || character));
+      return `tb${numericTail}`;
+    }
+    return taobaoId;
+  }
+  // Header OCR sometimes mistakes the latest message or a product phrase for
+  // the buyer name. Only accept a stable account-like token here; keeping the
+  // previous context in "switching" is safer than binding a draft to a phrase.
+  return /^[A-Za-z0-9_.@-]{3,64}$/.test(raw) ? raw : '';
+}
+
+export function resolveQianniuFillTarget(suggestion: {
+  conversation_key?: string | null;
+  contact_id?: string | null;
+  sender: string;
+}): string | undefined {
+  if (suggestion.conversation_key) return undefined;
+  return normalizeQianniuContact(suggestion.contact_id || suggestion.sender) || undefined;
+}
+
+export function evaluateQianniuFocusVerification(
+  target: string,
+  observed?: string,
+): 'confirmed' | 'pending' | 'mismatch' {
+  const expected = normalizeQianniuContact(target);
+  const actual = normalizeQianniuContact(observed);
+  if (!expected || !actual) return 'pending';
+  return actual.toLowerCase() === expected.toLowerCase()
+    ? 'confirmed'
+    : 'mismatch';
 }
 
 export function evaluateQianniuCapture(
@@ -38,7 +82,12 @@ export function evaluateQianniuCapture(
     return { accepted: false, reasonCode: 'not_incoming' };
   if (input.latestDirection !== 'incoming')
     return { accepted: false, reasonCode: 'latest_not_incoming' };
-  if (input.ocrEngine !== 'rapidocr')
+  // The resident capture worker uses Windows OCR deliberately: it avoids a
+  // Python start-up on every customer click.  Treat it exactly like the
+  // legacy RapidOCR path once the caller has supplied the same confidence
+  // threshold.  Requiring "rapidocr" here made every fast-path detection
+  // appear in the UI but silently prevented draft generation.
+  if (input.ocrEngine !== 'rapidocr' && input.ocrEngine !== 'windows')
     return { accepted: false, reasonCode: 'ocr_unavailable' };
   if ((input.confidence || 0) < minConfidence)
     return { accepted: false, reasonCode: 'ocr_low_confidence' };

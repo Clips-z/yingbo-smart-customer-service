@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax */
 import { ChildProcessWithoutNullStreams, spawn } from 'child_process';
 import crypto from 'crypto';
 import readline from 'readline';
@@ -58,6 +59,10 @@ export class QianniuOcrWorker {
 
   public isWarm(): boolean {
     return this.warmed && Boolean(this.process && !this.process.killed);
+  }
+
+  public start(): void {
+    this.ensureProcess();
   }
 
   public async recognize(image: string): Promise<QianniuOcrResult> {
@@ -126,6 +131,10 @@ export class QianniuOcrWorker {
         type?: string;
       };
     } catch {
+      return;
+    }
+    if (response.type === 'ready') {
+      this.warmed = true;
       return;
     }
     if (!response.id) return;

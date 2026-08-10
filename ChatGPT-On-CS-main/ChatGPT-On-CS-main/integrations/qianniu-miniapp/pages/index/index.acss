@@ -1,0 +1,39 @@
+.page {
+  padding: 16px;
+}
+
+.card {
+  padding: 16px;
+  border: 1px solid #dbe4ee;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.title {
+  margin-bottom: 12px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.status {
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ok {
+  color: #047857;
+  background: #ecfdf5;
+}
+
+.waiting {
+  color: #b45309;
+  background: #fffbeb;
+}
+
+.identity,
+.hint {
+  margin-top: 10px;
+  color: #64748b;
+  font-size: 12px;
+}

@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax, no-void */
 import { ChildProcess, spawn } from 'child_process';
 import { BrowserWindow, Rectangle, screen } from 'electron';
 import readline from 'readline';
@@ -101,16 +102,20 @@ export function chooseCompanionTarget(
   if (mode !== 'follow') {
     return usable.find((target) => target.platformId === mode);
   }
-  const foreground = usable.find((target) => target.foreground);
+  // A minimized client remains in the native target list so a platform lock
+  // can hide/restore with it. In automatic mode it must never become the new
+  // active platform merely because every real client is closed or minimized.
+  const visible = usable.filter((target) => !target.minimized);
+  const foreground = visible.find((target) => target.foreground);
   if (foreground) return foreground;
   if (previousPlatformId) {
-    const previous = usable.find(
+    const previous = visible.find(
       (target) => target.platformId === previousPlatformId,
     );
     if (previous) return previous;
   }
   return PLATFORM_PRIORITY.map((platformId) =>
-    usable.find((target) => target.platformId === platformId),
+    visible.find((target) => target.platformId === platformId),
   ).find((target): target is CompanionTargetWindow => Boolean(target));
 }
 
@@ -124,8 +129,6 @@ export function calculateDockedBounds(args: {
   const height = Math.min(args.target.height, args.workArea.height);
   const rightX = args.target.x + args.target.width;
   const leftX = args.target.x - width;
-  const minX = args.workArea.x;
-  const maxX = args.workArea.x + args.workArea.width - width;
   // Preserve the selected side even at a desktop edge. Windows clips the
   // overflow, keeping the other side free for a second workbench.
   const preferredX =
@@ -140,6 +143,17 @@ export function calculateDockedBounds(args: {
     width,
     height,
   };
+}
+
+export function resolveDockedPanelWidth(
+  currentWidth: number,
+  expandedWidth: number,
+  collapsed: boolean,
+): number {
+  if (collapsed) return 56;
+  return Number.isFinite(currentWidth) && currentWidth >= 120
+    ? Math.round(currentWidth)
+    : expandedWidth;
 }
 
 function isPlatformId(value: unknown): value is CompanionPlatformId {
@@ -310,6 +324,7 @@ export class WindowDockingService {
     private switchDelayMs = 180,
     private onStateChange?: (state: CompanionDockState) => void,
     private expandedWidth = 372,
+    private minimumExpandedWidth = 280,
   ) {
     this.state = normalizeCompanionDockState(initial);
   }
@@ -334,6 +349,7 @@ export class WindowDockingService {
 
   public setAttached(attached: boolean): void {
     this.state.attached = attached;
+    this.panel.setResizable(true);
     this.publishState();
     if (attached) void this.sync();
   }
@@ -357,6 +373,11 @@ export class WindowDockingService {
 
   public setCollapsed(collapsed: boolean): void {
     this.state.collapsed = collapsed;
+    this.panel.setResizable(true);
+    this.panel.setMinimumSize(
+      collapsed ? 56 : this.minimumExpandedWidth,
+      this.panel.getMinimumSize()[1],
+    );
     this.publishState();
     if (this.state.attached) void this.sync();
     else
@@ -364,6 +385,11 @@ export class WindowDockingService {
         collapsed ? 56 : this.expandedWidth,
         this.panel.getSize()[1],
       );
+  }
+
+  public setExpandedWidth(width: number): void {
+    if (!Number.isFinite(width) || width < this.minimumExpandedWidth) return;
+    this.expandedWidth = Math.round(width);
   }
 
   private commitStableTarget(
@@ -437,9 +463,16 @@ export class WindowDockingService {
     if (!this.state.attached) return;
 
     const display = screen.getDisplayMatching(target);
+    const currentWidth = this.panel.getBounds().width;
+    const panelWidth = resolveDockedPanelWidth(
+      currentWidth,
+      this.expandedWidth,
+      this.state.collapsed,
+    );
+    if (!this.state.collapsed) this.expandedWidth = panelWidth;
     const bounds = calculateDockedBounds({
       target,
-      panelWidth: this.state.collapsed ? 56 : this.expandedWidth,
+      panelWidth,
       side: resolveDockSide(this.state, target.platformId),
       workArea: display.workArea,
     });

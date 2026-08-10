@@ -3,7 +3,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const appRoot = path.resolve(__dirname, '..');
-const baseline = { errors: 254, warnings: 0 };
+const baseline = { errors: 248, warnings: 0 };
 const result = spawnSync(
   process.execPath,
   [

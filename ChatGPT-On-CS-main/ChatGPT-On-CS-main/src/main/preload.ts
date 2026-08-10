@@ -20,6 +20,7 @@ export type Channels =
   | 'selected-directory'
   | 'open-url'
   | 'open-user-manual'
+  | 'open-external'
   | 'notification'
   | 'get-browser-version'
   | 'broadcast'
@@ -30,7 +31,10 @@ export type Channels =
   | 'open-companion-window'
   | 'companion-command'
   | 'companion-state'
-  | 'get-companion-state';
+  | 'get-companion-state'
+  | 'main-window-command'
+  | 'main-window-state'
+  | 'get-main-window-state';
 
 // 运行时白名单 — 防止渲染进程注入未知通道
 const validChannels = new Set<Channels>([
@@ -51,6 +55,7 @@ const validChannels = new Set<Channels>([
   'selected-directory',
   'open-url',
   'open-user-manual',
+  'open-external',
   'notification',
   'get-browser-version',
   'broadcast',
@@ -62,6 +67,9 @@ const validChannels = new Set<Channels>([
   'companion-command',
   'companion-state',
   'get-companion-state',
+  'main-window-command',
+  'main-window-state',
+  'get-main-window-state',
 ]);
 
 // 通道参数校验规则
@@ -74,6 +82,8 @@ const channelArgRules: Partial<Record<Channels, (args: unknown[]) => boolean>> =
   'open-url': (args) => args.length === 1 && typeof args[0] === 'string',
   'notification': (args) => args.length >= 1 && typeof args[0] === 'string',
   'companion-command': (args) =>
+    args.length === 1 && typeof args[0] === 'object' && args[0] !== null,
+  'main-window-command': (args) =>
     args.length === 1 && typeof args[0] === 'object' && args[0] !== null,
 };
 

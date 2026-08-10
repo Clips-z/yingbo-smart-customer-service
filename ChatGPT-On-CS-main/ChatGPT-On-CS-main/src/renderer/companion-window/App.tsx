@@ -1,3 +1,4 @@
+/* eslint-disable no-void, no-nested-ternary */
 import React, {
   useCallback,
   useEffect,
@@ -29,7 +30,6 @@ import {
   FiArrowRight,
   FiChevronsLeft,
   FiChevronsRight,
-  FiMessageCircle,
   FiMove,
   FiPackage,
   FiExternalLink,
@@ -57,10 +57,15 @@ import {
 import theme from '../common/styles/theme';
 import '../common/App.css';
 import {
-  selectCompanionHistory,
+  companionContactLabel,
+  isCompanionCollectorReady,
   selectCompanionProduct,
   selectCompanionSuggestion,
 } from './companionSelection';
+import {
+  buildCompanionConversation,
+  isReadableConversationText,
+} from './companionConversation';
 import { fetchProductQAList, productPlaceholderImage } from '../common/services/knowledge/productQA';
 
 type PlatformId =
@@ -89,6 +94,14 @@ type ReplyGenerationState = {
   startedAt?: number;
   error?: string;
 };
+
+function validQianniuStore(value?: string | null): string {
+  const text = String(value || '').replace(/\s+/g, '').trim();
+  if (!text || /^\d{1,8}$/.test(text) || /^qianniu-default$/i.test(text)) return '';
+  if (/^(淘宝|京东|拼多多|抖音电商|微信|企业微信)$/u.test(text)) return '';
+  if (!/^[\u4e00-\u9fffA-Za-z0-9_.-]+$/u.test(text)) return '';
+  return text;
+}
 
 const PLATFORM: Record<PlatformId, { name: string; short: string }> = {
   win_qianniu: { name: '千牛', short: '千' },
@@ -144,27 +157,34 @@ function CompanionSurfaceContent() {
   const contextQuery = useQuery(
     ['companion-context', platformId],
     () => getCompanionContext(platformId),
-    { refetchInterval: 5000 },
+    { refetchInterval: 800 },
   );
   const healthQuery = useQuery(
     ['companion-health', platformId],
     () => getCompanionCollectorHealth(platformId),
-    { refetchInterval: 5000 },
+    { refetchInterval: 1500 },
   );
   const suggestionsQuery = useQuery(
     ['companion-suggestions', platformId],
     () => getQianniuSuggestions('all', platformId),
-    { refetchInterval: 5000 },
+    { refetchInterval: 1500 },
   );
   const timelineQuery = useQuery(
     ['companion-timeline', platformId, contextQuery.data?.data?.conversationKey],
-    () => getCompanionTimeline(platformId, 50),
-    { enabled: Boolean(contextQuery.data?.data?.contactId), refetchInterval: 5000 },
+    () => getCompanionTimeline(platformId, 5),
+    {
+      enabled:
+        contextQuery.data?.data?.state === 'stable' &&
+        Boolean(companionContactLabel(platformId, contextQuery.data?.data?.contactId)) &&
+        (platformId !== 'win_qianniu' ||
+          Boolean(validQianniuStore(contextQuery.data?.data?.storeId || contextQuery.data?.data?.storeName))),
+      refetchInterval: 1500,
+    },
   );
   const modeQuery = useQuery(
     ['companion-mode', platformId],
     () => getReplyMode(platformId),
-    { refetchInterval: 5000 },
+    { refetchInterval: 1500 },
   );
   const productsQuery = useQuery(
     ['companion-products', contextQuery.data?.data?.storeId || '', contextQuery.data?.data?.productId || ''],
@@ -173,29 +193,79 @@ function CompanionSurfaceContent() {
   );
 
   const context = contextQuery.data?.data;
+  const visibleStore = validQianniuStore(context?.storeName || context?.storeId);
+  const recognizedContactId = companionContactLabel(platformId, context?.contactId);
+  const visibleAccountId = companionContactLabel('win_qianniu', context?.accountName || context?.accountId);
+  const conversationItems = useMemo(
+    () =>
+      buildCompanionConversation(
+        context?.recentMessages,
+        timelineQuery.data?.data,
+        recognizedContactId,
+        5,
+      ),
+    [context?.recentMessages, recognizedContactId, timelineQuery.data?.data],
+  );
   const health = healthQuery.data?.data as
     | {
         state?: string;
         phase?: string;
+        lastSuccessAt?: string;
         lastScanDurationMs?: number;
         lastError?: string;
         captureRoute?: { source?: string; state?: string; stale?: boolean; lastError?: string };
+        accessibility?: {
+          mode?:
+            | 'probing'
+            | 'uia-msaa-primary'
+            | 'accessibility-partial'
+            | 'clipboard-assisted'
+            | 'unavailable';
+          reason?: string;
+        };
+        officialBridge?: {
+          connected?: boolean;
+          runtime?: 'miniapp' | 'legacy-jssdk';
+          lastHeartbeatAt?: number;
+          pendingCount?: number;
+          currentContact?: { securityUID?: string; bizDomain?: string; userNick?: string };
+        };
       }
     | undefined;
+  const captureLabel =
+    platformId === 'win_qianniu'
+      ? health?.officialBridge?.connected
+        ? '官方身份/填入 + 按变化 OCR'
+        : health?.accessibility?.mode === 'accessibility-partial'
+          ? '真实对话校准 + OCR 辅助'
+        : '真实对话校准 + OCR 辅助'
+      : health?.captureRoute?.source || '兼容采集';
   const suggestions = useMemo(
     () => suggestionsQuery.data?.data ?? [],
     [suggestionsQuery.data?.data],
   );
+  const liveQuestion = useMemo(
+    () =>
+      [...(context?.recentMessages || [])]
+        .reverse()
+        .find(
+          (item) =>
+            item.direction === 'incoming' &&
+            isReadableConversationText(item.content),
+        )
+        ?.content?.trim() || '',
+    [context?.recentMessages],
+  );
   const suggestion = useMemo(
-    () => selectCompanionSuggestion(context, suggestions),
-    [context, suggestions],
+    () => selectCompanionSuggestion(context, suggestions, liveQuestion),
+    [context, liveQuestion, suggestions],
+  );
+  const displayedQuestion = useMemo(
+    () => liveQuestion || suggestion?.incoming_content?.trim() || '',
+    [liveQuestion, suggestion?.incoming_content],
   );
   const currentQuestionIsLink = /^https?:\/\//i.test(
-    suggestion?.incoming_content?.trim() || '',
-  );
-  const history = useMemo(
-    () => selectCompanionHistory(context, suggestions, suggestion?.id),
-    [context, suggestion?.id, suggestions],
+    displayedQuestion,
   );
   const currentProduct = useMemo(
     () => selectCompanionProduct(context, productsQuery.data?.list || []),
@@ -307,7 +377,14 @@ function CompanionSurfaceContent() {
       ]);
     });
     return () => unsubscribe();
-  }, [contextQuery, healthQuery, modeQuery, suggestionsQuery, timelineQuery]);
+  }, [
+    contextQuery,
+    healthQuery,
+    modeQuery,
+    platformId,
+    suggestionsQuery,
+    timelineQuery,
+  ]);
 
   useEffect(() => {
     if (platformId === 'win_qianniu') {
@@ -316,9 +393,23 @@ function CompanionSurfaceContent() {
   }, [platformId]);
 
   const stable = context?.state === 'stable';
-  const collectorReady =
-    health?.state === 'running' &&
-    (platformId !== 'win_qianniu' || health.phase === 'ready');
+  let visibleContactId = '等待识别客户 ID';
+  if (stable) visibleContactId = recognizedContactId || visibleContactId;
+  else if (context) visibleContactId = '正在识别当前客户…';
+  const personCentricPlatform = ['win_wechat', 'win_wecom'].includes(platformId);
+  const headerPrimary = personCentricPlatform
+    ? visibleContactId
+    : (visibleStore || '店铺识别中') +
+      (visibleAccountId ? `:${visibleAccountId}` : '');
+  const headerSecondary = personCentricPlatform ? platform.name : visibleContactId;
+  const questionContact =
+    recognizedContactId ||
+    companionContactLabel(
+      platformId,
+      suggestion?.contact_id || suggestion?.sender,
+    ) ||
+    '联系人识别中';
+  const collectorReady = isCompanionCollectorReady(platformId, health);
   const matchesLiveContext = Boolean(
     suggestion &&
     context &&
@@ -355,7 +446,9 @@ function CompanionSurfaceContent() {
             ? '正在读取当前会话'
             : suggestion
               ? '回复草稿已就绪'
-              : '已识别会话，等待客户新问题';
+              : displayedQuestion
+                ? '已识别问题，等待对应回复'
+                : '已识别会话，等待客户新问题';
 
   const fill = async () => {
     if (!suggestion) {
@@ -428,7 +521,7 @@ function CompanionSurfaceContent() {
           {platform.short}
         </Badge>
         <Tooltip
-          label={context?.contactId || `等待${platform.name}会话`}
+          label={visibleContactId || `等待${platform.name}会话`}
           placement="left"
         >
           <Flex
@@ -488,13 +581,10 @@ function CompanionSurfaceContent() {
         </Flex>
         <Box flex="1" minW={0}>
           <Text fontSize="12px" fontWeight="900" noOfLines={1}>
-            {(context?.storeName || context?.storeId || platform.name) +
-              (context?.accountName || context?.accountId
-                ? `:${context?.accountName || context?.accountId}`
-                : '')}
+            {headerPrimary}
           </Text>
           <Text fontSize="10px" fontWeight="700" color="whiteAlpha.800" noOfLines={1}>
-            {context?.contactId || '等待识别客户 ID'}
+            {headerSecondary}
           </Text>
           <Text hidden display="none" fontSize="12px" fontWeight="900" noOfLines={1}>
             {context?.contactId || `等待识别 ${platform.name} 客户`}
@@ -681,15 +771,24 @@ function CompanionSurfaceContent() {
 
           <Box as="details" borderRadius="10px" border="1px solid #E6EAF0" bg="#FAFCFF">
             <Text as="summary" cursor="pointer" px={3} py={2} fontSize="10px" fontWeight="800" color="#60749A">
-              采集诊断 · {health?.captureRoute?.source || 'ocr'} · {health?.captureRoute?.stale ? '等待新事件' : '最近有事件'}
+              采集诊断 · {captureLabel} · {health?.captureRoute?.stale ? '等待新事件' : '最近有事件'}
             </Text>
             <Stack px={3} pb={2} spacing={1} fontSize="9px" color="#718096">
               <Text>采集状态：{health?.state || '未连接'} / {health?.phase || '未知'}</Text>
+              {platformId === 'win_qianniu' && (
+                <Text>
+                  官方桥接：{health?.officialBridge?.connected ? `已连接 · ${health.officialBridge.runtime === 'miniapp' ? 'PC 小程序' : 'PCWW JSSDK'}（联系人识别和点击填入走官方接口）` : '未连接（消息变化后才调用 OCR）'}
+                </Text>
+              )}
               <Text>最近扫描：{health?.lastScanDurationMs ?? '-'} ms</Text>
               {(health?.lastError || health?.captureRoute?.lastError) && (
                 <Text color="#B54708" noOfLines={2}>原因：{health.lastError || health.captureRoute?.lastError}</Text>
               )}
-              <Text>当前会话：{context?.storeName || context?.storeId || '-'} · {context?.contactId || '-'}</Text>
+              <Text>
+                {personCentricPlatform
+                  ? `当前联系人/群聊：${recognizedContactId || '-'}`
+                  : `当前会话：${context?.storeName || context?.storeId || '-'} · ${context?.contactId || '-'}`}
+              </Text>
             </Stack>
           </Box>
 
@@ -752,75 +851,42 @@ function CompanionSurfaceContent() {
             </Box>
           )}
 
-          {Boolean(context?.recentMessages?.length) && (
-            <Box
-              as="details"
-              bg="white"
-              borderRadius="12px"
-              p={3}
-              border="1px solid #E6EAF0"
-            >
-              <HStack as="summary" cursor="pointer" justify="space-between">
-                <Text fontSize="11px" fontWeight="900">
-                  最近真实对话
-                </Text>
-                <Badge>
-                  {context?.recentMessages?.length} 段
-                  {context?.recentMessagesReused ? ' · 已恢复' : ''}
-                </Badge>
-              </HStack>
-              <Stack spacing={1.5} mt={2}>
-                {context?.recentMessages?.slice(-3).map((message, index) => (
-                  <Flex
-                    key={`${message.direction}-${index}-${message.content}`}
-                    justify={
-                      message.direction === 'outgoing'
-                        ? 'flex-end'
-                        : 'flex-start'
-                    }
-                  >
+          {Boolean(conversationItems.length && stable && recognizedContactId) && (
+            <Box bg="white" borderRadius="12px" p={3} border="1px solid #E6EAF0">
+              <Flex align="center" justify="space-between" mb={2}>
+                <Box minW={0}>
+                  <Text fontSize="11px" fontWeight="900">当前客户最近对话</Text>
+                  <Text fontSize="9px" color="#7A8A96" noOfLines={1}>
+                    {personCentricPlatform ? '联系人/群聊' : '客户 ID'}：{recognizedContactId}
+                  </Text>
+                </Box>
+                <Badge>{conversationItems.length} 条</Badge>
+              </Flex>
+              <Stack spacing={1.5}>
+                {conversationItems.map((item) => item.kind === 'message' ? (
+                  <Flex key={item.key} justify={item.direction === 'outgoing' ? 'flex-end' : 'flex-start'}>
                     <Box
-                      maxW="88%"
+                      maxW="90%"
                       px={2.5}
                       py={1.5}
                       borderRadius="10px"
-                      bg={
-                        message.direction === 'outgoing' ? '#e4f2ff' : '#f1f5f4'
-                      }
+                      bg={item.direction === 'outgoing' ? '#E4F2FF' : '#F1F5F4'}
                       fontSize="10px"
+                      whiteSpace="pre-wrap"
                     >
-                      {message.content}
+                      {item.content}
                     </Box>
                   </Flex>
-                ))}
-              </Stack>
-            </Box>
-          )}
-
-          {Boolean(timelineQuery.data?.data?.length) && (
-            <Box bg="white" borderRadius="12px" p={3} border="1px solid #E6EAF0">
-              <Flex align="center" justify="space-between" mb={2}>
-                <Text fontSize="11px" fontWeight="900">一问一答历史</Text>
-                <Badge>{timelineQuery.data?.data?.length || 0} 条</Badge>
-              </Flex>
-              <Stack spacing={2}>
-                {timelineQuery.data?.data?.slice(-5).map((item) => (
-                  <Box key={item.id} border="1px solid #E8EDF1" borderRadius="9px" overflow="hidden">
-                    <Box px={2} py={1.5} bg="#F7FAFC">
-                      <Flex gap={1.5} align="flex-start">
-                        <Badge colorScheme="blue" borderRadius="4px">问</Badge>
-                        <Text flex="1" fontSize="10px" whiteSpace="pre-wrap">{item.question}</Text>
-                      </Flex>
-                    </Box>
-                    <Box px={2} py={1.5} bg={item.state === 'sent' ? '#F1FFF4' : '#FFFDF5'}>
-                      <Flex gap={1.5} align="flex-start">
-                        <Badge colorScheme="orange" borderRadius="4px">答</Badge>
-                        <Text flex="1" fontSize="10px" whiteSpace="pre-wrap">{item.finalAnswer || item.answer}</Text>
-                      </Flex>
-                      <Text mt={1} fontSize="9px" color="#84949E">
-                        {item.state === 'sent' ? '已发送' : item.state === 'filled' ? '已填入' : '建议回复'}
-                      </Text>
-                    </Box>
+                ) : (
+                  <Box key={item.key} border="1px solid #E8EDF1" borderRadius="9px" overflow="hidden">
+                    <Flex px={2} py={1.5} gap={1.5} bg="#F7FAFC" align="flex-start">
+                      <Badge colorScheme="blue" borderRadius="4px">问</Badge>
+                      <Text flex="1" fontSize="10px" whiteSpace="pre-wrap">{item.question}</Text>
+                    </Flex>
+                    <Flex px={2} py={1.5} gap={1.5} bg={item.state === 'sent' ? '#F1FFF4' : '#FFFDF5'} align="flex-start">
+                      <Badge colorScheme="orange" borderRadius="4px">答</Badge>
+                      <Text flex="1" fontSize="10px" whiteSpace="pre-wrap">{item.answer}</Text>
+                    </Flex>
                   </Box>
                 ))}
               </Stack>
@@ -834,14 +900,18 @@ function CompanionSurfaceContent() {
                 <Text fontSize="12px" fontWeight="700">
                   {currentQuestionIsLink
                     ? '客户发送的商品链接'
-                    : suggestion?.incoming_content || '正在识别当前客户的问题…'}
+                    : displayedQuestion || '正在识别当前客户的问题…'}
                 </Text>
                 {currentQuestionIsLink && (
                   <Text mt={1} fontSize="10px" color="#2670C8" noOfLines={1}>
-                    {suggestion?.incoming_content}
+                    {displayedQuestion}
                   </Text>
                 )}
-                <Text mt={1} fontSize="9px" color="#8A9AA5">客户问题 · 当前会话</Text>
+                <Text mt={1} fontSize="9px" color="#8A9AA5" noOfLines={1}>
+                  {personCentricPlatform
+                    ? `来自：${questionContact}`
+                    : `客户问题 · ${questionContact}`}
+                </Text>
               </Box>
             </Flex>
             <Box

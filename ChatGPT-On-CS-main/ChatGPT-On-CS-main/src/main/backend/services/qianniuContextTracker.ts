@@ -127,6 +127,110 @@ export class QianniuContextTracker {
     this.candidateCount = 0;
   }
 
+  /**
+   * A screen fingerprint changed before OCR has finished identifying the new
+   * buyer. Publish this transition immediately so stale drafts are hidden and
+   * never treated as safe to deliver while the user is switching chats.
+   */
+  public markSwitching(
+    chatFingerprint: string,
+    capturedAt = new Date().toISOString(),
+  ): CompanionContextSnapshot | undefined {
+    if (!this.current) return undefined;
+    this.current = {
+      ...this.current,
+      chatFingerprint,
+      capturedAt,
+      state: 'switching',
+    };
+    this.candidateKey = '';
+    this.candidateCount = 0;
+    return { ...this.current };
+  }
+
+  /**
+   * The selected shop tab is available before the slower conversation OCR.
+   * Publish the shop immediately, but clear the previous buyer so the UI can
+   * never combine a newly selected shop with the old conversation.
+   */
+  public markStoreSwitch(
+    storeId: string,
+    accountId: string,
+    chatFingerprint: string,
+    capturedAt = new Date().toISOString(),
+  ): CompanionContextSnapshot | undefined {
+    if (!this.current || !storeId.trim()) return undefined;
+    const nextStore = storeId.trim();
+    const nextAccount = accountId.trim() || this.current.accountId;
+    if (
+      this.current.storeId === nextStore &&
+      this.current.chatFingerprint === chatFingerprint
+    ) return { ...this.current };
+    this.current = {
+      ...this.current,
+      storeId: nextStore,
+      storeName: nextStore,
+      accountId: nextAccount,
+      accountName: nextAccount,
+      contactId: '',
+      chatFingerprint,
+      productId: null,
+      productTitle: null,
+      recentMessages: [],
+      recentMessagesReused: false,
+      incomingMessageFingerprint: null,
+      contextRevision: this.current.contextRevision + 1,
+      capturedAt,
+      state: 'switching',
+    };
+    this.candidateKey = '';
+    this.candidateCount = 0;
+    return { ...this.current };
+  }
+
+  /**
+   * The official QianNiu bridge is authoritative for the active buyer, but it
+   * does not expose the new message body. Update the visible identity
+   * immediately, clear data owned by the previous buyer, and keep the context
+   * in switching state until a changed-frame recognition confirms the chat.
+   */
+  public markOfficialContactSwitch(
+    contactId: string,
+    officialIdentity: string,
+    capturedAt = new Date().toISOString(),
+  ): CompanionContextSnapshot | undefined {
+    if (!this.current) return undefined;
+    const normalizedContact = contactId.trim();
+    const normalizedIdentity = officialIdentity.trim();
+    if (!normalizedContact || !normalizedIdentity) return undefined;
+    const observedAt = Date.parse(capturedAt);
+    if (!Number.isFinite(observedAt)) throw new Error('capturedAt is invalid');
+
+    const alreadyCurrent =
+      this.current.contactId === normalizedContact &&
+      this.current.state === 'stable';
+    if (alreadyCurrent) return { ...this.current };
+
+    this.lastObservedAt = Math.max(this.lastObservedAt, observedAt);
+    this.current = {
+      ...this.current,
+      contactId: normalizedContact,
+      chatFingerprint: `official:${normalizedIdentity}`,
+      productId: null,
+      productTitle: null,
+      recentMessages: [],
+      recentMessagesReused: false,
+      incomingMessageFingerprint: null,
+      contextRevision: this.current.contextRevision + 1,
+      capturedAt,
+      confidence: 1,
+      state: 'switching',
+    };
+    this.candidateKey = '';
+    this.candidateCount = 0;
+    return { ...this.current };
+  }
+
   public keys(snapshot = this.current) {
     if (!snapshot || snapshot.state !== 'stable') return undefined;
     return {

@@ -109,6 +109,42 @@ function Ensure-EmbeddedPython {
   @('python311.zip', '.', 'import site') | Set-Content -LiteralPath (Join-Path $PythonRoot 'python311._pth') -Encoding ASCII
 }
 
+function Ensure-RuntimeDllBootstrap {
+  $siteCustomize = Join-Path $PythonRoot 'sitecustomize.py'
+  @'
+"""Make bundled native Python wheels work from deep Windows install paths."""
+import os
+from pathlib import Path
+
+_python_root = Path(__file__).resolve().parent
+_rapidocr_root = _python_root.parent / "rapidocr-py311"
+_native_dirs = [
+    _rapidocr_root / "shapely.libs",
+    _rapidocr_root / "numpy.libs",
+]
+for _native_dir in _native_dirs:
+    if _native_dir.is_dir():
+        os.environ["PATH"] = str(_native_dir) + os.pathsep + os.environ.get("PATH", "")
+
+# Shapely's generated delvewheel hook calls add_dll_directory with the full
+# install path. Windows may reject that path with WinError 206 even though the
+# DLLs are already available through PATH. Keep the hook when it works and
+# only ignore that specific long-path failure.
+_original_add_dll_directory = getattr(os, "add_dll_directory", None)
+if _original_add_dll_directory is not None and not getattr(os, "_yingbo_dll_bootstrap", False):
+    def _safe_add_dll_directory(path):
+        try:
+            return _original_add_dll_directory(path)
+        except OSError as _error:
+            if getattr(_error, "winerror", None) == 206:
+                return None
+            raise
+
+    os.add_dll_directory = _safe_add_dll_directory
+    os._yingbo_dll_bootstrap = True
+'@ | Set-Content -LiteralPath $siteCustomize -Encoding UTF8
+}
+
 function Install-Target([string]$Name, [string]$Requirements) {
   $target = Join-Path $ToolsRoot $Name
   $hashMaterial = Get-Content -LiteralPath $Requirements -Raw
@@ -151,6 +187,7 @@ function Test-Import([string]$Target, [string]$Imports) {
 New-Item -ItemType Directory -Path $ToolsRoot -Force | Out-Null
 Copy-SeedRuntime
 Ensure-EmbeddedPython
+Ensure-RuntimeDllBootstrap
 
 $runtimeRoot = Join-Path $AppRoot 'runtime'
 Install-Target 'rapidocr-py311' (Join-Path $runtimeRoot 'requirements-rapidocr.txt')

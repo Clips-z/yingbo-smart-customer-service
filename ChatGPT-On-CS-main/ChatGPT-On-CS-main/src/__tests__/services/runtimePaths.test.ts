@@ -21,6 +21,25 @@ describe('runtimePaths', () => {
     ).toBe(true);
   });
 
+  it('recognizes the current WeChat process and emits QianNiu tab switches without OCR text', () => {
+    const targetScript = fs.readFileSync(
+      runtimePath('scripts', 'companion-target-window.ps1'),
+      'utf8',
+    );
+    const captureScript = fs.readFileSync(
+      runtimePath('scripts', 'qianniu-compat-capture.ps1'),
+      'utf8',
+    );
+
+    expect(targetScript).toContain('name == "wechatappex"');
+    expect(captureScript).toContain(
+      'if ($Watch -and $WindowsOcrOnly -and $activeTabChanged)',
+    );
+    expect(captureScript).not.toContain(
+      '$activeTabChanged -and $fastTabLines.Count -gt 0',
+    );
+  });
+
   it('prefers packaged resources over a working directory that also has scripts', () => {
     const originalResourcesPath = (
       process as NodeJS.Process & {

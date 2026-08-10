@@ -12,6 +12,9 @@ const jinmaiConfig: SidecarConfig = {
   healthEventName: 'jinmai_collector_health_changed',
   modeEventName: 'jinmai_reply_mode_changed',
   configModeKey: 'jinmai_reply_mode',
+  // The companion must follow an already-open 京麦/咚咚 client immediately;
+  // requiring a separate hidden platform toggle made switching appear broken.
+  requireActive: false,
 };
 
 export class JinmaiSidecarService extends BaseSidecarService {

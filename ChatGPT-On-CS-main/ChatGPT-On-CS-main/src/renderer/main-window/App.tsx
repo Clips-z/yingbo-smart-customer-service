@@ -1,3 +1,4 @@
+/* eslint-disable no-void */
 import React, { useEffect, useState } from 'react';
 import { ChakraProvider } from '@chakra-ui/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -23,13 +24,24 @@ const queryClient = new QueryClient({
 });
 
 function App() {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [serviceState, setServiceState] = useState<
+    'starting' | 'ready' | 'unavailable'
+  >('starting');
 
   useEffect(
     () =>
       subscribeToStartupReadiness(
         window.electron.ipcRenderer,
-        () => setIsLoaded(true),
+        () => {
+          setServiceState('ready');
+          void queryClient.invalidateQueries();
+        },
+        () => {
+          setServiceState((current) =>
+            current === 'starting' ? 'starting' : 'unavailable',
+          );
+          void queryClient.cancelQueries();
+        },
       ),
     [],
   );
@@ -39,7 +51,11 @@ function App() {
       <ChakraProvider theme={theme}>
         <BroadcastProvider>
           <ErrorBoundary>
-            {isLoaded ? <MainLayout /> : <FullScreenLoader />}
+            {serviceState === 'ready' ? (
+              <MainLayout />
+            ) : (
+              <FullScreenLoader reconnecting={serviceState === 'unavailable'} />
+            )}
             <SystemCheck />
             <Updater />
           </ErrorBoundary>

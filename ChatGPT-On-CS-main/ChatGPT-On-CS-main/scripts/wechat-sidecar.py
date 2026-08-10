@@ -537,6 +537,16 @@ def run_wechat39(
             verify_current_chat(target)
             set_reply_text(text)
 
+    def focus_contact(target: str) -> None:
+        refresh_controls()
+        select_contact(target)
+        verify_current_chat(target)
+        window.restore()
+        window.set_focus()
+        edit = find_chat_input()
+        edit.click_input()
+        time.sleep(0.2)
+
     def process_command() -> None:
         if not COMMAND_FILE.exists():
             return
@@ -546,9 +556,14 @@ def run_wechat39(
             request_id = str(command.get("requestId") or "")
             target = str(command.get("sender") or "").strip()
             text = str(command.get("content") or "").strip()
+            focus_only = bool(command.get("focusOnly"))
             if target:
-                fill_contact(target, text)
-                logging.info("Focused WeChat contact and filled reply: %s", target)
+                if focus_only:
+                    focus_contact(target)
+                    logging.info("Focused WeChat contact input: %s", target)
+                else:
+                    fill_contact(target, text)
+                    logging.info("Focused WeChat contact and filled reply: %s", target)
             COMMAND_RESULT_FILE.write_text(
                 json.dumps({"requestId": request_id, "ok": True}),
                 encoding="utf-8",

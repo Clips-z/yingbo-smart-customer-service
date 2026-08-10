@@ -35,7 +35,10 @@ if (missing.length) {
 
 const python = path.join(root, 'tools', 'python311', 'python.exe');
 const imports = [
-  ['rapidocr-py311', 'import rapidocr, onnxruntime'],
+    // RapidOCR is imported by the script check below, which normalizes the
+    // runtime path for Shapely's native GEOS DLL. Importing it here with the
+    // raw deep path would recreate the Windows long-path failure we support.
+    ['rapidocr-py311', 'import onnxruntime'],
   [
     'wechat-py311',
     'import pyautogui, pywinauto, win32api, onnxruntime; from rapidocr_onnxruntime import RapidOCR',
@@ -54,6 +57,23 @@ for (const [directory, statement] of imports) {
     console.error(result.stderr || result.stdout);
     process.exit(1);
   }
+}
+
+const qianniuScript = path.join(root, 'scripts', 'qianniu_rapidocr.py');
+const qianniuCheck = spawnSync(
+  python,
+  [
+    '-X',
+    'utf8',
+    '-c',
+    `import sys, runpy; sys.path.insert(0, r'${path.dirname(qianniuScript).replace(/\\/g, '\\\\')}'); runpy.run_path(r'${qianniuScript.replace(/\\/g, '\\\\')}')`,
+  ],
+  { encoding: 'utf8', windowsHide: true },
+);
+if (qianniuCheck.status !== 0) {
+  console.error('Import check failed for scripts/qianniu_rapidocr.py:');
+  console.error(qianniuCheck.stderr || qianniuCheck.stdout);
+  process.exit(qianniuCheck.status || 1);
 }
 
 console.log(

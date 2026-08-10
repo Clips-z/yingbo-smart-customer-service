@@ -4,13 +4,35 @@ import {
 } from '../common/services/platform/platform';
 import { ProductQA } from '../common/services/knowledge/productQA';
 
+export function companionContactLabel(
+  platformId: string,
+  value?: string | null,
+): string {
+  const text = String(value || '').trim();
+  if (!text || /^win_[a-z0-9_]+$/i.test(text)) return '';
+  if (platformId === 'win_qianniu') {
+    const compact = text.replace(/\s+/g, '');
+    return /^[A-Za-z0-9_.@-]{3,64}$/.test(compact) ? compact : '';
+  }
+  return text.length >= 2 && text.length <= 80 ? text : '';
+}
+
 export function selectCompanionSuggestion(
   context: QianniuCompanionContext | undefined,
   suggestions: ReplySuggestion[],
+  currentQuestion?: string,
 ): ReplySuggestion | undefined {
-  if (!context || context.state !== 'stable') return undefined;
+  if (!context || context.state !== 'stable') {
+    return undefined;
+  }
+  const normalizedCurrentQuestion = normalizeQuestion(currentQuestion);
+  const matchesQuestion = (item: ReplySuggestion) =>
+    !normalizedCurrentQuestion ||
+    normalizeQuestion(item.incoming_content) === normalizedCurrentQuestion;
   const exact = context.draftKey
-    ? suggestions.find((item) => item.draft_key === context.draftKey)
+    ? suggestions.find(
+        (item) => item.draft_key === context.draftKey && matchesQuestion(item),
+      )
     : undefined;
   if (exact) return exact;
   const matchesIdentity = (item: ReplySuggestion) =>
@@ -27,10 +49,39 @@ export function selectCompanionSuggestion(
           matchesIdentity(item),
       ),
     )
+    .filter(matchesQuestion)
     .sort(
       (left, right) =>
         new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
     )[0];
+}
+
+export function normalizeQuestion(value?: string | null): string {
+  return String(value || '')
+    .replace(/\s+/gu, '')
+    .replace(/[，。！？、,.!?;；:：'"“”‘’()[\]（）]/gu, '')
+    .toLowerCase();
+}
+
+type CollectorHealthLike = {
+  state?: string;
+  phase?: string;
+  lastSuccessAt?: string;
+};
+
+export function isCompanionCollectorReady(
+  platformId: string,
+  health?: CollectorHealthLike,
+  now = Date.now(),
+): boolean {
+  if (health?.state !== 'running') return false;
+  if (platformId !== 'win_qianniu') return true;
+  if (health.phase === 'ready' || health.phase === 'scanning') return true;
+
+  const lastSuccessAt = health.lastSuccessAt
+    ? Date.parse(health.lastSuccessAt)
+    : Number.NaN;
+  return Number.isFinite(lastSuccessAt) && now - lastSuccessAt < 15_000;
 }
 
 export function selectCompanionHistory(

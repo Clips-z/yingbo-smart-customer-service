@@ -1,6 +1,6 @@
 {
   "name": "yingbo-smart-customer-service-runtime",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "迎波智能客服：面向多平台、多店铺的智能回复与知识运营工作台",
   "main": "./dist/main/main.js",
   "author": "YinBo",

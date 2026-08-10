@@ -1,3 +1,4 @@
+/* eslint-disable no-nested-ternary */
 import {
   App,
   Instance,
@@ -424,6 +425,13 @@ export async function refreshQianniuCompanion() {
   );
 }
 
+export async function generateQianniuReplyFromClipboard(content: string) {
+  return POST<{ data: ReplySuggestion }>(
+    '/api/v1/compat/qianniu/clipboard-question',
+    { content },
+  );
+}
+
 export async function getQianniuCompanionContext() {
   return GET<{ data?: QianniuCompanionContext }>(
     '/api/v1/compat/qianniu/context',
@@ -437,7 +445,7 @@ export async function getCompanionContext(platformId: string) {
   );
 }
 
-export async function getCompanionTimeline(platformId: string, limit = 50) {
+export async function getCompanionTimeline(platformId: string, limit = 5) {
   return GET<{
     data: Array<{
       id: number;
@@ -492,10 +500,17 @@ export async function getQianniuSuggestions(
   );
 }
 
+export async function getAllReplySuggestions(status = 'all') {
+  return GET<{ data: ReplySuggestion[] }>(
+    '/api/v1/compat/suggestions',
+    { status, platformId: 'all' },
+  );
+}
+
 export async function focusReplySuggestion(id: number) {
   return POST<{
     data: { id: number; platformId: string; sender: string };
-  }>('/api/v1/compat/suggestions/focus', { id });
+  }>('/api/v1/compat/suggestions/focus', { id }, { timeout: 8000 });
 }
 
 export type ReplyFeedbackAction =

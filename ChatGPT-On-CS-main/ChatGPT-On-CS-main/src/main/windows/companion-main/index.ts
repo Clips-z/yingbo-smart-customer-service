@@ -22,6 +22,7 @@ const store = new Store();
 const STATE_KEY = 'unified-companion-state';
 const LEGACY_STATE_KEY = 'qianniu-companion-state';
 const BOUNDS_KEY = 'qianniu-companion-bounds';
+const DOCKED_WIDTH_KEY = 'companion-docked-width';
 
 let companionWindow: BrowserWindow | null = null;
 let dockingService: WindowDockingService | null = null;
@@ -56,16 +57,21 @@ export function createCompanionWindow(): BrowserWindow {
   const storedBounds = store.get(BOUNDS_KEY) as
     | { x?: number; y?: number; width?: number; height?: number }
     | undefined;
+  const storedDockedWidth = Math.max(
+    280,
+    Math.min(520, Number(store.get(DOCKED_WIDTH_KEY)) || 372),
+  );
   companionWindow = new BrowserWindow({
     show: false,
     x: storedBounds?.x,
     y: storedBounds?.y,
-    width: state.collapsed ? 56 : storedBounds?.width || 372,
+    width: state.collapsed ? 56 : storedDockedWidth,
     height: storedBounds?.height || 860,
-    minWidth: 56,
+    minWidth: state.collapsed ? 56 : 280,
     minHeight: 520,
     maxWidth: 520,
     frame: false,
+    thickFrame: true,
     resizable: true,
     maximizable: false,
     minimizable: false,
@@ -92,6 +98,8 @@ export function createCompanionWindow(): BrowserWindow {
       store.set(STATE_KEY, nextState);
       companionWindow?.webContents.send('companion-state', nextState);
     },
+    storedDockedWidth,
+    280,
   );
   dockingService.start();
 
@@ -104,9 +112,16 @@ export function createCompanionWindow(): BrowserWindow {
     }
   });
   companionWindow.on('resize', () => {
-    if (!dockingService?.getState().attached && companionWindow) {
+    if (!companionWindow) return;
+    if (!dockingService?.getState().attached) {
       store.set(BOUNDS_KEY, companionWindow.getBounds());
+      return;
     }
+    if (dockingService.getState().collapsed) return;
+    const { width } = companionWindow.getBounds();
+    if (width < 280) return;
+    dockingService.setExpandedWidth(width);
+    store.set(DOCKED_WIDTH_KEY, width);
   });
   companionWindow.on('closed', () => {
     dockingService?.stop();

@@ -29,8 +29,7 @@ describe('MessageService', () => {
       getTransferKeywords: jest.fn().mockResolvedValue([]),
     };
 
-    const { MessageService: MS } = require('../../main/backend/services/messageService');
-    messageService = new MS(mockLogger, mockKeywordController);
+    messageService = new MessageService(mockLogger, mockKeywordController);
   });
 
   describe('createTextReply', () => {
@@ -50,5 +49,29 @@ describe('MessageService', () => {
       const result = await messageService.matchReplaceKeyword(ctx, '你好');
       expect(result).toBe('你好');
     });
+  });
+
+  it('skips the configured typing delay for the real-time Qianniu companion', async () => {
+    jest
+      .spyOn(messageService as any, 'matchKeyword')
+      .mockResolvedValue({ type: 'TEXT', content: '现货，可以直接下单。' });
+    const cfg = {
+      has_transfer: false,
+      context_count: 0,
+      reply_speed: 2,
+      reply_random_speed: 0,
+      has_keyword_match: true,
+      has_use_gpt: false,
+      has_replace: false,
+    } as any;
+    const startedAt = Date.now();
+    const reply = await messageService.getReply(
+      cfg,
+      new Map([['CTX_PLATFORM', 'qianniu-9.96-compat']]),
+      [{ sender: 'buyer', content: '有货吗', role: 'OTHER', type: 'TEXT' }],
+    );
+
+    expect(reply.content).toBe('现货，可以直接下单。');
+    expect(Date.now() - startedAt).toBeLessThan(500);
   });
 });

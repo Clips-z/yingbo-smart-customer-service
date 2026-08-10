@@ -1,4 +1,6 @@
 import {
+  companionContactLabel,
+  isCompanionCollectorReady,
   selectCompanionHistory,
   selectCompanionProduct,
   selectCompanionSuggestion,
@@ -7,6 +9,19 @@ import {
   QianniuCompanionContext,
   ReplySuggestion,
 } from '../../renderer/common/services/platform/platform';
+
+describe('companionContactLabel', () => {
+  test('keeps QianNiu buyer ids strict', () => {
+    expect(companionContactLabel('win_qianniu', 'tb123456')).toBe('tb123456');
+    expect(companionContactLabel('win_qianniu', '轮趣科技_黄文丽')).toBe('');
+  });
+
+  test('shows real WeChat people and group names instead of platform ids', () => {
+    expect(companionContactLabel('win_wechat', '轮趣科技_黄文丽')).toBe('轮趣科技_黄文丽');
+    expect(companionContactLabel('win_wechat', '养基宝用户交流群（209）Q')).toBe('养基宝用户交流群（209）Q');
+    expect(companionContactLabel('win_wechat', 'win_wechat')).toBe('');
+  });
+});
 
 const context: QianniuCompanionContext = {
   platformId: 'win_qianniu',
@@ -68,6 +83,20 @@ describe('selectCompanionSuggestion', () => {
     ).toBeUndefined();
   });
 
+  test('shows no draft until the current customer identity is stable', () => {
+    expect(
+      selectCompanionSuggestion(undefined, [
+        suggestion({ id: 9, conversation_key: 'another-customer' }),
+      ]),
+    ).toBeUndefined();
+    expect(
+      selectCompanionSuggestion(
+        { ...context, state: 'switching' },
+        [suggestion({ id: 9, conversation_key: 'another-customer' })],
+      ),
+    ).toBeUndefined();
+  });
+
   test('restores a legacy draft by stable identity after screenshot changes', () => {
     expect(
       selectCompanionSuggestion(context, [
@@ -81,6 +110,38 @@ describe('selectCompanionSuggestion', () => {
     ).toBe(1);
   });
 
+  test('never pairs a stale answer with a different live customer question', () => {
+    expect(
+      selectCompanionSuggestion(
+        context,
+        [
+          suggestion({
+            conversation_key: 'conversation-a',
+            incoming_content: '昨天',
+            reply_content: '昨天有啥问题或者需要咨询的？',
+          }),
+        ],
+        '树莓派5.4g能跑动ros2吗',
+      ),
+    ).toBeUndefined();
+  });
+
+  test('keeps a reply only when it was generated for the live question', () => {
+    expect(
+      selectCompanionSuggestion(
+        context,
+        [
+          suggestion({
+            id: 8,
+            conversation_key: 'conversation-a',
+            incoming_content: '树莓派 5.4G 能跑动 ROS2 吗？',
+          }),
+        ],
+        '树莓派5.4g能跑动ros2吗',
+      )?.id,
+    ).toBe(8);
+  });
+
   test('keeps the latest three previous drafts for context', () => {
     const items = [1, 2, 3, 4].map((id) =>
       suggestion({
@@ -92,6 +153,41 @@ describe('selectCompanionSuggestion', () => {
     expect(selectCompanionHistory(context, items, 4).map((item) => item.id)).toEqual([
       3, 2, 1,
     ]);
+  });
+});
+
+describe('isCompanionCollectorReady', () => {
+  test('does not flicker to connecting during a normal scan', () => {
+    expect(
+      isCompanionCollectorReady('win_qianniu', {
+        state: 'running',
+        phase: 'scanning',
+      }),
+    ).toBe(true);
+  });
+
+  test('keeps a recently healthy collector ready during a short transition', () => {
+    const now = Date.parse('2026-08-10T04:00:10.000Z');
+    expect(
+      isCompanionCollectorReady(
+        'win_qianniu',
+        {
+          state: 'running',
+          phase: 'warming',
+          lastSuccessAt: '2026-08-10T04:00:00.000Z',
+        },
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  test('reports a stopped collector as unavailable', () => {
+    expect(
+      isCompanionCollectorReady('win_qianniu', {
+        state: 'stopped',
+        phase: 'idle',
+      }),
+    ).toBe(false);
   });
 });
 

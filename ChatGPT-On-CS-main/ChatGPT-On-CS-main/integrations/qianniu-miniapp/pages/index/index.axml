@@ -1,0 +1,10 @@
+<view class="page">
+  <view class="card">
+    <view class="title">迎波智能客服 · 千牛官方桥接</view>
+    <view class="status {{connected ? 'ok' : 'waiting'}}">
+      {{statusText}}
+    </view>
+    <view class="identity" a:if="{{contactText}}">当前客户：{{contactText}}</view>
+    <view class="hint">本页面只监听当前客户、打开会话和填入回复，不会自动发送消息。</view>
+  </view>
+</view>

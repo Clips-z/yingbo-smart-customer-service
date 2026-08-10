@@ -1,0 +1,7 @@
+{
+  "pages": ["pages/index/index"],
+  "window": {
+    "defaultTitle": "迎波智能客服桥接",
+    "titleBarColor": "#0ea5a8"
+  }
+}

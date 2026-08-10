@@ -146,11 +146,34 @@ class BackendServiceManager {
   }
 
   async getAvailablePort(): Promise<number> {
+    const configured = Number(process.env.YINGBO_BACKEND_PORT || 9999);
+    if (Number.isInteger(configured) && configured > 0 && configured < 65536) {
+      const preferredAvailable = await this.isPortAvailable(configured);
+      if (preferredAvailable) return configured;
+      console.warn(
+        `Preferred backend port ${configured} is occupied; using an ephemeral port. The QianNiu official bridge will remain disconnected until the configured port is available.`,
+      );
+    }
+    return this.reserveEphemeralPort();
+  }
+
+  private async isPortAvailable(port: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const server = createServer();
+      server.unref();
+      server.once('error', () => resolve(false));
+      server.listen(port, '127.0.0.1', () => {
+        server.close(() => resolve(true));
+      });
+    });
+  }
+
+  private async reserveEphemeralPort(): Promise<number> {
     return new Promise((resolve, reject) => {
       const server = createServer();
       server.unref();
       server.on('error', reject);
-      server.listen(0, () => {
+      server.listen(0, '127.0.0.1', () => {
         const { port } = server.address() as { port: number };
         server.close(() => {
           resolve(port);

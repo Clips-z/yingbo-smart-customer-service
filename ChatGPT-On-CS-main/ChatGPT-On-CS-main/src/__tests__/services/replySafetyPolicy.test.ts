@@ -23,17 +23,14 @@ describe('replySafetyPolicy', () => {
     ).toEqual({ allowed: true, mode: 'assist' });
   });
 
-  it('rejects unattended delivery until the platform is explicitly unlocked', () => {
+  it('allows unattended delivery for a supported platform when the operator selects it', () => {
     expect(
       evaluateReplyModeChange({
         platformId: 'win_qianniu',
         requestedMode: 'unattended',
         unattendedEnabled: false,
       }),
-    ).toMatchObject({
-      allowed: false,
-      code: 'unattended_not_enabled',
-    });
+    ).toEqual({ allowed: true, mode: 'unattended' });
   });
 
   it('does not permit unattended delivery for unsupported platforms', () => {
@@ -70,22 +67,22 @@ describe('replySafetyPolicy', () => {
     expect(normalizeReplyMode('win_qianniu', 'assist')).toBe('assist');
   });
 
-  it('does not treat WeCom as an unattended-supported production platform', () => {
-    expect(getDefaultReplyMode('win_wecom')).toBe('hint');
+  it('supports unattended delivery for WeCom', () => {
+    expect(getDefaultReplyMode('win_wecom')).toBe('assist');
     expect(
       evaluateReplyModeChange({
         platformId: 'win_wecom',
         requestedMode: 'unattended',
         unattendedEnabled: true,
       }),
-    ).toMatchObject({ allowed: false });
+    ).toEqual({ allowed: true, mode: 'unattended' });
   });
 
-  it('throws a structured denial that API routes can return safely', () => {
+  it('still rejects unattended delivery for unsupported platforms', () => {
     const decision = evaluateReplyModeChange({
-      platformId: 'win_qianniu',
+      platformId: 'win_pdd',
       requestedMode: 'unattended',
-      unattendedEnabled: false,
+      unattendedEnabled: true,
     });
     expect(() => assertReplyModeAllowed(decision)).toThrow(
       expect.objectContaining({

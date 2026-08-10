@@ -34,20 +34,30 @@ public static class CompanionBoundsProbe
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int count);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out RECT rect, int size);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
 
     [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+    private static bool GetVisibleWindowRect(IntPtr hwnd, bool minimized, out RECT rect)
+    {
+        if (!minimized && DwmGetWindowAttribute(hwnd, 9, out rect, Marshal.SizeOf(typeof(RECT))) == 0 &&
+            rect.Right > rect.Left && rect.Bottom > rect.Top)
+            return true;
+        return GetWindowRect(hwnd, out rect);
+    }
 
     private static string PlatformForProcess(string processName)
     {
         var name = processName.ToLowerInvariant();
         if (name == "aliworkbench" || name == "qianniu") return "win_qianniu";
         if (name == "jingmai" || name == "jingmaiworkbench" || name == "jdworkstation" || name == "jmworkstation" || name == "jdm_dd_workbench") return "win_jinmai";
-        if (name == "wechat" || name == "weixin") return "win_wechat";
+        if (name == "wechat" || name == "weixin" || name == "wechatappex") return "win_wechat";
         if (name == "wxwork" || name == "wecom") return "win_wecom";
         if (name == "pdd" || name == "pinduoduo" || name == "pinduoduoworkbench") return "win_pdd";
         if (name == "douyin" || name == "douyinshop" || name == "dyworkbench") return "win_douyin";
@@ -67,8 +77,12 @@ public static class CompanionBoundsProbe
             catch { }
         }
 
+        var foregroundWindow = GetForegroundWindow();
+        var foregroundRoot = GetAncestor(foregroundWindow, 3); // GA_ROOTOWNER
         uint foregroundProcessId;
-        GetWindowThreadProcessId(GetForegroundWindow(), out foregroundProcessId);
+        GetWindowThreadProcessId(foregroundWindow, out foregroundProcessId);
+        uint foregroundRootProcessId;
+        GetWindowThreadProcessId(foregroundRoot, out foregroundRootProcessId);
         var candidates = new List<CompanionWindowRecord>();
         EnumWindows((hwnd, _) => {
             if (!IsWindowVisible(hwnd)) return true;
@@ -90,14 +104,15 @@ public static class CompanionBoundsProbe
             if (platform == "win_qianniu" && !windowTitle.Contains("\u5343\u725b\u63a5\u5f85\u53f0")) return true;
             if (platform != "win_qianniu" && String.IsNullOrWhiteSpace(windowTitle)) return true;
 
+            var minimized = IsIconic(hwnd);
             RECT rect;
-            if (!GetWindowRect(hwnd, out rect)) return true;
+            if (!GetVisibleWindowRect(hwnd, minimized, out rect)) return true;
             var width = rect.Right - rect.Left;
             var height = rect.Bottom - rect.Top;
             // Minimized windows use the Windows parking rectangle (-32000,
             // -32000). Keep them in the target list so the companion can
             // explicitly hide, then immediately follow once restored.
-            if (!IsIconic(hwnd) && (width < 320 || height < 300)) return true;
+            if (!minimized && (width < 320 || height < 300)) return true;
             candidates.Add(new CompanionWindowRecord {
                 platformId = platform,
                 hwnd = hwnd.ToInt64(),
@@ -105,8 +120,9 @@ public static class CompanionBoundsProbe
                 y = rect.Top,
                 width = width,
                 height = height,
-                minimized = IsIconic(hwnd),
-                foreground = processId == foregroundProcessId
+                minimized = minimized,
+                foreground = hwnd == foregroundWindow || hwnd == foregroundRoot ||
+                    processId == foregroundProcessId || processId == foregroundRootProcessId
             });
             return true;
         }, IntPtr.Zero);

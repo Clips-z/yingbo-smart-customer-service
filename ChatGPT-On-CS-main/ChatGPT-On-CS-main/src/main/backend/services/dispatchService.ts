@@ -94,7 +94,7 @@ export class DispatchService {
       return NO_REPLY_RESULT;
     }
 
-    if (!cfg.has_use_gpt) {
+    if (!cfg.has_use_gpt && !cfg.has_keyword_match) {
       this.log.info(`平台 ${appId || 'global'} 未启用 GPT，跳过回复生成`);
       return NO_REPLY_RESULT;
     }
@@ -152,7 +152,12 @@ export class DispatchService {
   }
 
   public receiveBroadcast(msg: any): void {
-    this.mainWindow.webContents.send('broadcast', msg);
+    // The companion is a separate BrowserWindow. Sending only to the main
+    // dashboard made it wait for its REST polling interval after every chat
+    // switch and every finished reply.
+    BrowserWindow.getAllWindows()
+      .filter((window) => !window.isDestroyed())
+      .forEach((window) => window.webContents.send('broadcast', msg));
   }
 
   public async checkHealth(): Promise<boolean> {
@@ -238,7 +243,7 @@ export class DispatchService {
     }
   }
 
-  public async runTask(appId?: string): Promise<void> {
+  public async runTask(_appId?: string): Promise<void> {
     if (this.io.sockets.sockets.size === 0) {
       throw new Error('后端组件尚未连接，请稍后重试');
     }
@@ -246,7 +251,7 @@ export class DispatchService {
     this.io.emit('strategyService-run');
   }
 
-  public async stopTask(appId?: string): Promise<void> {
+  public async stopTask(_appId?: string): Promise<void> {
     if (this.io.sockets.sockets.size === 0) {
       return;
     }

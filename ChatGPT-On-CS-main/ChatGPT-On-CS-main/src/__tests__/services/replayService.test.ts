@@ -1,15 +1,17 @@
-import { replaySanitizedFixtures } from '../../main/backend/services/replayService';
 import sqlite from 'sqlite3';
 import { Sequelize } from 'sequelize';
 import { initReplayFixture, ReplayFixture } from '../../main/backend/entities/replayFixture';
 import { initAuditEvent } from '../../main/backend/entities/auditEvent';
-import { saveReplayFixture } from '../../main/backend/services/replayService';
+import {
+  replaySanitizedFixtures,
+  saveReplayFixture,
+} from '../../main/backend/services/replayService';
 
 describe('sanitized platform replay', () => {
-  it('replays safety outcomes without screenshots or personal data', () => {
+  it('replays unattended delivery outcomes without screenshots or personal data', () => {
     const result = replaySanitizedFixtures([
       { platformId: 'win_qianniu', source: 'llm', retrievalStatus: 'hit', ocrConfidence: 0.95, expectedAllowed: true },
-      { platformId: 'win_wechat', source: 'llm', retrievalStatus: 'no_hit', ocrConfidence: 0.95, expectedAllowed: false },
+      { platformId: 'win_wechat', source: 'llm', retrievalStatus: 'no_hit', ocrConfidence: 0.95, expectedAllowed: true },
     ]);
     expect(result.map((row) => row.passed)).toEqual([true, true]);
   });

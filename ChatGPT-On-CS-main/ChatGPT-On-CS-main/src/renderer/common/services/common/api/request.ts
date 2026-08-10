@@ -33,6 +33,65 @@ export interface ApiError {
   details?: unknown;
 }
 
+export class ApiRequestError extends Error implements ApiError {
+  code?: number;
+
+  status?: number;
+
+  details?: unknown;
+
+  constructor(message: string, values: Omit<ApiError, 'message'> = {}) {
+    super(message);
+    this.name = 'ApiRequestError';
+    Object.assign(this, values);
+  }
+}
+
+function readableMessage(value: unknown, fallback: string): string {
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (value && typeof value === 'object') {
+    const nested = value as {
+      message?: unknown;
+      error?: unknown;
+      reason?: unknown;
+    };
+    const nestedText = [nested.message, nested.error, nested.reason]
+      .map((candidate) => readableMessage(candidate, ''))
+      .find(Boolean);
+    if (nestedText) return nestedText;
+  }
+  return fallback;
+}
+
+function toApiRequestError(err: AxiosError): ApiRequestError {
+  if (!err) return new ApiRequestError('未知错误');
+  if (err.message === 'Network Error') {
+    return new ApiRequestError('服务仍在启动，请稍后重试');
+  }
+  if (err.code === 'ECONNABORTED') {
+    return new ApiRequestError('请求超时，请稍后重试');
+  }
+  if (err.response) {
+    const body = err.response.data;
+    const messageValue =
+      body && typeof body === 'object' && 'message' in body
+        ? (body as { message: unknown }).message
+        : body;
+    return new ApiRequestError(
+      readableMessage(messageValue, `请求失败 (${err.response.status})`),
+      {
+        status: err.response.status,
+        code:
+          body && typeof body === 'object'
+            ? (body as { code?: number }).code
+            : undefined,
+        details: body,
+      },
+    );
+  }
+  return new ApiRequestError(readableMessage(err.message, '未知错误'));
+}
+
 /* 创建请求实例 */
 const instance = axios.create({
   timeout: 60000,
@@ -63,7 +122,7 @@ function checkRes<T>(data: T): T {
     throw new Error('服务器异常');
   }
   if (body.code && (body.code < 200 || body.code >= 400)) {
-    throw Object.assign(new Error(body.message || '请求失败'), {
+    throw new ApiRequestError(readableMessage(body.message, '请求失败'), {
       code: body.code,
       details: data,
     });
@@ -75,39 +134,7 @@ function checkRes<T>(data: T): T {
  * 响应错误 — 将 AxiosError 转为 ApiError
  */
 function responseError(err: AxiosError): Promise<never> {
-  const apiError: ApiError = { message: '未知错误' };
-
-  if (!err) {
-    return Promise.reject(apiError);
-  }
-
-  if (err.message === 'Network Error') {
-    apiError.message = '服务还在启动，请稍后尝试';
-    return Promise.reject(apiError);
-  }
-
-  if (err.code === 'ECONNABORTED') {
-    apiError.message = '请求超时，请稍后再试';
-    return Promise.reject(apiError);
-  }
-
-  if (err.response) {
-    apiError.status = err.response.status;
-    const body = err.response.data;
-    if (body && typeof body === 'object' && 'message' in body) {
-      apiError.message = String(
-        (body as { message: unknown }).message,
-      );
-      apiError.code = (body as { code?: number }).code;
-      apiError.details = body;
-    } else {
-      apiError.message = `请求失败 (${err.response.status})`;
-    }
-    return Promise.reject(apiError);
-  }
-
-  apiError.message = err.message || String(err);
-  return Promise.reject(apiError);
+  return Promise.reject(toApiRequestError(err));
 }
 
 /**

@@ -1,4 +1,7 @@
-import { extractQianniuContextEvidence } from '../../main/backend/services/qianniuContextEvidence';
+import {
+  extractQianniuContextEvidence,
+  normalizeQianniuStoreName,
+} from '../../main/backend/services/qianniuContextEvidence';
 
 const line = (text: string, x: number, y: number) => ({
   text, score: 0.98, x, y, width: text.length * 12, height: 22,
@@ -40,6 +43,73 @@ describe('extractQianniuContextEvidence', () => {
       storeName: 'wheeltec品牌店',
       accountId: 'jamie',
       accountName: 'jamie',
+    });
+  });
+
+  test('repairs the selected passionpaul tab when OCR drops one letter', () => {
+    expect(
+      extractQianniuContextEvidence([
+        { ...line('passonipauljame', 249, 20), active_tab: true },
+        line('jamie', 108, 89),
+      ]),
+    ).toMatchObject({
+      storeId: 'passionpaul',
+      accountId: 'jamie',
+    });
+  });
+
+  test('uses the verified active tab slot when the Chinese shop text is corrupted', () => {
+    expect(
+      extractQianniuContextEvidence(
+        [{ ...line('《、wheeltectWEjamie', 420, 20), active_tab: true }],
+        'jamie',
+        2,
+      ),
+    ).toMatchObject({
+      storeId: 'wheeltec旗舰店',
+      storeName: 'wheeltec旗舰店',
+      accountId: 'jamie',
+    });
+    expect(
+      extractQianniuContextEvidence(
+        [{ ...line('《、wheeltectWEjame', 420, 20), active_tab: true }],
+        undefined,
+        2,
+      ),
+    ).toMatchObject({ storeId: 'wheeltec旗舰店', accountId: 'jamie' });
+  });
+
+  test('does not guess a store from an ambiguous tab strip', () => {
+    expect(
+      extractQianniuContextEvidence([
+        line('firstshop:jamie', 250, 18),
+        line('wheeltech品牌店jamie', 610, 18),
+      ]),
+    ).toEqual({});
+  });
+
+  test('parses the space-separated store and account emitted by Windows OCR', () => {
+    expect(
+      extractQianniuContextEvidence([
+        line('wheeltech 品牌店 jamie', 610, 18),
+      ]),
+    ).toMatchObject({
+      storeId: 'wheeltech品牌店',
+      accountId: 'jamie',
+    });
+  });
+
+  test('repairs the live OCR flagship suffix without changing a brand shop', () => {
+    expect(normalizeQianniuStoreName('wheeltech 牌 店')).toBe('wheeltech旗舰店');
+    expect(normalizeQianniuStoreName('wheeltech 品牌店')).toBe('wheeltech品牌店');
+    expect(
+      extractQianniuContextEvidence([
+        { ...line('wheeltech 牌 店:jamie', 610, 18), active_tab: true },
+      ]),
+    ).toMatchObject({
+      storeId: 'wheeltech旗舰店',
+      storeName: 'wheeltech旗舰店',
+      accountId: 'jamie',
     });
   });
 

@@ -1,3 +1,4 @@
+/* eslint-disable no-void, no-nested-ternary, prefer-destructuring */
 import express from 'express';
 import cors from 'cors';
 import asyncHandler from 'express-async-handler';
@@ -25,10 +26,7 @@ import {
   WechatCollectorState,
   WechatSidecarService,
 } from './services/wechatSidecarService';
-import {
-  WecomCollectorState,
-  WecomSidecarService,
-} from './services/wecomSidecarService';
+import { WecomSidecarService } from './services/wecomSidecarService';
 import {
   JinmaiCollectorState,
   JinmaiReplyMode,
@@ -37,6 +35,7 @@ import {
 import { CollectorState, ReplyMode } from './services/baseSidecarService';
 import { PddSidecarService } from './services/pddSidecarService';
 import { DouyinSidecarService } from './services/douyinSidecarService';
+import { buildSidecarSuggestion } from './services/sidecarSuggestion';
 import { RagService } from './services/ragService';
 import {
   evaluateAutomaticDelivery,
@@ -68,6 +67,12 @@ import { appendAuditEvent, AuditExportFormat, listAuditEvents, serializeAuditExp
 import { deleteReplayFixture, listReplayFixtures, replaySanitizedFixtures, saveReplayFixture } from './services/replayService';
 import { CompanionContextRegistry } from './services/companionContextRegistry';
 import { ConversationTimelineService } from './services/conversationTimelineService';
+import {
+  closeSupersededPendingReplies,
+  resolvePendingReplies,
+} from './services/pendingReplyReconciliation';
+import { QianniuOfficialBridge } from './services/qianniuOfficialBridge';
+import { renderQianniuOfficialBridgePage } from './services/qianniuOfficialBridgePage';
 import { Config } from './entities/config';
 import {
   CTX_APP_ID,
@@ -130,6 +135,8 @@ class BKServer {
   private companionContextRegistry = new CompanionContextRegistry(1);
 
   private conversationTimelineService = new ConversationTimelineService();
+
+  private qianniuOfficialBridge = new QianniuOfficialBridge();
 
   constructor(port: number, mainWindow: BrowserWindow) {
     this.app = express();
@@ -219,6 +226,7 @@ class BKServer {
           await this.knowledgeCandidateService.considerFeedback(result.feedback);
         }
       },
+      this.qianniuOfficialBridge,
     );
     this.wechatSidecarService = new WechatSidecarService(
       port,
@@ -632,6 +640,9 @@ class BKServer {
           content: reply.content,
         });
         const safeReply = { ...reply, safeToAutoSend: deliveryDecision.allowed };
+        if (binding) {
+          await closeSupersededPendingReplies({ context: binding.snapshot });
+        }
         const suggestion = await ReplySuggestion.create({
           ...(binding
             ? {
@@ -1276,12 +1287,112 @@ class BKServer {
       res.json({ success: true, data: this.qianniuCompatService.getHealth() });
     });
 
+    this.app.get('/api/v1/compat/qianniu/official-bridge', (_req, res) => {
+      res.type('html').send(renderQianniuOfficialBridgePage());
+    });
+
+    this.app.post('/api/v1/compat/qianniu/official-bridge/heartbeat', (req, res) => {
+      try {
+        const runtime = String(req.body.runtime || '');
+        if (runtime !== 'miniapp' && runtime !== 'legacy-jssdk') {
+          throw new Error('未检测到受支持的千牛官方运行容器');
+        }
+        this.qianniuOfficialBridge.heartbeat(
+          String(req.body.clientId || ''),
+          runtime,
+        );
+        res.json({ success: true, data: this.qianniuOfficialBridge.getHealth() });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
+    this.app.post('/api/v1/compat/qianniu/official-bridge/contact', (req, res) => {
+      try {
+        const runtime = String(req.body.runtime || '');
+        if (runtime !== 'miniapp' && runtime !== 'legacy-jssdk') {
+          throw new Error('未检测到受支持的千牛官方运行容器');
+        }
+        this.qianniuOfficialBridge.heartbeat(
+          String(req.body.clientId || ''),
+          runtime,
+        );
+        const previous = this.qianniuOfficialBridge.getHealth().currentContact;
+        const contact = this.qianniuOfficialBridge.observeContact({
+          securityUID: String(req.body.securityUID || ''),
+          bizDomain: String(req.body.bizDomain || ''),
+          ...(req.body.userNick ? { userNick: String(req.body.userNick) } : {}),
+        });
+        const changed =
+          !previous ||
+          previous.securityUID !== contact.securityUID ||
+          previous.bizDomain !== contact.bizDomain ||
+          previous.userNick !== contact.userNick;
+        if (changed) this.qianniuCompatService.onOfficialContactChanged(contact);
+        res.json({ success: true, data: contact });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
+    this.app.get('/api/v1/compat/qianniu/official-bridge/commands', (req, res) => {
+      try {
+        const command = this.qianniuOfficialBridge.pollCommand(
+          String(req.query.clientId || ''),
+        );
+        res.json({ success: true, data: command || null });
+      } catch (error) {
+        res.status(400).json({
+          success: false,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    });
+
+    this.app.post(
+      '/api/v1/compat/qianniu/official-bridge/commands/:commandId/complete',
+      (req, res) => {
+        try {
+          this.qianniuOfficialBridge.completeCommand(
+            String(req.body.clientId || ''),
+            {
+              commandId: String(req.params.commandId || ''),
+              ok: req.body.ok === true,
+              ...(req.body.error ? { error: String(req.body.error) } : {}),
+            },
+          );
+          res.json({ success: true });
+        } catch (error) {
+          res.status(409).json({
+            success: false,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      },
+    );
+
     this.app.post('/api/v1/compat/qianniu/refresh', (_req, res) => {
       res.json({
         success: true,
         data: this.qianniuCompatService.requestRefresh(),
       });
     });
+
+    this.app.post(
+      '/api/v1/compat/qianniu/clipboard-question',
+      asyncHandler(async (req, res) => {
+        const suggestion = await this.qianniuCompatService.generateFromClipboard(
+          req.body.content,
+        );
+        res.json({ success: true, data: suggestion });
+      }),
+    );
 
     this.app.post(
       '/api/v1/compat/qianniu/mode',
@@ -1404,6 +1515,16 @@ class BKServer {
           res.json({ success: true, data: [] });
           return;
         }
+        if (
+          context.state !== 'stable' ||
+          !context.contactId ||
+          !context.storeId ||
+          /^qianniu-default$/i.test(context.storeId) ||
+          /^\d{1,8}$/.test(context.storeId)
+        ) {
+          res.json({ success: true, data: [] });
+          return;
+        }
         const data = await this.conversationTimelineService.listForContext(
           context,
           Number(req.query.limit) || 50,
@@ -1412,7 +1533,7 @@ class BKServer {
       }),
     );
 
-    this.app.post('/api/v1/compat/:platform/context', (req, res) => {
+    this.app.post('/api/v1/compat/:platform/context', asyncHandler(async (req, res) => {
       const platformId =
         req.params.platform === 'wechat'
           ? 'win_wechat'
@@ -1453,6 +1574,23 @@ class BKServer {
           storeName: body.storeName ? String(body.storeName) : undefined,
           accountName: body.accountName ? String(body.accountName) : undefined,
         });
+        const messages = update.snapshot.recentMessages || [];
+        const latest = messages[messages.length - 1];
+        const resolved = await resolvePendingReplies({
+          context: update.snapshot,
+          outgoingContent:
+            latest?.direction === 'outgoing' ? latest.content : undefined,
+        });
+        if (resolved > 0) {
+          this.dispatchService.receiveBroadcast({
+            event: 'reply_suggestions_reconciled',
+            data: {
+              platformId,
+              contactId: update.snapshot.contactId,
+              count: resolved,
+            },
+          });
+        }
         res.json({ success: true, data: update.snapshot });
       } catch (error) {
         res.status(400).json({
@@ -1460,7 +1598,7 @@ class BKServer {
           message: error instanceof Error ? error.message : String(error),
         });
       }
-    });
+    }));
 
     this.app.post('/api/v1/compat/wechat/health', (req, res) => {
       const state = String(req.body.state || 'running');
@@ -1593,6 +1731,23 @@ class BKServer {
           data: suggestion.toJSON(),
         });
         res.json({ success: true, data: suggestion });
+      }),
+    );
+
+    this.app.get(
+      '/api/v1/compat/suggestions',
+      asyncHandler(async (req, res) => {
+        const status = String(req.query.status || 'all');
+        const platformId = String(req.query.platformId || 'all');
+        const where: Record<string, unknown> = {};
+        if (status !== 'all') where.status = status;
+        if (platformId !== 'all') where.platform_id = platformId;
+        const data = await ReplySuggestion.findAll({
+          where,
+          order: [['created_at', 'DESC']],
+          limit: 200,
+        });
+        res.json({ success: true, data });
       }),
     );
 
@@ -1952,18 +2107,15 @@ class BKServer {
     this.app.post(
       '/api/v1/compat/jinmai/suggestions/delivery',
       asyncHandler(async (req, res) => {
-        const { sender, content, replyText, platformId, instanceId } = req.body || {};
+        const payload = req.body || {};
         try {
-          const suggestion = await ReplySuggestion.create({
-            platform_id: platformId || 'win_jinmai',
-            platform_name: '京麦',
-            sender: sender || '京麦客户',
-            buyer_message: content,
-            reply_content: replyText,
-            status: 'pending',
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
+          const suggestion = await ReplySuggestion.create(
+            buildSidecarSuggestion({
+              ...payload,
+              platformId: payload.platformId || 'win_jinmai',
+              platformName: '京麦',
+            }),
+          );
           this.dispatchService.receiveBroadcast({
             event: 'jinmai_suggestion_created',
             data: suggestion.toJSON(),
@@ -2039,18 +2191,15 @@ class BKServer {
     this.app.post(
       '/api/v1/compat/pdd/suggestions/delivery',
       asyncHandler(async (req, res) => {
-        const { sender, content, replyText, platformId, instanceId } = req.body || {};
+        const payload = req.body || {};
         try {
-          const suggestion = await ReplySuggestion.create({
-            platform_id: platformId || 'win_pdd',
-            platform_name: '拼多多',
-            sender: sender || '拼多多客户',
-            buyer_message: content,
-            reply_content: replyText,
-            status: 'pending',
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
+          const suggestion = await ReplySuggestion.create(
+            buildSidecarSuggestion({
+              ...payload,
+              platformId: payload.platformId || 'win_pdd',
+              platformName: '拼多多',
+            }),
+          );
           this.dispatchService.receiveBroadcast({
             event: 'pdd_suggestion_created',
             data: suggestion.toJSON(),
@@ -2125,18 +2274,15 @@ class BKServer {
     this.app.post(
       '/api/v1/compat/douyin/suggestions/delivery',
       asyncHandler(async (req, res) => {
-        const { sender, content, replyText, platformId, instanceId } = req.body || {};
+        const payload = req.body || {};
         try {
-          const suggestion = await ReplySuggestion.create({
-            platform_id: platformId || 'win_douyin',
-            platform_name: '抖音电商',
-            sender: sender || '抖音客户',
-            buyer_message: content,
-            reply_content: replyText,
-            status: 'pending',
-            created_at: new Date(),
-            updated_at: new Date(),
-          });
+          const suggestion = await ReplySuggestion.create(
+            buildSidecarSuggestion({
+              ...payload,
+              platformId: payload.platformId || 'win_douyin',
+              platformName: '抖音电商',
+            }),
+          );
           this.dispatchService.receiveBroadcast({
             event: 'douyin_suggestion_created',
             data: suggestion.toJSON(),
@@ -2393,23 +2539,22 @@ class BKServer {
 
     this.app.get('/api/v1/base/health', async (req, res) => {
       try {
-        const resp = await this.dispatchService.checkHealth();
-        if (resp) {
-          res.json({
-            success: true,
-            data: true,
-          });
-        } else {
-          res.json({
-            success: false,
-            data: false,
-          });
-        }
+        // Reaching this route proves that the local Express service and its
+        // database startup gate are ready. The legacy Socket.IO strategy
+        // worker is optional for desktop compatibility collectors, so its
+        // absence must not force the whole UI into a disconnected screen.
+        const strategyConnected = await this.dispatchService.checkHealth();
+        res.json({
+          success: true,
+          data: true,
+          components: { strategyConnected },
+        });
       } catch (error) {
         console.error(error);
-        res.json({
+        res.status(503).json({
           success: false,
           data: false,
+          message: error instanceof Error ? error.message : String(error),
         });
       }
     });

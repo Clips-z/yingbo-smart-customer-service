@@ -2259,8 +2259,9 @@ def process_command(
         request_id = str(command.get("requestId") or "")
         target = str(command.get("sender") or "").strip()
         text = str(command.get("content") or "").strip()
+        focus_only = bool(command.get("focusOnly"))
 
-        if target and text:
+        if target and (text or focus_only):
             if not HAS_PYAUTOGUI:
                 COMMAND_RESULT_FILE.write_text(
                     json.dumps({"requestId": request_id, "ok": False, "error": "pyautogui not available"}),
@@ -2277,13 +2278,42 @@ def process_command(
                     layout = parser.capture_and_parse(handle)
                     convs = layout.get("conversations", [])
                 conv = find_conv_by_name(convs, target)
+                search_state = None
+                if not conv and PLATFORM_ID == "win_wechat":
+                    # The aggregated workbench can contain a valid WeChat
+                    # conversation that has scrolled out of the visible list.
+                    # Search it by the stable part before the UI ellipsis,
+                    # then re-run the layout parser on the search results.
+                    search_query = re.split(
+                        r"(?:\.{2,}|…+)", normalize_contact_name(target), maxsplit=1
+                    )[0]
+                    if len(search_query) >= 4:
+                        search_state = save_desktop_state()
+                        bring_to_front(handle)
+                        time.sleep(0.3)
+                        pyautogui.hotkey("ctrl", "f", _pause=False)
+                        time.sleep(0.2)
+                        copy_text_to_clipboard(search_query)
+                        pyautogui.hotkey("ctrl", "a", _pause=False)
+                        pyautogui.hotkey("ctrl", "v", _pause=False)
+                        time.sleep(1.0)
+                        search_layout = parser.capture_and_parse(handle)
+                        conv = find_conv_by_name(
+                            search_layout.get("conversations", []), target
+                        ) or find_conv_by_name(
+                            search_layout.get("conversations", []), search_query
+                        )
+                        if not conv:
+                            pyautogui.press("esc", _pause=False)
+                            restore_desktop_state(search_state)
+                            search_state = None
                 if conv:
                     logging.info(
                         "process_command: target=%s click=(%d,%d)",
                         target, conv.get("click_x", 0), conv.get("click_y", 0),
                     )
                     # 保存桌面状态
-                    desktop_state = save_desktop_state()
+                    desktop_state = search_state or save_desktop_state()
                     try:
                         bring_to_front(handle)
                         time.sleep(0.5)
@@ -2306,6 +2336,15 @@ def process_command(
                         pyautogui.click(input_x, input_y, _pause=False)
                         time.sleep(0.3)
 
+                        if focus_only:
+                            COMMAND_RESULT_FILE.write_text(
+                                json.dumps({"requestId": request_id, "ok": True}),
+                                encoding="utf-8",
+                            )
+                            logging.info("Focused input for: %s", target)
+                            desktop_state = None
+                            return
+
                         # 填入回复文本
                         copy_text_to_clipboard(text)
                         time.sleep(0.15)
@@ -2323,8 +2362,9 @@ def process_command(
                         return
                     finally:
                         # 等待 UI 完全处理完粘贴操作后再恢复桌面
-                        time.sleep(0.3)
-                        restore_desktop_state(desktop_state)
+                        if desktop_state is not None:
+                            time.sleep(0.3)
+                            restore_desktop_state(desktop_state)
 
         COMMAND_RESULT_FILE.write_text(
             json.dumps({"requestId": request_id, "ok": False, "error": "未找到联系人"}),
@@ -2344,6 +2384,16 @@ def process_command(
 def find_conv_by_name(conversations: list[dict], name: str) -> dict | None:
     """在会话列表中按名称查找联系人"""
     key = normalize_contact_name(name)
+
+    def stable_prefix(value: str) -> str:
+        normalized = normalize_contact_name(value)
+        # OCR/list views shorten long group names with either two/three dots
+        # or a Unicode ellipsis. The visible prefix is still stable enough to
+        # locate the same row, while the old exact comparison made every
+        # truncated WeChat group impossible to open from the workbench.
+        return re.split(r"(?:\.{2,}|…+)", normalized, maxsplit=1)[0]
+
+    target_prefix = stable_prefix(name)
     for conv in conversations:
         if normalize_contact_name(conv.get("name", "")) == key:
             return conv
@@ -2353,6 +2403,18 @@ def find_conv_by_name(conversations: list[dict], name: str) -> dict | None:
     for conv in conversations:
         if key in normalize_contact_name(conv.get("name", "")):
             return conv
+    if len(target_prefix) >= 4:
+        for conv in conversations:
+            candidates = [conv.get("name", ""), *conv.get("raw_texts", [])]
+            if any(
+                len(candidate_prefix := stable_prefix(str(candidate))) >= 4
+                and (
+                    candidate_prefix.startswith(target_prefix)
+                    or target_prefix.startswith(candidate_prefix)
+                )
+                for candidate in candidates
+            ):
+                return conv
     return None
 
 

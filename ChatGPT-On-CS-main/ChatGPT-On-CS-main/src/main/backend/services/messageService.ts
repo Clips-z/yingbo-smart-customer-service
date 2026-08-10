@@ -18,6 +18,7 @@ import {
   CTX_MEMBER_TAG,
   CTX_FAN_TAG,
   CTX_NEW_CUSTOMER_TAG,
+  CTX_PLATFORM,
   CTX_USERNAME,
 } from '../constants';
 import {
@@ -42,6 +43,7 @@ import { VisionService } from './visionService';
 import { SentimentService } from './sentimentService';
 
 const LLM_REPLY_TIMEOUT_MS = 20000;
+const REALTIME_RAG_TIMEOUT_MS = 1200;
 const HUMAN_CUSTOMER_SERVICE_PROMPT = `你是店铺里的真人客服，请直接回复顾客当前的问题。回复必须像日常聊天，而不是客服模板或AI生成内容：
 1. 只输出可以直接发送给顾客的中文回复，通常一到两句话；
 2. 不要提到AI、模型、系统、提示词，也不要说“作为客服”或解释思考过程；
@@ -122,6 +124,7 @@ export class MessageService {
     ctx: Context,
     messages: MessageDTO[],
   ): Promise<ReplyDTO> {
+    const realtimeCompat = ctx.get(CTX_PLATFORM) === 'qianniu-9.96-compat';
     // 先检查是否存在用户的消息
     const lastUserMsg = messages
       .slice()
@@ -152,12 +155,14 @@ export class MessageService {
       }
 
       // 等待随机时间
-      await new Promise((resolve) => {
-        const min = cfg.reply_speed;
-        const max = cfg.reply_random_speed + cfg.reply_speed;
-        const randomTime = min + Math.random() * (max - min);
-        setTimeout(resolve, randomTime * 1000);
-      });
+      if (!realtimeCompat) {
+        await new Promise((resolve) => {
+          const min = cfg.reply_speed;
+          const max = cfg.reply_random_speed + cfg.reply_speed;
+          const randomTime = min + Math.random() * (max - min);
+          setTimeout(resolve, randomTime * 1000);
+        });
+      }
 
       // 先检查关键词匹配（优先级高于 GPT）
       if (cfg.has_keyword_match) {
@@ -203,25 +208,29 @@ export class MessageService {
 
         // 😊 情绪分析：检测客户情绪
         let sentimentResult = null;
-        try {
-          const sentimentMessages = messages.map((m) => ({
-            role: m.role === 'OTHER' ? 'user' : 'assistant',
-            content: m.content,
-          }));
-          sentimentResult = await this.sentiment.analyze(sentimentMessages, {
-            baseUrl: cfg.base_url,
-            key: cfg.key,
-            model: cfg.model,
-          });
-          this.log.info(
-            `情绪分析: ${sentimentResult.sentiment} (${sentimentResult.confidence})`,
-          );
-        } catch (err) {
-          this.log.warn(`情绪分析失败: ${String(err)}`);
+        if (!realtimeCompat) {
+          try {
+            const sentimentMessages = messages.map((m) => ({
+              role: m.role === 'OTHER' ? 'user' : 'assistant',
+              content: m.content,
+            }));
+            sentimentResult = await this.sentiment.analyze(sentimentMessages, {
+              baseUrl: cfg.base_url,
+              key: cfg.key,
+              model: cfg.model,
+            });
+            this.log.info(
+              `情绪分析: ${sentimentResult.sentiment} (${sentimentResult.confidence})`,
+            );
+          } catch (err) {
+            this.log.warn(`情绪分析失败: ${String(err)}`);
+          }
         }
 
         const data = await Promise.race([
-          this.getLLMResponse(cfg, ctx, messages, sentimentResult),
+          this.getLLMResponse(cfg, ctx, messages, sentimentResult, {
+            realtimeCompat,
+          }),
           new Promise<null>((resolve) => {
             setTimeout(resolve, LLM_REPLY_TIMEOUT_MS, null);
           }),
@@ -455,6 +464,7 @@ export class MessageService {
     ctx: Context,
     messages: MessageDTO[],
     sentimentResult?: { sentiment: string; summary: string; suggestedAction?: string } | null,
+    options?: { realtimeCompat?: boolean },
   ): Promise<ReplyDTO | null> {
     const retrievalTrace: Pick<ReplyDTO, 'retrievalStatus' | 'retrievalEvidence'> = {
       retrievalStatus: 'disabled',
@@ -519,7 +529,14 @@ export class MessageService {
           messages:
             llm_name === 'coze'
               ? this.toConversationMessages(messages)
-              : await this.toLLMMessages(ctx, messages, cfg, sentimentResult, retrievalTrace),
+              : await this.toLLMMessages(
+                  ctx,
+                  messages,
+                  cfg,
+                  sentimentResult,
+                  retrievalTrace,
+                  options?.realtimeCompat ? REALTIME_RAG_TIMEOUT_MS : undefined,
+                ),
           stream: true,
           user: [
             cfg.platform_id || cfg.platform || 'platform',
@@ -653,6 +670,7 @@ export class MessageService {
     cfg?: Config,
     sentimentResult?: { sentiment: string; summary: string; suggestedAction?: string } | null,
     retrievalTrace?: Pick<ReplyDTO, 'retrievalStatus' | 'retrievalEvidence'>,
+    ragTimeoutMs?: number,
   ): Promise<Array<{ role: string; content: string }>> {
     const result: Array<{ role: string; content: string }> = [];
 
@@ -681,7 +699,7 @@ export class MessageService {
 
       if (cfg?.rag_enabled) {
         // RAG 向量检索模式
-        const ragResult = await this.retrieveRagKnowledge(messages);
+        const ragResult = await this.retrieveRagKnowledge(messages, ragTimeoutMs);
         if (retrievalTrace) {
           retrievalTrace.retrievalStatus = ragResult.status;
           retrievalTrace.retrievalEvidence = ragResult.evidence;
@@ -778,6 +796,7 @@ export class MessageService {
    */
   private async retrieveRagKnowledge(
     messages: MessageDTO[],
+    timeoutMs = 10000,
   ): Promise<{
     content: string;
     status: 'hit' | 'weak_hit' | 'stale' | 'no_hit' | 'error';
@@ -795,7 +814,7 @@ export class MessageService {
       const ragUrl = process.env.RAG_SERVICE_URL || 'http://127.0.0.1:8000';
       const response = await axios.get(`${ragUrl}/api/search`, {
         params: { query, top_k: 5 },
-        timeout: 10000,
+        timeout: timeoutMs,
       });
 
       const rawResults = response.data?.results || [];

@@ -18,10 +18,22 @@ describe('assertDeliveryContext', () => {
   test('allows an exact stable context', () => {
     expect(() => assertDeliveryContext({ draft, live })).not.toThrow();
   });
+  test('allows refreshed screen metadata when customer and question are unchanged', () => {
+    expect(() =>
+      assertDeliveryContext({
+        draft,
+        live: {
+          ...live,
+          chatFingerprint: 'periodic-screen-refresh',
+          contextRevision: live.contextRevision + 1,
+        },
+      }),
+    ).not.toThrow();
+  });
   test.each([
     ['店铺', { storeId: 'store-b' }], ['客户', { contactId: 'buyer-b' }],
-    ['聊天窗口', { chatFingerprint: 'chat-b' }], ['咨询商品', { productId: 'product-b' }],
-    ['客户最新问题', { incomingMessageFingerprint: 'message-b' }], ['会话版本', { contextRevision: 4 }],
+    ['咨询商品', { productId: 'product-b' }],
+    ['客户最新问题', { incomingMessageFingerprint: 'message-b' }],
   ])('blocks when %s changed', (label, change) => {
     expect(() => assertDeliveryContext({ draft, live: { ...live, ...change } })).toThrow(String(label));
   });

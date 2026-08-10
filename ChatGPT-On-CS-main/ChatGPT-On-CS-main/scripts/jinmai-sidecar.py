@@ -646,22 +646,37 @@ def process_command(parser, handle):
         request_id = str(command.get("requestId") or "")
         target = str(command.get("sender") or "").strip()
         text = str(command.get("content") or "").strip()
+        focus_only = bool(command.get("focusOnly"))
 
-        if target and text:
+        if target and (text or focus_only):
             handle = find_jinmai_window_handle()
             if handle:
                 layout = parser.capture_and_parse(handle)
                 conv = find_conv_by_name(layout.get("conversations", []), target)
                 if conv:
-                    desktop_state = save_desktop_state()
+                    desktop_state = None if focus_only else save_desktop_state()
+                    bring_to_front(handle)
+                    time.sleep(0.2)
+                    post_click_background(handle, conv["click_x"], conv["click_y"])
+                    time.sleep(0.6)
+                    import pyautogui
+                    x, y, width, height = get_window_rect(handle)
+                    pyautogui.click(
+                        x + int(width * 0.65),
+                        y + height - 45,
+                        _pause=False,
+                    )
+                    time.sleep(0.2)
+                    if focus_only:
+                        COMMAND_RESULT_FILE.write_text(
+                            json.dumps({"requestId": request_id, "ok": True}),
+                            encoding="utf-8",
+                        )
+                        logging.info("Focused input for: %s", target)
+                        return
                     try:
-                        bring_to_front(handle)
-                        time.sleep(0.2)
-                        post_click_background(handle, conv["click_x"], conv["click_y"])
-                        time.sleep(0.6)
                         copy_text_to_clipboard(text)
                         time.sleep(0.1)
-                        import pyautogui
                         pyautogui.hotkey("ctrl", "a", _pause=False)
                         time.sleep(0.05)
                         pyautogui.hotkey("ctrl", "v", _pause=False)
@@ -672,7 +687,8 @@ def process_command(parser, handle):
                         logging.info("Filled reply for: %s", target)
                         return
                     finally:
-                        restore_desktop_state(desktop_state)
+                        if desktop_state is not None:
+                            restore_desktop_state(desktop_state)
 
         COMMAND_RESULT_FILE.write_text(
             json.dumps({"requestId": request_id, "ok": False, "error": "未找到联系人"}),
@@ -713,7 +729,17 @@ def parse_duration(value: str) -> float:
 
 def run_jinmai(duration, instance_id, api_port, dry_run, debounce_seconds):
     """京麦自动回复主循环"""
-    from _retry_utils import wait_for_window
+    def wait_for_window(finder, *args, **kwargs):
+        timeout = float(kwargs.get("timeout", kwargs.get("timeout_seconds", 30.0)))
+        interval = float(kwargs.get("interval", kwargs.get("poll_interval", 0.5)))
+        deadline = time.monotonic() + timeout
+        while True:
+            found = finder()
+            if found:
+                return found
+            if time.monotonic() >= deadline:
+                return None
+            time.sleep(interval)
 
     handle = wait_for_window(
         find_jinmai_window_handle,

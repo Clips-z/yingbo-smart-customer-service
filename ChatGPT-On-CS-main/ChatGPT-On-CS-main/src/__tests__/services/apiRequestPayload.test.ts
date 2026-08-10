@@ -13,6 +13,8 @@ jest.mock('axios', () => ({
   },
 }));
 
+// The request spy must exist before axios.create runs during module import.
+// eslint-disable-next-line import/first
 import { POST } from '../../renderer/common/services/common/api/request';
 
 describe('API request payload normalization', () => {
@@ -58,6 +60,34 @@ describe('API request payload normalization', () => {
       message: body.message,
       code: body.code,
       details: body,
+    });
+  });
+
+  it('turns structured transport errors into readable Error instances', async () => {
+    mockRequest.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { message: { reason: '当前客户输入框不可用' }, code: 40901 },
+      },
+    });
+
+    await expect(POST('/fill')).rejects.toMatchObject({
+      name: 'ApiRequestError',
+      message: '当前客户输入框不可用',
+      status: 409,
+      code: 40901,
+    });
+  });
+
+  it('keeps nested business errors readable', async () => {
+    mockRequest.mockResolvedValueOnce({
+      data: { code: 409, message: { error: '会话已经切换' } },
+    });
+
+    await expect(POST('/fill')).rejects.toMatchObject({
+      name: 'ApiRequestError',
+      message: '会话已经切换',
+      code: 409,
     });
   });
 });
